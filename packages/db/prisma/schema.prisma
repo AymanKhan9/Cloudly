@@ -1,0 +1,63 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Run {
+  id         String   @id @default(uuid())
+  status     RunStatusEnum
+  createdAt  DateTime @default(now())
+  leaseUntil DateTime?
+  cancelRequested Boolean @default(false)
+  costUsd    Decimal?   @default(0)
+  repo       String
+  baseBranch String
+  branch     String?
+  prompt     String
+  harness    String
+  workerId   String?  
+  sessionId  String?  
+  prUrl      String?
+  error      String?
+  events     RunEvent[]
+  @@index([status,createdAt])
+}
+
+model RunEvent {
+  runId     String  
+  seq       Int
+  ts        DateTime @default(now())
+  kind      RunEventEnum
+  data      Json?
+  run       Run   @relation(fields:[runId], references: [id],onDelete: Cascade)
+  @@id([runId, seq])
+  
+}
+
+enum RunStatusEnum{
+  queued
+  running
+  finalizing
+  succeeded
+  failed
+  cancelled
+}
+
+enum RunEventEnum{
+  status
+  text
+  tool_call
+  tool_result
+  raw
+  error
+  done
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@repo/db",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prisma": "7"
+  },
+  "peerDependencies": {
+    "typescript": "^7",
+    "@repo/shared": "*"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "7",
+    "dotenv": "^18.0.4"
+  }
+}
