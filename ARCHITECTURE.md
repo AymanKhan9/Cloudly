@@ -23,9 +23,10 @@ These are the decisions everything else in this document follows from.
    a separate broker. No Redis, no SQS, until it's *measured* to be insufficient — Postgres-as-queue
    is a well-worn pattern (Oban, River, GoodJob), not a shortcut.
 3. **The sandbox is unreachable from the outside.** No browser, no API request, ever talks to a
-   running container or microVM directly. Every hop goes through Postgres as a durable
-   intermediary. This is what makes worker crashes non-catastrophic, and what keeps the sandbox's
-   attack surface to one controlled egress path instead of an open inbound one.
+   running container or microVM directly — the worker is the sandbox's only peer, and the API and
+   worker themselves only communicate through Postgres, never directly. This is what makes worker
+   crashes non-catastrophic, and what keeps the sandbox's attack surface to one controlled egress
+   path instead of an open inbound one.
 4. **Docker now, Firecracker later.** Hardened Docker containers get the whole system working
    end-to-end first. A `Sandbox` interface means swapping in Firecracker microVMs (dedicated
    kernel, snapshot/restore, near-zero idle cost) later doesn't touch the worker's run-management
@@ -51,17 +52,20 @@ flowchart TB
 
     subgraph SandboxLayer["Sandbox (per run)"]
         direction TB
-        Container["Container / microVM<br/>infra/images/base ✅ (Docker) · Firecracker 🚧"]
+        Container["Run container / microVM<br/>infra/images/base ✅ (Docker) · Firecracker 🚧<br/>run clone (--no-hardlinks), agent-writable"]
         Runner["Runner<br/>packages/runner ✅<br/>picks a RunAdapter, normalizes events"]
-        ClaudeAdapter["ClaudeAdapter ✅<br/>@anthropic-ai/claude-agent-sdk<br/>(in-process SDK call)"]
+        ClaudeAdapter["ClaudeAdapter ✅<br/>@anthropic-ai/claude-agent-sdk<br/>(spawns claude CLI subprocess)"]
         CodexAdapter["CodexAdapter ✅<br/>@openai/codex-sdk<br/>(spawns codex CLI subprocess)"]
         Container --> Runner
         Runner --> ClaudeAdapter
         Runner --> CodexAdapter
     end
 
+    ExportC["Export container 🚧<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
+    CheckC["Check container 🚧<br/>run clone mounted, no output-folder mount<br/>no model keys, no network"]
+
     GitHub["GitHub<br/>repo + PR 🚧"]
-    Egress["Egress gateway<br/>model keys, cost metering 🚧"]
+    Egress["Allowlisting egress proxy 🚧<br/>model API + registries only<br/>(not yet built — see §8)"]
 
     UI -- "POST /runs<br/>GET /runs/:id/events (SSE)" --> API
     API -- "insert queued run" --> DB
@@ -71,12 +75,18 @@ flowchart TB
     Worker -- "insert RunEvent rows<br/>(runId, seq) composite PK" --> DB
     API -- "poll run_events ~500ms<br/>forward via SSE, replay by Last-Event-ID" --> DB
     Worker -- "SIGINT to cancel · /control writes" --> Container
-    Worker -- "short-lived installation token<br/>commit, push, open PR" --> GitHub
-    ClaudeAdapter -. outbound only .-> Egress
-    CodexAdapter -. outbound only .-> Egress
+    Worker -- "start after run container exits" --> ExportC
+    ExportC -- "untrusted patch file in output folder<br/>worker validates: lstat, O_NOFOLLOW|O_NONBLOCK, fstat" --> Worker
+    Worker -- "start after export completes" --> CheckC
+    CheckC -- "check result" --> Worker
+    Worker -- "checkout base_sha in fresh publish clone<br/>apply patch, deterministic commit<br/>push, create PR" --> GitHub
+    ClaudeAdapter -. outbound today, unrestricted .-> Egress
+    CodexAdapter -. outbound today, unrestricted .-> Egress
 
     style DB fill:#2b6cb0,color:#fff
     style Container fill:#744210,color:#fff
+    style ExportC fill:#4a5568,color:#fff
+    style CheckC fill:#4a5568,color:#fff
     style SandboxLayer fill:#1a202c,color:#fff
 ```
 
@@ -85,8 +95,10 @@ flowchart TB
 - **Client** — the only thing a user's browser ever talks to is the API, over plain HTTP and SSE.
 - **Control plane** — API, worker, and Postgres. Postgres sits *between* API and worker; they
   never call each other directly. This is deliberate (see §4).
-- **Sandbox** — one container (later: microVM) per run, fully isolated, reachable only by the
-  worker, and with only one narrow outbound path (the egress gateway) back to the internet.
+- **Sandbox** — one run container (later: microVM) per run, fully isolated, reachable only by the
+  worker, followed by two separate finalize containers — export, then check — neither with model
+  keys or network. Today the run container's outbound path is unrestricted (§8); the allowlisting
+  proxy that narrows it to one controlled egress path is designed but not yet built.
 
 ---
 
@@ -108,13 +120,12 @@ sequenceDiagram
     API-->>Browser: run id
 
     loop poll (SKIP LOCKED)
-        Worker->>DB: claim oldest queued run + lease
+        Worker->>DB: claim oldest queued run<br/>(one UPDATE sets status=running, lease, lease_gen — RETURNING *)
     end
     DB-->>Worker: claimed Run row
 
-    Worker->>Worker: prepare workspace<br/>(bare mirror, worktree on agent/run-&lt;id&gt;)
-    Worker->>Sandbox: docker run (uid 1000, resource limits)<br/>write /control/config.json
-    Worker->>DB: status=running
+    Worker->>Worker: prepare run clone<br/>(bare mirror -> git clone --no-hardlinks<br/>record base_sha - never a linked worktree)
+    Worker->>Sandbox: docker run (uid 1000, resource limits)<br/>mount run clone, write /control/config.json
 
     activate Sandbox
     Sandbox->>Sandbox: Runner selects RunAdapter (harness)
@@ -132,10 +143,20 @@ sequenceDiagram
         API-->>Browser: SSE events, id: seq
     end
 
-    Worker->>DB: status=finalizing
-    Worker->>Worker: run repo check command
-    Worker->>GH: commit, push (short-lived installation token)
-    Worker->>GH: open PR (check for existing PR first)
+    Note over Sandbox: run container already exited<br/>(stopped at kind=done — cannot docker exec into it)
+    Worker->>DB: conditional running->finalizing<br/>(WHERE worker_id=me AND lease_gen=mine)
+    Worker->>Worker: create fresh, empty output folder for this export
+    Worker->>Sandbox: export container: run clone + output folder mounted<br/>no model keys, no network
+    Sandbox->>Sandbox: git add -A - git diff --binary --no-ext-diff<br/>--no-textconv --cached base_sha - write to output folder
+    Worker->>Worker: lstat: require regular file, not symlink or FIFO<br/>open O_NOFOLLOW|O_NONBLOCK, fstat: confirm still regular, size cap
+    Worker->>Worker: store validated patch + hash durably (by run id)
+    Worker->>Sandbox: check container: run clone mounted, no output folder<br/>check can't touch the patch or its own output
+    Sandbox-->>Worker: check result (informational for now - see §11)
+    Worker->>Worker: fresh publish clone from mirror, never mounted anywhere
+    Worker->>Worker: checkout base_sha detached, create agent/run-id from it<br/>-> same parent on every retry
+    Worker->>Worker: git apply --index - git -c core.hooksPath=/dev/null commit<br/>author/committer/dates/message all fixed from run record<br/>-> deterministic sha, store commitSha on Run
+    Worker->>GH: push branch (skip if remote already at commitSha)
+    Worker->>GH: create PR - an already-exists reply counts as success
     Worker->>DB: status=succeeded, prUrl set
     API-->>Browser: SSE: kind=done
 ```
@@ -144,13 +165,28 @@ sequenceDiagram
 `cancelRequested` on the row → the worker (already polling/heartbeating that run) notices the flag
 → sends **SIGINT** (not SIGTERM — SIGTERM leaves the agent's turn unfinished) to the container →
 the runner's signal handler calls the active adapter's `interrupt()`, which aborts the in-flight
-SDK call or subprocess.
+SDK call or subprocess. A cancel that lands mid-finalize doesn't abort finalize outright: the
+export and check steps still run against whatever the agent had written when it was interrupted,
+and the patch is still stored — a cancelled run's partial work isn't silently thrown away. What it
+skips is opening a PR; the run ends `cancelled` with a stored patch available, not `succeeded` with
+a branch pushed the user never asked to land.
 
-**Crash recovery**, every ~30s: the worker sweeps `running` rows with an expired lease, looks the
-container up by its `run_id` label. Still running → take over, **re-read the container's stdout
-log from the beginning** (this is why the runner prints *every* event to stdout rather than
-streaming deltas — the whole history is always recoverable from the container's own log).
-Exited → finalize normally. Gone entirely → requeue with `RESUME_SESSION` or mark failed.
+**Crash recovery**, every ~30s: the worker sweeps *both* `running` **and** `finalizing` rows with
+an expired lease — not just `running`. A worker that dies mid-push would otherwise leave a run
+stuck in `finalizing` forever, since nothing else was watching it. The worker keeps heartbeating
+throughout finalize, not just while the agent is running, so the sweep's expiry check stays
+meaningful there too. Every finalize step is written to be safe to run twice (§11), so a recovered
+run re-running an already-completed step — re-pushing the same commit, re-attempting a PR create —
+is a no-op, not a duplicate.
+
+For `running` rows: still running → take over. Finalize steps are all conditional on
+`(worker_id, lease_gen)` matching the claiming worker (§11), so a worker that wasn't really dead —
+just slow, or briefly lost its DB connection — can't finalize the same run twice alongside whoever
+took over its lease; fencing protects the database writes, not any GitHub call already in flight,
+which is exactly why the GitHub side effects themselves need to be idempotent (§11). Exited →
+finalize normally. Gone entirely → requeue with `RESUME_SESSION` (if the harness's session
+directory was mounted from the host — see §10) or mark failed, up to a bounded `attempts` count so
+a run that reliably crashes the worker doesn't requeue forever.
 
 ---
 
@@ -176,8 +212,6 @@ This buys three things at once:
 
 ## 5. Why SSE, not WebSockets
 
-Explored directly with the user during development — see the reasoning transcript, summarized:
-
 - The browser only ever needs data flowing **one direction** (server → browser). User actions
   (cancel, approve) are separate `POST` requests, not messages over the same channel — so the
   bidirectional half of a WebSocket buys nothing here.
@@ -192,13 +226,13 @@ Explored directly with the user during development — see the reasoning transcr
 `claim` is one `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`
 statement. Multiple worker processes can run this concurrently against the same table with no
 double-claim race, no separate broker to operate, and no second source of truth to keep in sync
-with the `Run` row it's already reading. This is a deliberately deferred optimization decision —
-"no Redis until it's measured to be needed" — not an unawareness of message brokers.
+with the `Run` row it's already reading. This is a deliberately deferred decision — Postgres's
+`LISTEN/NOTIFY` is the next step if polling ever isn't enough, before reaching for Redis, since it
+keeps the "Postgres between every hop" principle intact.
 
 ## 7. Harness-agnostic in practice
 
-Built and tested so far: two adapters, structurally as different from each other as any future
-third harness is likely to be, both satisfying the exact same `RunAdapter` interface
+Built and tested so far: two adapters satisfying the exact same `RunAdapter` interface
 (`packages/runner/src/adapter.ts`):
 
 ```mermaid
@@ -220,42 +254,67 @@ classDiagram
     }
     RunAdapter <|.. ClaudeAdapter
     RunAdapter <|.. CodexAdapter
-    ClaudeAdapter --> "@anthropic-ai/claude-agent-sdk" : in-process query()
-    CodexAdapter --> "@openai/codex-sdk" : spawns codex CLI subprocess
 ```
 
-- `ClaudeAdapter` calls `@anthropic-ai/claude-agent-sdk`'s `query()` **in-process** — a TypeScript
-  async generator, no subprocess involved.
-- `CodexAdapter` uses `@openai/codex-sdk`, which itself **spawns the `codex` CLI as a subprocess**
-  and exchanges JSONL events over stdout — an entirely different transport.
-
-Both get mapped, by a pure function per adapter (`mapClaudeMessage`, `mapCodexEvent` — both
-`bun test`-covered with fixture data, no live calls needed to verify the mapping logic), onto the
-same normalized `RunEvent` shape from `packages/shared`:
+Both adapters spawn a native CLI binary as a subprocess — neither is a pure in-process library
+call. The SDK manages that subprocess internally either way, though: `ClaudeAdapter` gets a
+`Query` that extends `AsyncGenerator<SDKMessage>` directly, and `CodexAdapter` gets
+`{ events: AsyncGenerator<ThreadEvent> }` from `runStreamed()` — the same shape of thing at the
+point the adapter code touches it. What actually differs between the two is the **event
+vocabulary**: Claude streams messages built from Anthropic Messages API content blocks (`text`,
+`tool_use`, `tool_result`); Codex reports a thread/turn/item lifecycle (`thread.started`,
+`item.completed` with an item `type` of its own). Both get mapped, by a pure function per adapter
+(`mapClaudeMessage`,
+`mapCodexEvent` — both `bun test`-covered with fixture data, no live calls needed to verify the
+mapping logic), onto the same normalized `RunEvent` shape from `packages/shared`:
 
 ```
 kind: status | text | tool_call | tool_result | raw | error | done
 ```
 
 Nothing downstream of the runner — not the worker, not the API, not the UI — ever needs to know
-whether a given run is Claude Code or Codex under the hood.
+whether a given run is Claude Code or Codex under the hood. That said, two same-shaped native CLI
+adapters likely understate how different a *third* harness could look — an ACP-based adapter
+(Gemini CLI, or Claude/Codex via their ACP bridges) is a two-way protocol where the agent itself
+sends requests the client must answer (e.g. permission prompts), not a one-way event stream. That
+will exercise `RunAdapter` harder than either adapter built so far (see the `send()` gap below).
 
 ## 8. Security boundaries
 
-- **No credentials enter the sandbox.** The worker does all git operations (commit, push, PR)
-  itself using short-lived GitHub App installation tokens, from the host, outside the container.
-  The runner's own tool policy additionally disallows `Bash(git push *)` as a second layer.
+### Enforced today
+
+- **GitHub credentials never enter the sandbox.** The worker does all git operations (commit,
+  push, PR) itself using short-lived GitHub App installation tokens, from the host — outside the
+  container, and (per §11 below) outside any directory the agent could have written into.
+- **`Bash(git push *)` is disallowed in `ClaudeAdapter`'s tool policy** — belt-and-suspenders only.
+  With no GitHub credentials in the sandbox and the agent's clone never configured with a real
+  GitHub remote (§11), a push from inside the sandbox has no path to succeed regardless of tool
+  policy. The actual guarantee is "no credentials in the sandbox," not this rule, so it isn't worth
+  replicating into `CodexAdapter` as a platform-wide requirement.
 - **Non-root by construction.** The base image runs as uid 1000 (`infra/images/base/Dockerfile`,
   built on the official Node image's built-in `node` user), and the worker launches every
   container with `--user 1000:1000` explicitly regardless.
-- **One-way egress only.** The sandbox's outbound network goes through an egress gateway (later:
-  a LiteLLM gateway that also injects model keys and meters per-run cost). Nothing external has an
-  inbound path to a running sandbox — not the browser, not any other host.
 - **Only the worker touches the Docker socket** — effectively root on the host, so it's the one
   process with that privilege, not the API, not anything reachable from the browser.
+
+### Planned, not yet built
+
+- **Model API keys currently DO enter the sandbox.** `ANTHROPIC_API_KEY` (and the equivalent for
+  Codex) has to reach the container as an env var for the SDKs to function, and the container has
+  open internet. Combined with an agent that reads an untrusted repo's contents (including its
+  README), this is a real prompt-injection-to-key-exfiltration path today, not a closed one.
+  Nearest fix, and the right-sized one for what's actually needed right now: an internal Docker
+  network plus a small allowlisting proxy (model API + package registries only) — about a day of
+  work, closes the exfiltration path without needing key injection or cost metering yet. Pair it
+  with a separate, low-spend-limit API key used only for sandbox runs, if the provider supports
+  that, as defense in depth. LiteLLM is still the endgame for key injection (so the raw key never
+  enters the container at all) and per-run cost metering, but that's a bigger lift than the
+  exfiltration fix alone needs — don't reach for it before the smaller fix is in place.
+- **One-way egress only.** Once the allowlisting proxy above exists, the sandbox's outbound network
+  routes through it exclusively, and nothing external has an inbound path to a running sandbox.
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
   and explicit `setting_sources` prevent a malicious repo from smuggling in hooks or MCP servers
-  the platform didn't choose.
+  the platform didn't choose. Not yet wired up.
 - **Invite-only** while the Docker backend is the only isolation option; public sign-up is gated
   behind the microVM backend landing first.
 
@@ -274,8 +333,13 @@ erDiagram
         RunStatusEnum status
         string workerId
         datetime leaseUntil
+        int leaseGen
+        int attempts
         string sessionId
         boolean cancelRequested
+        string baseSha
+        string commitSha
+        string patchHash
         string prUrl
         decimal costUsd
         string error
@@ -292,29 +356,281 @@ erDiagram
 
 `RunEvent`'s primary key is the **composite** `(runId, seq)` — not an auto-increment id. That
 single choice is what makes crash-recovery replay idempotent: re-inserting an event the worker
-already wrote (because it re-read the container's stdout log after taking over a lease) just
-violates the PK / gets skipped by `skipDuplicates: true`, instead of creating a duplicate row.
+already wrote just violates the PK / gets skipped by `skipDuplicates: true`, instead of creating a
+duplicate row.
 
-## 10. Component status
+`Run.baseSha`, `commitSha`, and `patchHash` exist for the same reason, one layer up (§11):
+`baseSha` is recorded once, at clone time, and is what the agent's changes always get diffed
+against — never a branch name or ref inside the agent's own repo, which the agent can move.
+`commitSha` is computed once finalize builds a deterministic commit, and is what a retried
+finalize checks before pushing again — if the remote branch already points at it, the push is
+skipped rather than reattempted. `patchHash` lets a retry work from the already-validated, durably
+stored patch instead of re-deriving it from a workspace or container that may no longer exist.
+
+`kind` is currently a native Postgres enum (`RunEventEnum`), mirroring the Zod enum in
+`packages/shared`. Open question, not yet decided: every new event kind then requires a migration
+that must land before any runner build can emit it — plain `text` validated by Zod at the
+application layer would avoid that coupling, at the cost of losing the DB-level `CHECK` guarantee.
+Revisit if the event-kind list needs to grow faster than migrations comfortably allow.
+
+## 10. Known gaps and accepted trade-offs
+
+What's fixed in the design above (§11 has the mechanism for each), and what's still open — see
+§13 for how this list came to look the way it does.
+
+**Fixed in this design already:**
+- Finalize (check, patch export) always runs inside fresh, network-less containers — never on the
+  host, and never as a `docker exec` into an already-stopped run container.
+- Each run gets a standalone clone (`--no-hardlinks`), not a linked worktree — git actually works
+  inside the sandbox, and the clone shares no on-disk state with the shared mirror.
+- The host never runs git inside anything the agent could have written to. The run clone (mounted,
+  agent-writable) and the publish clone (host-only, never mounted, created fresh at finalize) are
+  two different directories; only the publish clone ever has a commit applied and pushed from it.
+- The export diffs against a pinned `base_sha`, never a mutable ref inside the agent's own repo,
+  using `--no-ext-diff --no-textconv` so agent-controlled diff/textconv config can't corrupt it.
+- The patch is read defensively — `lstat` requiring a regular file (not a symlink *or* a FIFO,
+  which a bare `O_NOFOLLOW` wouldn't catch and which can hang an open with no writer), then
+  `O_NOFOLLOW | O_NONBLOCK`, then `fstat` to close the race — plus a size cap and no `.git/` paths.
+  It's stored durably by run id as soon as it's validated.
+- The check command runs *after* the patch is already captured, in its own container with no
+  mount to the output folder — it can neither pollute the diff with its own side effects nor
+  tamper with a patch it has no path to. (Its lack of network access is a known, currently
+  accepted limitation — see §11.)
+- The publish clone explicitly checks out `base_sha` before applying anything, rather than
+  whatever the mirror's default branch currently is — the patch might not even apply otherwise,
+  and the commit's parent would differ between retries.
+- The commit finalize creates is fully deterministic (fixed author, committer, dates, *and*
+  message, all from the run record), so a retried finalize reproduces the same SHA and a repeat
+  push is a genuine no-op, checked against `Run.commitSha` before it's even attempted.
+- PR creation has no check-then-act step — it attempts create and treats GitHub's own
+  already-exists reply as success.
+- The recovery sweep covers `finalizing`, not just `running`, and the worker heartbeats through
+  finalize so that coverage stays meaningful.
+- A cancel mid-finalize keeps the exported/stored patch and skips only the PR — partial work isn't
+  discarded.
+- Model API keys' current in-sandbox exposure is stated plainly in §8, with a right-sized near-term
+  fix (allowlisting proxy) instead of reaching straight for LiteLLM.
+
+**Still open, tracked here rather than silently deferred:**
+- **`RunAdapter` needs a `send(cmd)` method.** The `Sandbox` interface already has
+  `send(h, cmd): Promise<void>` for message/cancel/approve/deny, but nothing inside the sandbox
+  can currently *receive* those — `RunAdapter` only has `start`/`interrupt`. Mid-run messages,
+  approvals, and (eventually) ACP permission requests all need this path. Cheap to add now, while
+  only two adapters exist to update; expensive to retrofit once more do.
+- **Recovery must not depend on `docker logs` surviving forever.** Re-reading a container's stdout
+  log from the beginning breaks the moment log rotation is turned on (and it should be, or disk
+  fills up) — the earliest events would be gone. It also doesn't exist as a concept at all under
+  Firecracker. Fix: the runner also appends events to a file on a host-mounted volume; extend
+  `Sandbox.events(h, fromSeq)` to accept a resume point, and have recovery resume from the last
+  `seq` actually stored in Postgres instead of from the start.
+- **Session directories must be mounted from the host.** Claude Code keeps sessions in
+  `~/.claude`, Codex in `~/.codex`, both inside the container by default. If the container is
+  gone, `RESUME_SESSION` has nothing to resume from. Mount a per-run home directory from the host
+  so sessions survive container loss.
+- **The runner shouldn't run as PID 1 unsupervised.** PID 1 in a container is responsible for
+  reaping exited child processes; Node/Bun don't do this automatically, so shells or dev servers
+  the agent spawns pile up as zombies over a long run. Launch containers with `--init` (tini), and
+  have the worker send SIGKILL after a grace period if SIGINT doesn't stop the runner.
+- **SSE auth can't use a bearer header.** The browser's native `EventSource` can't set an
+  `Authorization` header, so the dev-token auth this system currently plans won't reach the SSE
+  endpoint from a real web app. Needs a session cookie instead, once auth exists.
+- **`Bun.serve`'s idle timeout will cut quiet SSE streams.** A run that's thinking for a while with
+  no new events will look idle to the connection and get closed. Send a periodic comment-line ping
+  to keep it alive.
+
+## 11. How finalize works
+
+Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own
+check command, and every file the agent touched. Nothing here treats that code as anything other
+than untrusted input.
+
+**Two clones, never one.** Workspace prep (§3) gives each run a **run clone** —
+`git clone --no-hardlinks <mirror> <run-dir>`, mounted read-write into the sandbox, fully
+agent-writable, and gone once the run's containers are cleaned up. Finalize creates a second,
+unrelated **publish clone** — a fresh clone from the same mirror, made only at finalize time,
+never mounted into any container, never touched by the agent. Every host-side git operation —
+applying the patch, committing, pushing — happens only in the publish clone. The run clone is
+data the worker reads a diff out of; the publish clone is the only place the worker ever runs git
+against a directory it fully controls. Collapsing these into one clone is the same host-git hole
+under a different name: whichever clone the agent could write into is not a safe place for the
+host to run git, no matter how the patch got there.
+
+A **linked worktree** doesn't work for the run clone, for an unrelated reason: its `.git` is a
+*file* pointing at `<mirror>/worktrees/<name>`, and that mirror directory is never mounted into
+the sandbox — every git command run inside it, including the agent's own `git diff`, would fail
+immediately. `--no-hardlinks` on the clone matters too, separately: an ordinary local clone
+hardlinks object files from the source instead of copying them, so the workspace-prep `chown` to
+uid 1000 would flip the *mirror's own* object files to that owner as well (hardlinks share one
+inode, so a `chown` on one path changes it for every path pointing at that inode) — silently
+handing the agent write access to objects every other run's mirror depends on. `--no-hardlinks`
+forces real copies, so the run clone shares no on-disk state with anything else.
+
+**Export happens before the check runs, not after.** After the run container exits (it's already
+stopped by the time finalize starts — there's nothing left to `docker exec` into), the worker
+creates a fresh, empty output folder — new for this export, never reused — and starts an **export
+container**: run clone and output folder mounted, no model keys, no network. Inside it:
+`git add -A` then
+`git diff --binary --no-ext-diff --no-textconv --cached base_sha`, written to the output folder.
+`--no-ext-diff --no-textconv` matter because the run clone's git config and `.gitattributes` are
+agent-controlled — an external diff driver or textconv filter configured there could turn the
+export into something `git apply` can't use later; this isn't a security boundary, just what makes
+the patch actually usable. `base_sha` is the commit the worker itself recorded when it made the
+run clone — never a branch name or ref inside the agent's own repo, which the agent can move.
+Running the check command *before* this point would let its side effects (test snapshots, build
+artifacts) leak into the diff, and — since the check command is itself repo code the agent may
+have edited — let it tamper with a patch that doesn't exist yet. Running it *after* export, in a
+**separate check container** with the run clone mounted but no mount to the output folder at all,
+closes both: the check literally has no path to the patch by the time it runs. The output folder
+itself is mounted only into the export container, never the run container — the agent's main
+process never gets a chance to plant anything there ahead of time.
+
+**The patch is untrusted the moment it exists.** It came out of a container the agent had full
+write access to, including the output folder itself — which means the agent could leave something
+other than a plain file where the worker expects one. A symlink is the obvious case, but not the
+only one: a **named pipe** (`mkfifo`) is just as easy to plant, and opening a FIFO for reading with
+no writer on the other end blocks forever — `O_NOFOLLOW` alone stops symlink-following but does
+nothing to stop that hang, since a FIFO isn't a symlink. The worker reads it in three steps
+instead of one: `lstat` the path and require an actual regular file (rejecting symlinks, FIFOs,
+devices, sockets outright); open with `O_NOFOLLOW | O_NONBLOCK`, so even a same-instant swap to a
+FIFO can't block the open; then `fstat` the open file descriptor and check it's still the same
+regular file the `lstat` saw, closing the race between the two checks. On top of that: a size cap,
+and rejecting any patch content with a path under `.git/`. Once validated, the patch and its hash
+are stored durably, keyed by run id — a retried finalize works from that stored patch, not from a
+workspace or container that may no longer exist by the time recovery gets to it.
+
+**The commit finalize creates is deterministic.** A fresh clone from the mirror starts wherever
+the mirror's default branch currently is — not necessarily `base_sha` — so the publish clone
+explicitly checks out `base_sha` (detached) and creates `agent/run-<id>` from that exact commit
+before anything else happens. Skipping this step breaks two things at once: the patch might not
+even apply if the base has moved since the run started, and the commit's parent would differ
+between a first attempt and a retry, which breaks determinism just as much as a wrong timestamp
+would. From there: `git apply --index` on the validated patch, then
+`git -c core.hooksPath=/dev/null commit` with the author, committer, `GIT_AUTHOR_DATE`,
+`GIT_COMMITTER_DATE`, and the commit message *all* fixed from the run record rather than left to
+whatever `commit` would default to. Same parent, same tree, same metadata, same message always
+produce the same SHA — so a finalize that runs twice (recovered after a crash, say) produces the
+identical commit both times, not two different ones with the same content. That SHA is stored on
+`Run.commitSha`; a retried finalize checks whether the remote branch already points at it and
+skips the push entirely if so, rather than attempting a second push that would be rejected as
+non-fast-forward.
+
+**PR creation has no check-then-act step.** An expired DB lease doesn't mean the worker that held
+it is actually dead — it may just have been slow, or briefly lost its DB connection — and a push
+or PR-create request it already sent to GitHub can't be recalled once sent. `lease_gen` (a
+generation number on `Run`, incremented on every claim, checked on every status transition and
+finalize step) keeps two workers from racing on the database, but that says nothing about a
+GitHub call already in flight — so the GitHub side effects are written to be idempotent on their
+own terms instead. The branch name is fixed per run and the commit is deterministic, so pushing
+twice is a genuine no-op; PR creation just attempts create and treats GitHub's own
+already-exists reply as success, relying on GitHub's uniqueness guarantee rather than a client-side
+check that could never really be atomic against another worker.
+
+**The recovery sweep covers `finalizing`, not just `running`.** A worker that dies mid-push would
+otherwise leave a run stranded in `finalizing` forever, invisible to a sweep that only watched
+`running` rows. The worker heartbeats throughout finalize for exactly this reason, and every step
+above is safe to repeat — a recovering worker re-running a step that already completed (already
+pushed, already opened) is a no-op, not a duplicate action.
+
+**Cancel mid-finalize keeps the work, skips the PR.** Export and check still run against whatever
+the agent had produced when the cancel landed, and the patch is still stored — a cancelled run
+ends with a stored patch available, not with its work silently discarded. What cancel skips is
+opening the PR: the run ends `cancelled`, not `succeeded` with a branch pushed nobody asked to
+land.
+
+**The check container having no network is an open trade-off, not a settled one.** Plenty of real
+repos' check commands need network access — fetching dependencies, hitting a mocked or live
+service in a test. With no egress at all, those checks fail for reasons that have nothing to do
+with whether the agent's work is any good, and nothing in this design yet distinguishes that from
+a real failure. Two ways to resolve it, neither implemented: treat the check result as
+informational only for now (surfaced to the user, not gating anything), or give the check
+container the run's own environment-level egress allowlist once environments (§12) exist. Worker
+v0 takes the first option by default, simply because the second doesn't exist yet to take.
+
+**What this section claims is only as good as what's tested.** Every defense above is a design
+description until it has a test proving it holds. The tests worker v0 ships alongside this
+design, not after it:
+- A patch file that's a symlink to a host path gets rejected, not followed.
+- A patch file that's a named pipe gets rejected without the worker hanging.
+- A run clone with `core.fsmonitor` set to an arbitrary command, taken through a full finalize,
+  never executes that command on the host.
+- Running finalize twice against the same stored patch produces the same commit SHA, and the
+  second push is skipped rather than attempted.
+- `kill -9` on the worker mid-run and mid-finalize, on a fresh restart: the run finishes with no
+  duplicate `RunEvent`s, no duplicate pushes, no duplicate PRs.
+
+## 12. Component status
 
 | Component | Location | Status |
 |---|---|---|
 | Zod contracts (`RunEvent`, `RunStatus`, `HarnessManifest`) | `packages/shared` | ✅ |
-| Prisma schema, migration, singleton client | `packages/db` | ✅ |
-| Base sandbox image (Debian, non-root uid 1000, bun/git/python3) | `infra/images/base` | ✅ |
+| Prisma schema, migration, singleton client (incl. leaseGen/attempts/baseSha/commitSha/patchHash) | `packages/db` | ✅ |
+| Base sandbox image (Debian, non-root uid 1000, bun/git/python3/codex CLI) | `infra/images/base` | ✅ |
 | `RunAdapter` interface | `packages/runner/src/adapter.ts` | ✅ |
 | Claude Code adapter | `packages/runner/src/adapters/claude.ts` | ✅ tested live |
 | Codex adapter | `packages/runner/src/adapters/codex.ts` | ✅ tested live |
 | Runner entrypoint (config load, harness selection, stdout printing) | `packages/runner/src/index.ts` | ✅ tested live in-container |
-| Worker v0 (no DB, `Bun.spawn` docker run, commit, print diff) | `apps/worker` | 🚧 in progress |
+| Worker v0 (no DB, `Bun.spawn` docker run, two-clone finalize per §11, print diff) | `apps/worker` | 🚧 in progress |
+| Finalize security test suite (symlink, FIFO, fsmonitor, determinism, crash recovery — §11) | `apps/worker` | 🚧 in progress |
 | DB-backed worker (claim/lease/heartbeat/cancel/recovery sweep) | `apps/worker` | 🚧 planned |
 | API (POST/GET runs, cancel, SSE with replay) | `apps/api` | 🚧 planned |
 | Web UI | `apps/web` | 🚧 planned |
-| GitHub App (auth, installations, mirror, worktree, push, PR) | — | 🚧 planned |
+| GitHub App (auth, installations, bare mirror, clone, push, PR) | — | 🚧 planned |
 | ACP adapter (Gemini CLI and others) | `packages/runner` | 🚧 planned |
 | Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |
+
+## 13. Decision log
+
+This design went through four review passes before the worker was built on top of it. Kept here
+instead of narrated inline, since the sections above should read as the current design, not a
+history of getting there.
+
+**Pass 1 — initial architecture review.** Caught: the check command was going to run on the host
+(host-compromise path); git was going to run on the host inside the agent's own worktree
+(the `safe.directory`-class attack); an expired lease didn't stop a second worker from finalizing
+the same run (no fencing token); two false claims — "no credentials enter the sandbox" (model keys
+do) and "`ClaudeAdapter` is in-process" (it spawns a subprocess too); plus several smaller gaps
+now tracked in §10 (`RunAdapter.send()`, recovery's dependence on `docker logs`, session-directory
+mounting, PID 1 zombie reaping, SSE auth, `Bun.serve` idle timeout).
+
+**Pass 2 — reviewing pass 1's fixes.** The patch-export step from pass 1's fix still ran on the
+host, inside the agent-writable worktree — the same hole restated, since producing a patch with
+`git format-patch` is itself running git there. Also caught: the run container is already stopped
+by the time finalize would try to `docker exec` into it; a linked worktree can't be diffed inside
+the sandbox at all, since its bare mirror is never mounted there; `leaseGen`/`attempts` were
+described in prose but missing from the data model; `status=running` was being set twice;
+`RunAdapter`'s event-transport claim was imprecise even after the in-process correction; and
+"`Bash(git push *)` should become platform-wide" was pointless once there's no credential or
+remote for a push to succeed against anyway.
+
+**Pass 3 — reviewing pass 2's fixes.** The fix for pass 2 introduced a new version of the same
+contradiction: the patch was being applied inside "the standalone clone," described in the same
+breath as both the container-mounted, agent-writable directory and a directory "never agent
+writable." One clone can't be both — hence the run clone / publish clone split. Also caught:
+"pushing the same commit twice is a no-op" wasn't true without a deterministic commit, since
+re-applying a patch without fixed author/committer/date metadata produces a new SHA every time;
+the finalize container was running the check before the export, letting check side effects and
+possibly-agent-edited check code contaminate or tamper with the diff; the output folder itself was
+agent-writable, so a naive read of "the patch file" was open to a symlink pointing anywhere on the
+host; and diffing against a mutable ref instead of a pinned `base_sha` meant trusting state the
+agent controlled.
+
+**Pass 4 — reviewing pass 3's fixes.** §2's diagram still showed one finalize container doing both
+check and export, and its edge label implied the container handed back an already-validated patch
+— both stale against §3/§11's two-container, worker-validates design. The publish clone was being
+created "fresh from the mirror" without an explicit `base_sha` checkout, which quietly broke both
+patch applicability (if the base had moved) and commit determinism (a different parent on every
+retry) — the same class of bug as pass 3's non-deterministic timestamps, just one layer earlier.
+`O_NOFOLLOW` alone was treated as sufficient for reading the patch, but it only stops
+symlink-following — it does nothing against a named pipe left in the same spot, which blocks an
+unguarded open forever; fixed with the `lstat`-then-`O_NONBLOCK`-open-then-`fstat` sequence. Two
+robustness (not security) gaps were also raised: the run clone's git config could carry an
+external diff driver or textconv filter that corrupts the export, fixed with
+`--no-ext-diff --no-textconv`; and a check container with no network will spuriously fail any
+repo whose checks need one, which this pass surfaced as an explicit open trade-off rather than an
+implicit bug. This pass also asked for the design's claims to become tests, not just prose — see
+the list at the end of §11.
 
 ---
 

@@ -17,6 +17,8 @@ model Run {
   status     RunStatusEnum
   createdAt  DateTime @default(now())
   leaseUntil DateTime?
+  leaseGen   Int      @default(0)
+  attempts   Int      @default(0)
   cancelRequested Boolean @default(false)
   costUsd    Decimal?   @default(0)
   repo       String
@@ -24,8 +26,11 @@ model Run {
   branch     String?
   prompt     String
   harness    String
-  workerId   String?  
-  sessionId  String?  
+  workerId   String?
+  sessionId  String?
+  baseSha    String?
+  commitSha  String?
+  patchHash  String?
   prUrl      String?
   error      String?
   events     RunEvent[]

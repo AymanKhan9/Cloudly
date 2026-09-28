@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV BUN_INSTALL=/usr/local
 RUN curl -fsSL https://bun.com/install | bash -s "bun-v1.3.0"
 
+RUN bun add -g @openai/codex
+
 RUN mkdir -p /workspace && chown 1000:1000 /workspace
 
 WORKDIR  /workspace
