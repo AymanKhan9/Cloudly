@@ -29,6 +29,18 @@
         "typescript": "7.0.2",
       },
     },
+    "apps/worker": {
+      "name": "@repo/worker",
+      "dependencies": {
+        "@repo/shared": "*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+      "peerDependencies": {
+        "typescript": "^7",
+      },
+    },
     "packages/db": {
       "name": "@repo/db",
       "dependencies": {
@@ -388,6 +400,8 @@
     "@repo/typescript-config": ["@repo/typescript-config@workspace:packages/typescript-config"],
 
     "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+
+    "@repo/worker": ["@repo/worker@workspace:apps/worker"],
 
     "@stablelib/base64": ["@stablelib/base64@1.0.1", "", {}, "sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ=="],
 
