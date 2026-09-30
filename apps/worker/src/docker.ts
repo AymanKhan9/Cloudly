@@ -34,7 +34,7 @@ function credentialFlags(harness: string): string[] {
     return flags;
 }
 
-export async function* createRunContainer(workspace: Workspace, task:string,harness:string): AsyncIterable<RunEvent>{
+export async function* createRunContainer(workspace: Workspace, task:string,harness:string,runId:string): AsyncIterable<RunEvent>{
     const controlDir = await mkdtemp(
         path.join(tmpdir(),"run-control-"),
     );
@@ -55,6 +55,12 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             "docker",
             "run",
             "--rm",
+
+            "--name",
+            `run-${runId}`,
+
+            "--label",
+            `run_id=${runId}`,
 
             "-v",
             `${workspace.runDir}:/workspace`,
@@ -147,6 +153,65 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             force:true
         })
     }
+}
 
 
+/**
+ * Sends SIGINT (never SIGTERM — SIGTERM leaves the agent's turn unfinished)
+ * to a run container by its stable name. A container that's already exited
+ * (the run finished right as cancel was requested) is not an error — this
+ * is an expected, benign race.
+ */
+export async function cancelRun(runId: string): Promise<void> {
+    const proc = Bun.spawn(["docker", "kill", "-s", "SIGINT", `run-${runId}`], {
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+
+    const [stderr, exitCode] = await Promise.all([
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+
+    if (exitCode !== 0 && !stderr.includes("No such container")) {
+        throw new Error(`docker kill failed for run-${runId}: ${stderr}`);
+    }
+}
+
+/**
+ * Force-removes a run's container whether it's running or already exited —
+ * used by the recovery sweep to clean up before redoing a run from scratch.
+ * A container that no longer exists is not an error.
+ */
+export async function removeContainer(runId: string): Promise<void> {
+    const proc = Bun.spawn(["docker", "rm", "-f", `run-${runId}`], {
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+
+    const [stderr, exitCode] = await Promise.all([
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+
+    if (exitCode !== 0 && !stderr.includes("No such container")) {
+        throw new Error(`docker rm failed for run-${runId}: ${stderr}`);
+    }
+}
+
+export async function runContainerCommand(
+    args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const proc = Bun.spawn(["docker", "run", "--rm", ...args], {
+        stdout: "pipe",
+        stderr: "pipe",
+    });
+
+    const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+
+    return { stdout, stderr, exitCode };
 }

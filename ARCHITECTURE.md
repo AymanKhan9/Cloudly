@@ -417,12 +417,17 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   can currently *receive* those — `RunAdapter` only has `start`/`interrupt`. Mid-run messages,
   approvals, and (eventually) ACP permission requests all need this path. Cheap to add now, while
   only two adapters exist to update; expensive to retrofit once more do.
-- **Recovery must not depend on `docker logs` surviving forever.** Re-reading a container's stdout
-  log from the beginning breaks the moment log rotation is turned on (and it should be, or disk
-  fills up) — the earliest events would be gone. It also doesn't exist as a concept at all under
-  Firecracker. Fix: the runner also appends events to a file on a host-mounted volume; extend
-  `Sandbox.events(h, fromSeq)` to accept a resume point, and have recovery resume from the last
-  `seq` actually stored in Postgres instead of from the start.
+- **Recovery redoes a run from scratch rather than resuming it — by design, not yet by gap.**
+  Built (`apps/worker/src/recovery.ts`): the sweep reclaims `running`/`finalizing` rows with an
+  expired lease (its own `SKIP LOCKED` query, bumping `leaseGen` and `attempts`), removes any
+  leftover container, clears the dead attempt's partial `RunEvent` rows, and hands the run to
+  `processRun` for a fresh agent invocation — proven live, including that the stale event log is
+  genuinely wiped before the retry. This sidesteps the original `docker logs`-survival concern
+  entirely (recovery never reads container logs at all), but trades away the dead attempt's partial
+  history and pays for a whole new agent turn on every recovery, rather than continuing the old
+  one. Runs out of retries → `failExhaustedRuns` marks it permanently `failed` instead of looping
+  forever. True log-based resume (host-mounted event file, `Sandbox.events(h, fromSeq)`) remains
+  the real fix if redo-from-scratch turns out to be too expensive in practice — not built.
 - **Session directories must be mounted from the host.** Claude Code keeps sessions in
   `~/.claude`, Codex in `~/.codex`, both inside the container by default. If the container is
   gone, `RESUME_SESSION` has nothing to resume from. Mount a per-run home directory from the host
@@ -569,9 +574,10 @@ design, not after it:
 | Claude Code adapter | `packages/runner/src/adapters/claude.ts` | ✅ tested live |
 | Codex adapter | `packages/runner/src/adapters/codex.ts` | ✅ tested live |
 | Runner entrypoint (config load, harness selection, stdout printing) | `packages/runner/src/index.ts` | ✅ tested live in-container |
-| Worker v0 (no DB, `Bun.spawn` docker run, two-clone finalize per §11, print diff) | `apps/worker` | 🚧 in progress |
-| Finalize security test suite (symlink, FIFO, fsmonitor, determinism, crash recovery — §11) | `apps/worker` | 🚧 in progress |
-| DB-backed worker (claim/lease/heartbeat/cancel/recovery sweep) | `apps/worker` | 🚧 planned |
+| Worker v0 (no DB, `Bun.spawn` docker run, two-clone finalize per §11, print diff) | `apps/worker` | ✅ built, pending one live run with real credentials |
+| Finalize security test suite (symlink, FIFO, fsmonitor, determinism — §11) | `apps/worker/tests/` | ✅ 15 tests passing |
+| DB-backed worker (claim, heartbeat, cancel, event insertion, poll loop + semaphore, recovery sweep) | `apps/worker` | ✅ built and tested live |
+| Crash-recovery test (`kill -9` mid-run/mid-finalize, no duplicate events) | `apps/worker/tests/recovery.test.ts` | ✅ (redo-from-scratch strategy — see §10) |
 | API (POST/GET runs, cancel, SSE with replay) | `apps/api` | 🚧 planned |
 | Web UI | `apps/web` | 🚧 planned |
 | GitHub App (auth, installations, bare mirror, clone, push, PR) | — | 🚧 planned |

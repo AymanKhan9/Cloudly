@@ -32,6 +32,7 @@
     "apps/worker": {
       "name": "@repo/worker",
       "dependencies": {
+        "@repo/db": "*",
         "@repo/shared": "*",
       },
       "devDependencies": {
