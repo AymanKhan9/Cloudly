@@ -1,6 +1,10 @@
 import type { RunAdapter } from "../adapter";
 import type { RunEvent } from "@repo/shared/run-event";
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type SDKMessage, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+
+const canUseTool: CanUseTool = async (_toolName, _input, options) => {
+    return { behavior: "allow", toolUseID: options.toolUseID };
+};
 
 export type NormalizedEvent = Pick<RunEvent, "kind" | "data">;
 
@@ -75,8 +79,8 @@ export class ClaudeAdapter implements RunAdapter {
             prompt: task,
             options: {
                 cwd: "/workspace",
-                permissionMode: "bypassPermissions",
-                allowDangerouslySkipPermissions: true,
+                permissionMode: "default",
+                canUseTool,
                 disallowedTools: ["Bash(git push *)"],
                 maxTurns: 5,
                 maxBudgetUsd: 20,

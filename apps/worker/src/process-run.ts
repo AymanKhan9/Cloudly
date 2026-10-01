@@ -4,9 +4,18 @@ import type { RunEvent } from "@repo/shared/run-event";
 
 import { createWorkspace, destroyWorkspace, type Workspace } from "./workspace";
 import { createRunContainer, cancelRun } from "./docker";
-import { exportPatch, publishCommit, destroyPublish, type CommitInfo } from "./finalize";
+import {
+  exportPatch,
+  publishCommit,
+  destroyPublish,
+  pushBranch,
+  openPullRequest,
+  type CommitInfo,
+  type PublishResult,
+} from "./finalize";
 import { insertEvents } from "./events";
 import { heartbeat } from "./heartbeat";
+import { resolveCloneSource, isRepoSlug } from "./github";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 
@@ -45,10 +54,10 @@ export async function processRun(
   }, heartbeatIntervalMs);
 
   let ws: Workspace | undefined;
-  let publishResult: { publishDir: string; commitSha: string } | undefined;
+  let publishResult: PublishResult | undefined;
 
   try {
-    ws = await createWorkspace(run.repo);
+    ws = await createWorkspace(await resolveCloneSource(run.repo));
 
     try {
       for await (const event of runContainer(ws, run.prompt, run.harness, run.id)) {
@@ -83,6 +92,26 @@ export async function processRun(
       createdAt: run.createdAt,
     };
     publishResult = await publishCommit(ws, patch, commitInfo);
+
+    if (leaseLost) return;
+
+    // Only GitHub-slug repos have a real remote to push to — every worker
+    // test fixture uses a local path, same gate `resolveCloneSource` uses.
+    if (isRepoSlug(run.repo)) {
+      await pushBranch(publishResult, run.repo);
+
+      // Cancelled or not, the push above still lands — only PR creation is
+      // what cancellation skips (see the comment above `exportPatch`).
+      if (!cancelled) {
+        await openPullRequest({
+          repoSlug: run.repo,
+          baseBranch: run.baseBranch,
+          branch: publishResult.branch,
+          title: `Agent run: ${run.prompt}`,
+          body: `Opened by Cloud Agents for run \`${run.id}\`.`,
+        });
+      }
+    }
 
     if (leaseLost) return;
 

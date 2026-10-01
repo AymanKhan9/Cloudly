@@ -55,7 +55,11 @@ export class CodexAdapter implements RunAdapter {
         this.controller = new AbortController();
         const codex = new Codex();
 
-        const threadOptions = { workingDirectory: "/workspace", skipGitRepoCheck: true };
+        const threadOptions = {
+            workingDirectory: "/workspace",
+            skipGitRepoCheck: true,
+            approvalPolicy: "never" as const,
+        };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)
             : codex.startThread(threadOptions);

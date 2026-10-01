@@ -64,7 +64,7 @@ flowchart TB
     ExportC["Export container 🚧<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
     CheckC["Check container 🚧<br/>run clone mounted, no output-folder mount<br/>no model keys, no network"]
 
-    GitHub["GitHub<br/>repo + PR 🚧"]
+    GitHub["GitHub<br/>repo + PR"]
     Egress["Allowlisting egress proxy 🚧<br/>model API + registries only<br/>(not yet built — see §8)"]
 
     UI -- "POST /runs<br/>GET /runs/:id/events (SSE)" --> API
@@ -439,8 +439,37 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
 - **SSE auth can't use a bearer header.** The browser's native `EventSource` can't set an
   `Authorization` header, so the dev-token auth this system currently plans won't reach the SSE
   endpoint from a real web app. Needs a session cookie instead, once auth exists.
-
 **Fixed since, while building the API (`apps/api`):**
+- **`AcpAdapter` didn't support `resume`.** `session/load` exists in the raw protocol but isn't
+  wrapped by the fluent `SessionBuilder` convenience API the way `session/new` is. Fix: calls
+  `session/load` directly, then hands its response (merged with the known `sessionId`, since
+  `LoadSessionResponse` doesn't echo it back) to `attachSession` — the same private method
+  `SessionBuilder.start()` itself uses internally to wire up an `ActiveSession`. `private` in the
+  `.d.ts` is TS-only and erased at runtime, so this works, but it's relying on an internal that
+  isn't a stable public contract — revisit if a future SDK version wraps `session/load` properly.
+  Live-tested across two *separate* `gemini --acp` subprocesses — a fresh process resuming a session
+  created by a different, already-exited one, the real shape of a worker recovery/redo: phase one
+  told it a secret code, phase two (new subprocess, `session/load` with that session's id) correctly
+  recalled it, proving history genuinely replays rather than the mock succeeding on its own say-so.
+  One real finding along the way: `session/load` needs an explicit `authenticate` request first
+  (`-32000 Authentication required` without it) even though `session/new` doesn't need one upfront —
+  each run is a brand-new subprocess with no prior auth state, so `startResumedSession` always calls
+  `authenticate` with `methodId: "gemini-api-key"` (the one credential path this harness supports)
+  before `session/load`.
+- **Run containers hung forever after a `gemini-acp` run finished, instead of exiting.**
+  Live-tested the full worker → `docker run` → `AcpAdapter` → `gemini --acp` path end to end: the
+  protocol mapping and handshake were correct (`initialize`, `session/new`, `session/prompt`,
+  `session/update` all matched real responses, text arrived, `done` fired), but `docker run --rm`
+  never returned — confirmed via `docker ps` showing the container still `Up` a full minute after
+  the agent's turn completed. No orphaned subprocess (`pgrep` came up empty), so the hang was Bun's
+  own process not exiting, not a leaked `gemini` process. Traced to `ndJsonStream`'s reader not fully
+  releasing its handle back to Bun's event loop even after the ACP SDK's own `connectWith` →
+  `runUntil` → `close()` correctly calls `reader.cancel()` on it — a Bun `Readable.toWeb()` gap, not
+  an SDK or adapter logic bug. Fix: `packages/runner/src/index.ts`'s entrypoint now calls
+  `process.exit(0)` after `main()` resolves, symmetric with the error path's existing `process.exit(1)`
+  — correct anyway for a one-container-per-run process whose job is done once the loop drains.
+  Re-tested the same real container run after the fix: completed in 16s, `docker run --rm` returned
+  on its own, no container left behind.
 - **`Bun.serve`'s idle timeout was cutting quiet SSE streams — reproduced live, then fixed.** A
   real test (insert events with multi-second gaps between them, watch the connection) showed
   `curl` dying with a partial-transfer error roughly 20+ seconds into a quiet stretch — confirming
@@ -451,6 +480,26 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   pings filled every gap, and the stream closed cleanly (`curl` exit code `0`) right after `done` —
   plus `Last-Event-ID` replay verified separately (reconnecting after `seq=1` correctly resumed
   from `seq=2` onward, not from the start).
+- **GitHub App auth, authenticated clone, push, and PR creation — built and live-tested against a
+  real repo, including the full `processRun` pipeline producing a real PR end to end.**
+  `apps/worker/src/github.ts` wraps `@octokit/auth-app` (RS256 JWT + installation-token exchange,
+  with its own caching/refresh — not hand-rolled) for `authenticatedCloneUrl` and an idempotent
+  `createPullRequest` (§11's "attempt create, treat GitHub's own already-exists reply as success"
+  rule, verified against a real duplicate-call 422, not assumed). `resolveCloneSource` only engages
+  GitHub auth when `run.repo` is a real `"owner/repo"` slug — anything else (every existing test
+  fixture's local path) passes through unchanged, so no test needed updating. `finalize.ts` gained
+  `pushBranch` (checks the remote branch via `git ls-remote` before pushing, skipping entirely if
+  it's already at `commitSha`, per §11) and `openPullRequest`; `process-run.ts` calls both after
+  `publishCommit`, gated the same way as clone resolution, with push always attempted but PR
+  creation skipped on cancel (matching the pre-existing code comment above `exportPatch`, not a new
+  decision). One real bug caught before any of this worked: `GITHUB_APP_INSTALLATION_ID` was
+  pasted in as the full settings URL instead of the trailing numeric ID — `@octokit/auth-app`
+  failed with a real, correctly-diagnosed runtime error, not a silent wrong value. Live-tested in
+  stages — installation token, authenticated clone, push, `createPullRequest` including its
+  duplicate-call idempotency path — then end to end: a full `processRun` against the real
+  `AymanKhan9/Cloudly` repo produced an actual PR (#2) with the correct branch and title, closed
+  and cleaned up afterward. Not yet built: user-facing GitHub login / repo picker — this covers the
+  mechanics only, per an explicit scoping decision to build push+PR before any UX around it.
 
 ## 11. How finalize works
 
@@ -590,10 +639,10 @@ design, not after it:
 | API: `POST`/`GET /runs`, `GET /runs/:id` | `apps/api/src/index.ts` | ✅ built and tested live |
 | API: `POST /runs/:id/cancel` | `apps/api/src/index.ts` | ✅ built and tested live |
 | API: `GET /runs/:id/events` (SSE, replay via `Last-Event-ID`, keep-alive ping) | `apps/api/src/index.ts` | ✅ built and tested live |
-| Dev-token auth | `apps/api` | 🚧 planned — not yet wired up |
+| Dev-token auth | `apps/api` | ✅ built and tested live |
 | Web UI | `apps/web` | 🚧 planned |
-| GitHub App (auth, installations, bare mirror, clone, push, PR) | — | 🚧 planned |
-| ACP adapter (Gemini CLI and others) | `packages/runner` | 🚧 planned |
+| GitHub App auth, authenticated clone, push, PR creation (idempotent) | `apps/worker/src/github.ts`, `finalize.ts` | ✅ tested live — real installation token, clone, push, PR created/closed on a real repo; login/repo-picker UX not built |
+| ACP adapter (Gemini CLI via `gemini --acp`), incl. `resume` via `session/load` | `packages/runner/src/adapters/acp.ts` | ✅ tested live end to end through the real worker → Docker path, resume tested across separate subprocesses |
 | Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |

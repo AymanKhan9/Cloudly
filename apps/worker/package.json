@@ -8,8 +8,11 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@repo/shared":"*",
-    "@repo/db": "*"
+    "@octokit/auth-app": "^8.3.1",
+    "@octokit/core": "^7.0.8",
+    "@octokit/request-error": "^7.1.2",
+    "@repo/db": "*",
+    "@repo/shared": "*"
   },
   "devDependencies": {
     "@types/bun": "latest"

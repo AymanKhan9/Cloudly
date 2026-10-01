@@ -15,6 +15,7 @@ interface ControlConfig{
 // design pass rather than being bolted onto the env-var-only model below.
 const HARNESS_CREDENTIALS: Record<string, string[]> = {
     "native-claude": ["ANTHROPIC_API_KEY"],
+    "gemini-acp": ["GEMINI_API_KEY"],
 };
 
 function credentialFlags(harness: string): string[] {

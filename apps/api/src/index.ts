@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { prisma } from "@repo/db";
 import { zValidator } from '@hono/zod-validator'
 import { RunSchema } from '@repo/shared/run';
-import { stream, streamSSE } from 'hono/streaming';
+import { streamSSE } from 'hono/streaming';
 import { authMiddleware } from './middleware/auth_middleware';
 
 const app = new Hono()
@@ -15,8 +15,6 @@ const CreateRunSchema = RunSchema.pick({
   prompt: true,
   harness: true,
 });
-
-
 
 
 app.get('/', (c) => {
@@ -141,15 +139,6 @@ app.get('/runs/:id/events',async (c)=>{
 
       await stream.close();
     })
-
-
-
-
 })
-
-
-
-
-
 
 export default app

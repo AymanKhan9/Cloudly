@@ -5,6 +5,7 @@ import path from "node:path";
 import { runContainerCommand } from "./docker";
 import { validatePatch } from "./patch";
 import { type Workspace } from "./workspace";
+import { authenticatedCloneUrl, createPullRequest, parseRepoSlug } from "./github";
 
 const MAX_PATCH_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -41,6 +42,7 @@ export interface CommitInfo {
 export interface PublishResult {
   publishDir: string;
   commitSha: string;
+  branch: string;
 }
 
 const GIT_IDENTITY = {
@@ -64,7 +66,8 @@ export async function publishCommit(
 
   // Checkout base_sha detached, then branch — never the mirror's current
   // default branch, which may have moved since the run started.
-  await Bun.$`git -C ${publishDir} checkout -b agent/run-${info.runId} ${workspace.baseSha}`;
+  const branch = `agent/run-${info.runId}`;
+  await Bun.$`git -C ${publishDir} checkout -b ${branch} ${workspace.baseSha}`;
 
   await writeFile(patchFile, patch, "utf-8");
   await Bun.$`git -C ${publishDir} apply --index ${patchFile}`;
@@ -101,9 +104,73 @@ export async function publishCommit(
 
   const commitSha = (await Bun.$`git -C ${publishDir} rev-parse HEAD`.text()).trim();
 
-  return { publishDir, commitSha };
+  return { publishDir, commitSha, branch };
 }
 
 export async function destroyPublish(result: PublishResult): Promise<void> {
   await rm(path.dirname(result.publishDir), { recursive: true, force: true });
+}
+
+export interface PushResult {
+  pushed: boolean;
+}
+
+/**
+ * Checks the remote branch before pushing — per ARCHITECTURE.md §11, a
+ * retried finalize must skip the push entirely if the remote already points
+ * at `commitSha`, rather than attempt a second push that a non-fast-forward
+ * (the deterministic commit has a fixed parent, so a real second push would
+ * never be a fast-forward either) would reject.
+ */
+export async function pushBranch(
+  publish: Pick<PublishResult, "publishDir" | "branch" | "commitSha">,
+  repoSlug: string,
+): Promise<PushResult> {
+  const { owner, repo } = parseRepoSlug(repoSlug);
+  // Same "token lives in the subprocess command line for the call's
+  // duration" tradeoff `resolveCloneSource`/`createWorkspace` already
+  // accept for clone — not a new exposure introduced here.
+  const remoteUrl = await authenticatedCloneUrl(owner, repo);
+
+  const lsRemote = (
+    await Bun.$`git ls-remote ${remoteUrl} refs/heads/${publish.branch}`.text()
+  ).trim();
+  const remoteSha = lsRemote.split(/\s+/)[0];
+
+  if (remoteSha === publish.commitSha) {
+    return { pushed: false };
+  }
+
+  await Bun.$`git -C ${publish.publishDir} push ${remoteUrl} HEAD:refs/heads/${publish.branch}`;
+  return { pushed: true };
+}
+
+export interface OpenPullRequestParams {
+  repoSlug: string;
+  baseBranch: string;
+  branch: string;
+  title: string;
+  body?: string;
+}
+
+export interface OpenPullRequestResult {
+  url: string;
+  number: number;
+  alreadyExisted: boolean;
+}
+
+/** Thin translation from this run's `owner/repo` slug to `createPullRequest`'s
+ * split params — the idempotent-create logic itself lives in `github.ts`. */
+export async function openPullRequest(
+  params: OpenPullRequestParams,
+): Promise<OpenPullRequestResult> {
+  const { owner, repo } = parseRepoSlug(params.repoSlug);
+  return createPullRequest({
+    owner,
+    repo,
+    head: params.branch,
+    base: params.baseBranch,
+    title: params.title,
+    body: params.body,
+  });
 }
