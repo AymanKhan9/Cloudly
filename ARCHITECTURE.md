@@ -45,9 +45,9 @@ flowchart TB
     end
 
     subgraph Control["Control plane"]
-        API["API<br/>apps/api · Hono/Bun 🚧"]
+        API["API<br/>apps/api · Hono/Bun ✅<br/>(dev-token auth still 🚧)"]
         DB[("Postgres<br/>Run + RunEvent tables ✅<br/>(the job queue & durable event log)")]
-        Worker["Worker<br/>apps/worker · long-running Bun process 🚧<br/>(v0: CLI, no DB — 🚧 building now)"]
+        Worker["Worker<br/>apps/worker ✅<br/>claim/lease/heartbeat/cancel/recovery sweep"]
     end
 
     subgraph SandboxLayer["Sandbox (per run)"]
@@ -439,9 +439,18 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
 - **SSE auth can't use a bearer header.** The browser's native `EventSource` can't set an
   `Authorization` header, so the dev-token auth this system currently plans won't reach the SSE
   endpoint from a real web app. Needs a session cookie instead, once auth exists.
-- **`Bun.serve`'s idle timeout will cut quiet SSE streams.** A run that's thinking for a while with
-  no new events will look idle to the connection and get closed. Send a periodic comment-line ping
-  to keep it alive.
+
+**Fixed since, while building the API (`apps/api`):**
+- **`Bun.serve`'s idle timeout was cutting quiet SSE streams — reproduced live, then fixed.** A
+  real test (insert events with multi-second gaps between them, watch the connection) showed
+  `curl` dying with a partial-transfer error roughly 20+ seconds into a quiet stretch — confirming
+  this predicted gap before it shipped. Fix: `GET /runs/:id/events` now writes an SSE comment line
+  (`: ping\n\n`, ignored by `EventSource`, invisible to the client) on every poll tick that finds no
+  new events, so the connection never goes quiet long enough to look idle. Re-tested through a full
+  `status → text → done` sequence with real multi-second gaps: all events delivered live, keep-alive
+  pings filled every gap, and the stream closed cleanly (`curl` exit code `0`) right after `done` —
+  plus `Last-Event-ID` replay verified separately (reconnecting after `seq=1` correctly resumed
+  from `seq=2` onward, not from the start).
 
 ## 11. How finalize works
 
@@ -578,7 +587,10 @@ design, not after it:
 | Finalize security test suite (symlink, FIFO, fsmonitor, determinism — §11) | `apps/worker/tests/` | ✅ 15 tests passing |
 | DB-backed worker (claim, heartbeat, cancel, event insertion, poll loop + semaphore, recovery sweep) | `apps/worker` | ✅ built and tested live |
 | Crash-recovery test (`kill -9` mid-run/mid-finalize, no duplicate events) | `apps/worker/tests/recovery.test.ts` | ✅ (redo-from-scratch strategy — see §10) |
-| API (POST/GET runs, cancel, SSE with replay) | `apps/api` | 🚧 planned |
+| API: `POST`/`GET /runs`, `GET /runs/:id` | `apps/api/src/index.ts` | ✅ built and tested live |
+| API: `POST /runs/:id/cancel` | `apps/api/src/index.ts` | ✅ built and tested live |
+| API: `GET /runs/:id/events` (SSE, replay via `Last-Event-ID`, keep-alive ping) | `apps/api/src/index.ts` | ✅ built and tested live |
+| Dev-token auth | `apps/api` | 🚧 planned — not yet wired up |
 | Web UI | `apps/web` | 🚧 planned |
 | GitHub App (auth, installations, bare mirror, clone, push, PR) | — | 🚧 planned |
 | ACP adapter (Gemini CLI and others) | `packages/runner` | 🚧 planned |

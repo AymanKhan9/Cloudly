@@ -14,6 +14,7 @@ export async function claimRun(
     WHERE id = (
       SELECT id FROM "Run"
       WHERE status = 'queued'
+        AND NOT "cancelRequested"
       ORDER BY "createdAt"
       FOR UPDATE SKIP LOCKED
       LIMIT 1
