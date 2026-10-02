@@ -57,3 +57,33 @@ function path_relative_to_objects(objectFile: string, repoPath: string): string 
   }
   return objectFile.slice(prefix.length);
 }
+
+test("continues from the thread's branch when an earlier turn pushed one", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    await Bun.$`git -C ${fixture.repoPath} checkout -q -b agent/thread-abc`;
+    await Bun.write(`${fixture.repoPath}/turn1.txt`, "from turn one\n");
+    await Bun.$`git -C ${fixture.repoPath} add -A`;
+    await Bun.$`git -C ${fixture.repoPath} commit -q -m "turn one"`;
+    const turnOneSha = (await Bun.$`git -C ${fixture.repoPath} rev-parse HEAD`.text()).trim();
+    await Bun.$`git -C ${fixture.repoPath} checkout -q -`;
+
+    const ws = await createWorkspace(fixture.repoPath, { branch: "agent/thread-abc" });
+    try {
+      expect(ws.baseSha).toBe(turnOneSha);
+      expect(await Bun.file(`${ws.runDir}/turn1.txt`).text()).toBe("from turn one\n");
+    } finally {
+      await destroyWorkspace(ws);
+    }
+
+    // A thread branch nobody pushed yet falls back to the base branch.
+    const first = await createWorkspace(fixture.repoPath, { branch: "agent/thread-new" });
+    try {
+      expect(await Bun.file(`${first.runDir}/turn1.txt`).exists()).toBe(false);
+    } finally {
+      await destroyWorkspace(first);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+});

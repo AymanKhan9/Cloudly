@@ -12,8 +12,63 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id          String   @id @default(uuid())
+  githubId    Int      @unique
+  login       String
+  avatarUrl   String?
+  createdAt   DateTime   @default(now())
+  sessions    Session[]
+  runs        Run[]
+  threads     Thread[]
+  budget      Budget?
+}
+
+// A conversation with one agent about one repo. Each message is a Run (a
+// turn). Turns share a git branch and one pull request, and resume the
+// agent's own session through agentSessionId.
+model Thread {
+  id             String   @id @default(uuid())
+  userId         String
+  repo           String
+  baseBranch     String
+  harness        String
+  title          String
+  branch         String
+  agentSessionId String?
+  prUrl          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs           Run[]
+  @@index([userId, updatedAt])
+}
+
+// Monthly model-spend limit. warnedMonth/stoppedMonth hold "YYYY-MM" so each
+// threshold notifies once per calendar month (UTC), not on every run.
+model Budget {
+  userId          String   @id
+  monthlyLimitUsd Decimal  @default(10)
+  alertEmail      String?
+  warnedMonth     String?
+  stoppedMonth    String?
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
+model Session {
+  id         String   @id
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
 model Run {
   id         String   @id @default(uuid())
+  userId     String?
   status     RunStatusEnum
   createdAt  DateTime @default(now())
   leaseUntil DateTime?
@@ -33,8 +88,13 @@ model Run {
   patchHash  String?
   prUrl      String?
   error      String?
+  threadId   String?
   events     RunEvent[]
+  user       User?    @relation(fields: [userId],references: [id],onDelete: Cascade)
+  thread     Thread?  @relation(fields: [threadId],references: [id],onDelete: Cascade)
   @@index([status,createdAt])
+  @@index([userId])
+  @@index([threadId, createdAt])
 }
 
 model RunEvent {

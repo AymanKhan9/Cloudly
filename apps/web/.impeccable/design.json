@@ -1,0 +1,561 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T15:43:45.291Z",
+  "title": "Design System: Cloudly",
+  "extensions": {
+    "colorMeta": {
+      "atlas": {
+        "role": "primary",
+        "displayName": "Atlas Cobalt",
+        "canonical": "#1f3f8c",
+        "oklch": "oklch(39.2% 0.134 264.1)",
+        "tonalRamp": [
+          "oklch(15% 0.066 264.1)",
+          "oklch(26.4% 0.108 264.1)",
+          "oklch(37.9% 0.134 264.1)",
+          "oklch(49.3% 0.134 264.1)",
+          "oklch(60.7% 0.134 264.1)",
+          "oklch(72.1% 0.113 264.1)",
+          "oklch(83.6% 0.071 264.1)",
+          "oklch(95% 0.028 264.1)"
+        ]
+      },
+      "atlas-deep": {
+        "role": "primary",
+        "displayName": "Deep Atlas",
+        "canonical": "#17316e",
+        "oklch": "oklch(33.2% 0.111 263.9)",
+        "tonalRamp": [
+          "oklch(15% 0.066 263.9)",
+          "oklch(26.4% 0.108 263.9)",
+          "oklch(37.9% 0.111 263.9)",
+          "oklch(49.3% 0.111 263.9)",
+          "oklch(60.7% 0.111 263.9)",
+          "oklch(72.1% 0.111 263.9)",
+          "oklch(83.6% 0.071 263.9)",
+          "oklch(95% 0.028 263.9)"
+        ]
+      },
+      "atlas-2": {
+        "role": "primary",
+        "displayName": "Middle-Cloud Cobalt",
+        "canonical": "#27509f",
+        "oklch": "oklch(44.7% 0.137 261.9)",
+        "tonalRamp": [
+          "oklch(15% 0.066 261.9)",
+          "oklch(26.4% 0.108 261.9)",
+          "oklch(37.9% 0.137 261.9)",
+          "oklch(49.3% 0.137 261.9)",
+          "oklch(60.7% 0.137 261.9)",
+          "oklch(72.1% 0.113 261.9)",
+          "oklch(83.6% 0.071 261.9)",
+          "oklch(95% 0.028 261.9)"
+        ]
+      },
+      "atlas-3": {
+        "role": "primary",
+        "displayName": "Low-Cloud Cobalt",
+        "canonical": "#3061b3",
+        "oklch": "oklch(50.3% 0.141 260.1)",
+        "tonalRamp": [
+          "oklch(15% 0.066 260.1)",
+          "oklch(26.4% 0.108 260.1)",
+          "oklch(37.9% 0.141 260.1)",
+          "oklch(49.3% 0.141 260.1)",
+          "oklch(60.7% 0.141 260.1)",
+          "oklch(72.1% 0.113 260.1)",
+          "oklch(83.6% 0.071 260.1)",
+          "oklch(95% 0.028 260.1)"
+        ]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "International Orange",
+        "canonical": "#ff5a1f",
+        "oklch": "oklch(68.2% 0.211 37.7)",
+        "tonalRamp": [
+          "oklch(15% 0.066 37.7)",
+          "oklch(26.4% 0.108 37.7)",
+          "oklch(37.9% 0.15 37.7)",
+          "oklch(49.3% 0.192 37.7)",
+          "oklch(60.7% 0.155 37.7)",
+          "oklch(72.1% 0.113 37.7)",
+          "oklch(83.6% 0.071 37.7)",
+          "oklch(95% 0.028 37.7)"
+        ]
+      },
+      "signal-hover": {
+        "role": "secondary",
+        "displayName": "Orange, Lit",
+        "canonical": "#ff7440",
+        "oklch": "oklch(71.8% 0.182 40)",
+        "tonalRamp": [
+          "oklch(15% 0.066 40)",
+          "oklch(26.4% 0.108 40)",
+          "oklch(37.9% 0.15 40)",
+          "oklch(49.3% 0.182 40)",
+          "oklch(60.7% 0.155 40)",
+          "oklch(72.1% 0.113 40)",
+          "oklch(83.6% 0.071 40)",
+          "oklch(95% 0.028 40)"
+        ]
+      },
+      "rose": {
+        "role": "tertiary",
+        "displayName": "Cumulus Rose",
+        "canonical": "#e8b9a6",
+        "oklch": "oklch(82.3% 0.061 43.1)",
+        "tonalRamp": [
+          "oklch(15% 0.061 43.1)",
+          "oklch(26.4% 0.061 43.1)",
+          "oklch(37.9% 0.061 43.1)",
+          "oklch(49.3% 0.061 43.1)",
+          "oklch(60.7% 0.061 43.1)",
+          "oklch(72.1% 0.061 43.1)",
+          "oklch(83.6% 0.061 43.1)",
+          "oklch(95% 0.028 43.1)"
+        ]
+      },
+      "rose-ink": {
+        "role": "tertiary",
+        "displayName": "Rose Ink",
+        "canonical": "#8e3f27",
+        "oklch": "oklch(46.8% 0.114 37.5)",
+        "tonalRamp": [
+          "oklch(15% 0.066 37.5)",
+          "oklch(26.4% 0.108 37.5)",
+          "oklch(37.9% 0.114 37.5)",
+          "oklch(49.3% 0.114 37.5)",
+          "oklch(60.7% 0.114 37.5)",
+          "oklch(72.1% 0.113 37.5)",
+          "oklch(83.6% 0.071 37.5)",
+          "oklch(95% 0.028 37.5)"
+        ]
+      },
+      "storm": {
+        "role": "tertiary",
+        "displayName": "Storm Flag",
+        "canonical": "#c2231b",
+        "oklch": "oklch(52.7% 0.195 28.9)",
+        "tonalRamp": [
+          "oklch(15% 0.066 28.9)",
+          "oklch(26.4% 0.108 28.9)",
+          "oklch(37.9% 0.15 28.9)",
+          "oklch(49.3% 0.192 28.9)",
+          "oklch(60.7% 0.155 28.9)",
+          "oklch(72.1% 0.113 28.9)",
+          "oklch(83.6% 0.071 28.9)",
+          "oklch(95% 0.028 28.9)"
+        ]
+      },
+      "chalk": {
+        "role": "neutral",
+        "displayName": "Chalk",
+        "canonical": "#eef2f7",
+        "oklch": "oklch(96% 0.008 253.9)",
+        "tonalRamp": [
+          "oklch(15% 0.008 253.9)",
+          "oklch(26.4% 0.008 253.9)",
+          "oklch(37.9% 0.008 253.9)",
+          "oklch(49.3% 0.008 253.9)",
+          "oklch(60.7% 0.008 253.9)",
+          "oklch(72.1% 0.008 253.9)",
+          "oklch(83.6% 0.008 253.9)",
+          "oklch(95% 0.008 253.9)"
+        ]
+      },
+      "chalk-2": {
+        "role": "neutral",
+        "displayName": "Chalk 2",
+        "canonical": "#e2e9f1",
+        "oklch": "oklch(93.1% 0.013 251.6)",
+        "tonalRamp": [
+          "oklch(15% 0.013 251.6)",
+          "oklch(26.4% 0.013 251.6)",
+          "oklch(37.9% 0.013 251.6)",
+          "oklch(49.3% 0.013 251.6)",
+          "oklch(60.7% 0.013 251.6)",
+          "oklch(72.1% 0.013 251.6)",
+          "oklch(83.6% 0.013 251.6)",
+          "oklch(95% 0.013 251.6)"
+        ]
+      },
+      "chalk-3": {
+        "role": "neutral",
+        "displayName": "Chalk 3",
+        "canonical": "#d3dce8",
+        "oklch": "oklch(89.1% 0.019 255.5)",
+        "tonalRamp": [
+          "oklch(15% 0.019 255.5)",
+          "oklch(26.4% 0.019 255.5)",
+          "oklch(37.9% 0.019 255.5)",
+          "oklch(49.3% 0.019 255.5)",
+          "oklch(60.7% 0.019 255.5)",
+          "oklch(72.1% 0.019 255.5)",
+          "oklch(83.6% 0.019 255.5)",
+          "oklch(95% 0.019 255.5)"
+        ]
+      },
+      "sheet-paper": {
+        "role": "neutral",
+        "displayName": "Sheet Paper",
+        "canonical": "#f8fafc",
+        "oklch": "oklch(98.4% 0.003 247.9)",
+        "tonalRamp": [
+          "oklch(15% 0.003 247.9)",
+          "oklch(26.4% 0.003 247.9)",
+          "oklch(37.9% 0.003 247.9)",
+          "oklch(49.3% 0.003 247.9)",
+          "oklch(60.7% 0.003 247.9)",
+          "oklch(72.1% 0.003 247.9)",
+          "oklch(83.6% 0.003 247.9)",
+          "oklch(95% 0.003 247.9)"
+        ]
+      },
+      "field-well": {
+        "role": "neutral",
+        "displayName": "Field Well",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100% 0 89.9)",
+        "tonalRamp": [
+          "oklch(15% 0.008 253.9)",
+          "oklch(26.4% 0.008 253.9)",
+          "oklch(37.9% 0.008 253.9)",
+          "oklch(49.3% 0.008 253.9)",
+          "oklch(60.7% 0.008 253.9)",
+          "oklch(72.1% 0.008 253.9)",
+          "oklch(83.6% 0.008 253.9)",
+          "oklch(95% 0.008 253.9)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Station Ink",
+        "canonical": "#0f1b33",
+        "oklch": "oklch(22.5% 0.05 262.9)",
+        "tonalRamp": [
+          "oklch(15% 0.05 262.9)",
+          "oklch(26.4% 0.05 262.9)",
+          "oklch(37.9% 0.05 262.9)",
+          "oklch(49.3% 0.05 262.9)",
+          "oklch(60.7% 0.05 262.9)",
+          "oklch(72.1% 0.05 262.9)",
+          "oklch(83.6% 0.05 262.9)",
+          "oklch(95% 0.028 262.9)"
+        ]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Nimbus Slate",
+        "canonical": "#4d5b73",
+        "oklch": "oklch(46.9% 0.043 261.1)",
+        "tonalRamp": [
+          "oklch(15% 0.043 261.1)",
+          "oklch(26.4% 0.043 261.1)",
+          "oklch(37.9% 0.043 261.1)",
+          "oklch(49.3% 0.043 261.1)",
+          "oklch(60.7% 0.043 261.1)",
+          "oklch(72.1% 0.043 261.1)",
+          "oklch(83.6% 0.043 261.1)",
+          "oklch(95% 0.028 261.1)"
+        ]
+      },
+      "mist": {
+        "role": "neutral",
+        "displayName": "Mist",
+        "canonical": "#c3cfe2",
+        "oklch": "oklch(85.1% 0.03 259.6)",
+        "tonalRamp": [
+          "oklch(15% 0.03 259.6)",
+          "oklch(26.4% 0.03 259.6)",
+          "oklch(37.9% 0.03 259.6)",
+          "oklch(49.3% 0.03 259.6)",
+          "oklch(60.7% 0.03 259.6)",
+          "oklch(72.1% 0.03 259.6)",
+          "oklch(83.6% 0.03 259.6)",
+          "oklch(95% 0.028 259.6)"
+        ]
+      },
+      "mist-dim": {
+        "role": "neutral",
+        "displayName": "Dim Mist",
+        "canonical": "#9fb0cc",
+        "oklch": "oklch(75.3% 0.045 260.4)",
+        "tonalRamp": [
+          "oklch(15% 0.045 260.4)",
+          "oklch(26.4% 0.045 260.4)",
+          "oklch(37.9% 0.045 260.4)",
+          "oklch(49.3% 0.045 260.4)",
+          "oklch(60.7% 0.045 260.4)",
+          "oklch(72.1% 0.045 260.4)",
+          "oklch(83.6% 0.045 260.4)",
+          "oklch(95% 0.028 260.4)"
+        ]
+      },
+      "hair": {
+        "role": "neutral",
+        "displayName": "Hairline on Cobalt",
+        "canonical": "rgba(238, 242, 247, 0.22)",
+        "note": "Chalk at 22% alpha; 1px rules on cobalt grounds."
+      },
+      "hair-ink": {
+        "role": "neutral",
+        "displayName": "Hairline on Chalk",
+        "canonical": "rgba(15, 27, 51, 0.14)",
+        "note": "Ink at 14% alpha; 1px rules on chalk grounds."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Landing hero and closing headline; .display class, balanced, 11-13ch."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Landing section heads, max 18ch."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "App page heads and the sign-in heading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All UI copy in Geist with ss01; ledes 17-18.5px at 46-58ch."
+      },
+      "label": {
+        "displayName": "Frame Label",
+        "purpose": "Archivo Expanded caps for plate numbers, mount and sheet headings, course kinds, barometer zone words. Never a kicker above a headline."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Uppercase Archivo wdth 118 on every button."
+      },
+      "latin": {
+        "displayName": "Latin Genus",
+        "purpose": "Bodoni Moda italic, genus and species names only, beside the plain harness name."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Geist Mono with tabular figures and slashed zero for costs, times, tool calls and the install command."
+      }
+    },
+    "shadows": [
+      {
+        "name": "plate",
+        "value": "0 18px 40px -18px rgba(8, 18, 45, 0.55), 0 2px 6px -2px rgba(8, 18, 45, 0.35)",
+        "purpose": "Plate mounts, the install card, plate frames."
+      },
+      {
+        "name": "card",
+        "value": "0 10px 24px -14px rgba(15, 27, 51, 0.35), 0 1px 2px rgba(15, 27, 51, 0.12)",
+        "purpose": "Observation sheets, run log, settings reading, mail preview."
+      },
+      {
+        "name": "signal-glow",
+        "value": "0 6px 16px -8px rgba(255, 90, 31, 0.7)",
+        "purpose": "Signal button at rest; dropped on press and when disabled."
+      },
+      {
+        "name": "field-focus",
+        "value": "0 0 0 3px rgba(31, 63, 140, 0.18)",
+        "purpose": "Input focus halo with an atlas border."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid #ff5a1f; outline-offset: 3px",
+        "purpose": "Global :focus-visible ring on pressables."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The one easing curve, for every transition and the barometer needle."
+      },
+      {
+        "name": "state",
+        "value": "160ms",
+        "purpose": "Hover, press, border and color transitions."
+      },
+      {
+        "name": "course-in",
+        "value": "520ms; from opacity 0, translateY(6px), blur(3px)",
+        "purpose": "A new course condenses into the log."
+      },
+      {
+        "name": "needle",
+        "value": "600ms",
+        "purpose": "Barometer needle travel."
+      },
+      {
+        "name": "live-pulse",
+        "value": "1.6s infinite, opacity to 0.25",
+        "purpose": "Rose live dot on a running log."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Animations and transitions collapse to 1ms; the cloud plate stops advancing time; courses appear without condensing."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "lg",
+        "value": "1080px",
+        "purpose": "Two-column sections, run detail and settings collapse to one column; side plate moves above the log."
+      },
+      {
+        "name": "md",
+        "value": "760px",
+        "purpose": "Sheets, genus picker, sign-in and empty state go single-column; app nav wraps; course kind hides."
+      },
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "Station figure swaps to its tall drawing; dialects table becomes stacked groups."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Signal Button",
+      "kind": "button",
+      "refersTo": "button-signal",
+      "description": "The one primary action per view: copy install, start run, sign in.",
+      "html": "<button class=\"ds-btn ds-btn-signal\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"8.5\" y=\"8.5\" width=\"11\" height=\"11\" rx=\"1.5\"/><path d=\"M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5\"/></svg>Copy</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 18px;border:1px solid transparent;border-radius:3px;font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 118;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:background-color 160ms cubic-bezier(.16,1,.3,1),transform 160ms cubic-bezier(.16,1,.3,1),box-shadow 160ms cubic-bezier(.16,1,.3,1),border-color 160ms cubic-bezier(.16,1,.3,1),color 160ms cubic-bezier(.16,1,.3,1)}.ds-btn svg{width:16px;height:16px;flex:none}.ds-btn-signal{background:#ff5a1f;color:#0f1b33;box-shadow:0 6px 16px -8px rgba(255,90,31,.7)}.ds-btn-signal:hover{background:#ff7440}.ds-btn-signal:active{transform:translateY(1px);box-shadow:none}.ds-btn:focus-visible{outline:2px solid #ff5a1f;outline-offset:3px}"
+    },
+    {
+      "name": "Line Button",
+      "kind": "button",
+      "refersTo": "button-line",
+      "description": "Secondary action on cobalt; border and text turn orange on hover.",
+      "html": "<div style=\"background:#1f3f8c;padding:20px\"><button class=\"ds-btn-line\">Sign in</button></div>",
+      "css": ".ds-btn-line{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;background:transparent;color:#eef2f7;border:1px solid currentColor;border-radius:3px;font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 118;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:border-color 160ms cubic-bezier(.16,1,.3,1),color 160ms cubic-bezier(.16,1,.3,1)}.ds-btn-line:hover{border-color:#ff5a1f;color:#ff5a1f}.ds-btn-line:focus-visible{outline:2px solid #ff5a1f;outline-offset:3px}"
+    },
+    {
+      "name": "Field Input",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Sheet field: slate label over a white well; atlas border and halo on focus.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-limit\">Monthly model-spend limit</label><input id=\"ds-limit\" class=\"ds-input\" value=\"20.00\"/><div class=\"ds-field-hint\">Runs stop at 100%.</div></div>",
+      "css": ".ds-field{padding:16px 20px;background:#f8fafc;color:#0f1b33;font-family:Geist,system-ui,sans-serif}.ds-field-label{display:block;font-size:12px;font-weight:600;color:#4d5b73;margin-bottom:6px}.ds-input{width:100%;border:1px solid #d3dce8;background:#fff;border-radius:3px;padding:10px 12px;font-size:15px;color:#0f1b33;transition:border-color 160ms cubic-bezier(.16,1,.3,1),box-shadow 160ms cubic-bezier(.16,1,.3,1)}.ds-input:focus{outline:none;border-color:#1f3f8c;box-shadow:0 0 0 3px rgba(31,63,140,.18)}.ds-field-hint{font-size:12.5px;color:#4d5b73;margin-top:6px}"
+    },
+    {
+      "name": "App Bar",
+      "kind": "nav",
+      "refersTo": "app-bar",
+      "description": "Cobalt bar: wordmark, mist tabs with the current page on deep atlas, and the limit reading.",
+      "html": "<header class=\"ds-appbar\"><span class=\"ds-wordmark\">Cloudly</span><nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Runs</a><a href=\"#\">New run</a><a href=\"#\">Settings</a></nav><a href=\"#\" class=\"ds-reading\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 12 L12 3 A9 9 0 0 1 21 12 Z\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg><span class=\"ds-caps\">Fair</span><span class=\"ds-num\">$4.20 / $20.00</span></a></header>",
+      "css": ".ds-appbar{display:flex;align-items:center;gap:28px;min-height:60px;padding:0 24px;background:#1f3f8c;color:#eef2f7;font-family:Geist,system-ui,sans-serif}.ds-wordmark{font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 125;font-weight:800;font-size:17px;letter-spacing:.02em}.ds-nav{display:flex;gap:4px;flex:1}.ds-nav a{padding:8px 12px;text-decoration:none;font-size:14px;color:#c3cfe2;border-radius:3px;transition:color 160ms cubic-bezier(.16,1,.3,1),background-color 160ms cubic-bezier(.16,1,.3,1)}.ds-nav a:hover{color:#eef2f7}.ds-nav a[aria-current=\"page\"]{color:#eef2f7;background:#17316e}.ds-nav a:focus-visible,.ds-reading:focus-visible{outline:2px solid #ff5a1f;outline-offset:3px}.ds-reading{display:inline-flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid rgba(238,242,247,.22);border-radius:3px;font-size:13px;color:#eef2f7;text-decoration:none}.ds-caps{font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 125;font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase}.ds-num{font-family:\"Geist Mono\",ui-monospace,monospace;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Harness Switch",
+      "kind": "chip",
+      "refersTo": "harness-switch-option",
+      "description": "Segmented control in a plate head; the selected harness reclassifies the cloud's genus.",
+      "html": "<div class=\"ds-switch\" role=\"group\"><button aria-pressed=\"true\">Claude Code</button><button aria-pressed=\"false\">Codex</button><button aria-pressed=\"false\">Gemini CLI</button></div>",
+      "css": ".ds-switch{display:inline-flex;border:1px solid rgba(15,27,51,.14);border-radius:3px;overflow:hidden;background:#eef2f7}.ds-switch button{appearance:none;border:0;border-left:1px solid rgba(15,27,51,.14);background:transparent;padding:6px 12px;font-family:Geist,system-ui,sans-serif;font-size:12.5px;font-weight:500;color:#4d5b73;cursor:pointer;transition:background-color 160ms cubic-bezier(.16,1,.3,1),color 160ms cubic-bezier(.16,1,.3,1)}.ds-switch button:first-child{border-left:0}.ds-switch button:hover{color:#0f1b33}.ds-switch button[aria-pressed=\"true\"]{background:#1f3f8c;color:#eef2f7}.ds-switch button:focus-visible{outline:2px solid #ff5a1f;outline-offset:-2px}"
+    },
+    {
+      "name": "Observation Sheet",
+      "kind": "card",
+      "refersTo": "observation-sheet",
+      "description": "Shared anatomy of the run composer and the record: caps head, hairline field grid, foot.",
+      "html": "<section class=\"ds-sheet\"><div class=\"ds-sheet-head\"><span class=\"ds-caps\">Observation sheet</span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg></div><div class=\"ds-sheet-grid\"><div class=\"ds-cell\"><span class=\"ds-lbl\">Repository</span><div>acme/billing-api</div></div><div class=\"ds-cell\"><span class=\"ds-lbl\">Agent</span><div><em class=\"ds-latin\">Cumulus</em> Claude Code</div></div><div class=\"ds-cell\"><span class=\"ds-lbl\">Cost</span><div class=\"ds-num\">$0.21</div></div></div></section>",
+      "css": ".ds-sheet{background:#f8fafc;color:#0f1b33;border:1px solid rgba(15,27,51,.14);border-radius:3px;box-shadow:0 10px 24px -14px rgba(15,27,51,.35),0 1px 2px rgba(15,27,51,.12);font-family:Geist,system-ui,sans-serif}.ds-sheet-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(15,27,51,.14)}.ds-caps{font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 125;font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#4d5b73}.ds-sheet-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.ds-cell{padding:16px 20px;border-right:1px solid rgba(15,27,51,.14);font-size:15px}.ds-cell:last-child{border-right:0}.ds-lbl{display:block;font-size:12px;font-weight:600;color:#4d5b73;margin-bottom:6px}.ds-latin{font-family:\"Bodoni Moda\",serif;font-style:italic;font-weight:500;font-size:17px}.ds-num{font-family:\"Geist Mono\",ui-monospace,monospace;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Plate Mount",
+      "kind": "custom",
+      "refersTo": "plate-mount",
+      "description": "The atlas plate: chalk mount, ink-ruled head with plate number, cobalt window for the cloud canvas, Latin caption.",
+      "html": "<figure class=\"ds-mount\"><div class=\"ds-mount-head\"><span class=\"ds-caps\">Plate I</span><span class=\"ds-caps ds-dim\">Fair weather</span></div><div class=\"ds-mount-window\"><span class=\"ds-genus\">Cumulus</span></div><figcaption class=\"ds-mount-caption\"><span><em class=\"ds-latin\">Cumulus mediocris</em>, observed on your station.</span><span>Illustrative run</span></figcaption></figure>",
+      "css": ".ds-mount{margin:0;max-width:520px;background:#eef2f7;color:#0f1b33;padding:12px 12px 0;border-radius:3px;box-shadow:0 18px 40px -18px rgba(8,18,45,.55),0 2px 6px -2px rgba(8,18,45,.35);font-family:Geist,system-ui,sans-serif}.ds-mount-head{display:flex;justify-content:space-between;align-items:center;padding:2px 2px 10px;border-bottom:1px solid #0f1b33}.ds-caps{font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 125;font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase}.ds-dim{color:#4d5b73}.ds-mount-window{position:relative;margin-top:10px;aspect-ratio:16/10;border:1px solid #0f1b33;background:#27509f;color:#eef2f7}.ds-genus{position:absolute;left:14px;top:12px;font-family:\"Bodoni Moda\",serif;font-style:italic;font-size:22px}.ds-mount-caption{display:flex;justify-content:space-between;gap:16px;padding:10px 2px 12px;font-size:12.5px;color:#4d5b73}.ds-latin{font-family:\"Bodoni Moda\",serif;font-style:italic;font-weight:500;font-size:15px;color:#0f1b33}"
+    },
+    {
+      "name": "Courses",
+      "kind": "custom",
+      "refersTo": "run-log",
+      "description": "The run log as single-line courses: mono time, caps kind, body; done and PR kinds in rose.",
+      "html": "<ol class=\"ds-courses\"><li><span class=\"ds-t\">00:04</span><span class=\"ds-k\">Read</span><span class=\"ds-b\">src/routes/invoices.ts</span></li><li data-kind=\"tool\"><span class=\"ds-t\">00:19</span><span class=\"ds-k\">Tool</span><span class=\"ds-b\">bun test invoices</span></li><li data-kind=\"pr\"><span class=\"ds-t\">01:52</span><span class=\"ds-k\">PR</span><span class=\"ds-b\">Opened #214</span></li></ol>",
+      "css": ".ds-courses{list-style:none;margin:0;padding:0;background:#17316e;color:#eef2f7;border-radius:3px;font-family:Geist,system-ui,sans-serif}.ds-courses li{display:grid;grid-template-columns:52px 92px minmax(0,1fr);align-items:baseline;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(238,242,247,.22);font-size:13px;line-height:1.4;transition:background-color 160ms cubic-bezier(.16,1,.3,1)}.ds-courses li:last-child{border-bottom:0}.ds-courses li:hover{background:rgba(238,242,247,.06)}.ds-t{color:#9fb0cc;font-size:12px;font-family:\"Geist Mono\",ui-monospace,monospace;font-variant-numeric:tabular-nums}.ds-k{font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 125;font-weight:700;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#c3cfe2}.ds-courses li[data-kind=\"tool\"] .ds-b{font-family:\"Geist Mono\",ui-monospace,monospace;font-size:12.5px}.ds-courses li[data-kind=\"pr\"] .ds-k{color:#e8b9a6}.ds-courses li[data-kind=\"pr\"] .ds-b{font-weight:500}"
+    },
+    {
+      "name": "Oktas and Inked Stamp",
+      "kind": "custom",
+      "refersTo": "stamp-inked",
+      "description": "Progress in eighths of sky cover; status plain while running, stamped solid once terminal.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-row\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 12 L12 3 A9 9 0 0 1 18.364 18.364 Z\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg><span class=\"ds-stamp\">Running</span></span><span class=\"ds-row\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"currentColor\"/><circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\"/></svg><span class=\"ds-stamp\" data-inked>PR opened</span></span></div>",
+      "css": ".ds-status{display:flex;gap:28px;padding:16px;background:#eef2f7;color:#0f1b33;font-family:Geist,system-ui,sans-serif}.ds-row{display:inline-flex;align-items:center;gap:10px}.ds-stamp{font-weight:600;font-size:14px;padding:2px 0}.ds-stamp[data-inked]{background:#0f1b33;color:#eef2f7;padding:2px 8px;font-family:Archivo,sans-serif;font-variation-settings:\"wdth\" 120;font-size:12px;letter-spacing:.08em;text-transform:uppercase}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cloud Atlas Station",
+    "overview": "Your VM is your observing station and every run is a classified, logged observation. The system borrows from two real artifacts: the chromolithograph plates of the 1896 International Cloud Atlas (flat printed inks, numbered plate frames, Latin genus names under each cloud) and WMO station-model notation (oktas sky-cover circles, the barometer's Fair, Change, Storm). Meteorology stays the second layer: every reading also carries its plain label ($1.42, Running, PR opened).\n\nCommitted atlas cobalt owns whole regions rather than tinting them. The marketing page descends through hard-stepped cobalt bands (high, middle and low cloud) to a chalk ground; the app inverts that, a cobalt bar over a chalk desk where records are filed as observation sheets. Surfaces are plates: chalk mounts with a thin ink rule, a cobalt window holding a live WebGL cloud printed in four flat inks with a stippled edge, and a log of single-line courses beneath. Density is that of a field notebook: tight hairline-ruled rows, tabular figures, generous section air between them.\n\nThe world rejects the category default of a near-black terminal hero over a feature-card grid. Logs run on deep cobalt, never black; status is drawn as weather, never as colored badges.",
+    "keyCharacteristics": [
+      "Cobalt fields in hard steps, never gradients; chalk plates and sheets sit on them.",
+      "Four flat plate inks for clouds (slate, mist, chalk, rose), dithered at the edge.",
+      "Expanded Archivo caps for plate and sheet headings, Bodoni Moda italic for Latin genus names, Geist for UI, Geist Mono for every number.",
+      "International orange only on things you can press.",
+      "Progress in oktas, spend on a barometer, terminal states stamped in solid ink."
+    ],
+    "rules": [
+      {
+        "name": "The Orange Is Pressable Rule",
+        "body": "International orange appears only on things that respond to a press: buttons, the range control, focus rings and hover borders. It is never a heading color, a status, or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Warnings Rule",
+        "body": "Rose is Change (80% of the limit); storm red is the stop. The product's one danger signal never shares a color with its warning, and storm red never appears as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rose-on-Chalk Rule",
+        "body": "On chalk surfaces rose text becomes rose-ink. Rose as fill (the Change banner, barometer arc) is fine on either ground.",
+        "section": "colors"
+      },
+      {
+        "name": "The Frame Label Rule",
+        "body": "Expanded caps label a frame (a plate's number, a sheet's name, a course's kind). They are never a kicker or eyebrow stacked above a headline.",
+        "section": "typography"
+      },
+      {
+        "name": "The Latin Is a Name Rule",
+        "body": "Bodoni italic only sets a cloud's classification, always next to the plain harness name. It never sets sentences or headings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Money Rule",
+        "body": "Every cost, count and time is Geist Mono with tabular figures; estimates carry a tilde and say \"estimated\".",
+        "section": "typography"
+      },
+      {
+        "name": "The Hard Steps Rule",
+        "body": "Sky bands and plate inks change in hard steps. No gradient ever fills a band, a plate or a cloud.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do let atlas cobalt own whole bands and the app bar; step between atlas, atlas-deep, atlas-2 and atlas-3 in hard edges.",
+      "Do put every interactive primary action in international orange with ink text, and nothing else in orange.",
+      "Do print clouds in the four plate inks (slate, mist, chalk, rose) with a dithered edge, inside a numbered plate mount with a Latin caption.",
+      "Do show run progress with the oktas glyph and spend with the barometer, always beside the plain label and the mono figure.",
+      "Do label frames with Archivo Expanded caps (11px, 0.14em) and set genus names in Bodoni Moda italic next to the harness name.",
+      "Do use rose for Change (80%) and storm red for the stop; switch rose text to rose-ink on chalk.",
+      "Do keep every radius at 3px and every rule at 1px hairline.",
+      "Do honor reduced motion: the plate holds still, courses appear without condensing."
+    ],
+    "donts": [
+      "Don't fill a band, plate or cloud with a gradient or smooth shading.",
+      "Don't set logs or heroes on near-black; logs run on deep atlas.",
+      "Don't use orange for status, headings or decoration.",
+      "Don't let storm red mark the 80% warning or appear as an accent.",
+      "Don't stack a caps kicker or eyebrow above a headline; caps label frames only.",
+      "Don't draw status as colored pill badges; use oktas, the stamp, or plain text.",
+      "Don't use rose outside sunlit cloud tops, Change, done/PR kinds and the live pulse.",
+      "Don't round corners past 3px or split segmented controls into separate pills."
+    ]
+  }
+}

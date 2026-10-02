@@ -9,13 +9,18 @@ export type NormalizedEvent = Pick<RunEvent, "kind" | "data">;
 
 export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
     switch (update.sessionUpdate) {
-        case "agent_message_chunk":
-        case "agent_thought_chunk": {
+        case "agent_message_chunk": {
             const block = update.content;
             if (block.type === "text") {
                 return [{ kind: "text", data: block.text }];
             }
             return [{ kind: "raw", data: block }];
+        }
+
+        // Reasoning is kept out of the reply text so a chat can fold it away.
+        case "agent_thought_chunk": {
+            const block = update.content;
+            return [{ kind: "raw", data: block.type === "text" ? { thought: block.text } : block }];
         }
 
         case "tool_call":
@@ -42,6 +47,7 @@ export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
             }];
 
         case "user_message_chunk":
+        case "available_commands_update":
             return [];
 
         default:
@@ -142,10 +148,36 @@ export class AcpAdapter implements RunAdapter {
 
                 try {
                     this.sessionId = session.sessionId;
+                    push([{ kind: "status", data: { type: "acp.session", sessionId: session.sessionId } }]);
+
+                    // Gemini's "auto" router sends free-tier keys to models they have no
+                    // quota for (the pro models have a free limit of 0) and then retries
+                    // for minutes, so pin a fast flash model. GEMINI_MODEL=auto opts out.
+                    const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+                    if (model !== "auto") {
+                        await clientCtx
+                            .request("session/set_model", { sessionId: session.sessionId, modelId: model })
+                            .catch((err) => console.error("session/set_model failed:", err));
+                    }
+
+                    // `session/load` replays the whole earlier conversation as updates.
+                    // Those already belong to earlier turns, so wait for the replay burst
+                    // to go quiet and drop it before this turn's prompt goes out.
+                    let first: ReturnType<typeof session.nextUpdate> | undefined;
+                    if (resume) {
+                        const idle = Symbol("idle");
+                        first = session.nextUpdate();
+                        for (;;) {
+                            const got = await Promise.race([first, Bun.sleep(1500).then(() => idle)]);
+                            if (got === idle) break;
+                            first = session.nextUpdate();
+                        }
+                    }
                     session.prompt(task);
 
                     for (;;) {
-                        const message = await session.nextUpdate();
+                        const message = await (first ?? session.nextUpdate());
+                        first = undefined;
                         if (message.kind === "stop") {
                             push([{ kind: "done", data: message.response }]);
                             return message.response;

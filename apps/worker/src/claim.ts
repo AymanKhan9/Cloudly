@@ -15,6 +15,11 @@ export async function claimRun(
       SELECT id FROM "Run"
       WHERE status = 'queued'
         AND NOT "cancelRequested"
+        AND ("threadId" IS NULL OR NOT EXISTS (
+          SELECT 1 FROM "Run" busy
+          WHERE busy."threadId" = "Run"."threadId"
+            AND busy.status IN ('running', 'finalizing')
+        ))
       ORDER BY "createdAt"
       FOR UPDATE SKIP LOCKED
       LIMIT 1

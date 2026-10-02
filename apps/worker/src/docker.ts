@@ -7,15 +7,28 @@ import { type RunEvent } from "@repo/shared/run-event";
 
 interface ControlConfig{
     task:string,
-    harness:string
+    harness:string,
+    resume?:string
 }
 
-// native-codex isn't supported yet: its real credential is a mounted OAuth
-// session file (~/.codex/auth.json), not an env var, which needs its own
-// design pass rather than being bolted onto the env-var-only model below.
+export interface ContainerOptions {
+    /** The agent's own session id from an earlier turn. */
+    resume?: string;
+    /** Host dir mounted as the sandbox HOME so ~/.claude, ~/.codex and ~/.gemini persist. */
+    homeDir?: string;
+}
+
+// Codex takes an API key through the SDK's `apiKey` option (it becomes
+// CODEX_API_KEY for the CLI), so no mounted ~/.codex/auth.json is needed.
 const HARNESS_CREDENTIALS: Record<string, string[]> = {
     "native-claude": ["ANTHROPIC_API_KEY"],
+    "native-codex": ["OPENAI_API_KEY"],
     "gemini-acp": ["GEMINI_API_KEY"],
+};
+
+// Not credentials: passed through only when set, never required.
+const OPTIONAL_ENV: Record<string, string[]> = {
+    "gemini-acp": ["GEMINI_MODEL"],
 };
 
 function credentialFlags(harness: string): string[] {
@@ -32,10 +45,14 @@ function credentialFlags(harness: string): string[] {
         }
         flags.push("-e", `${name}=${value}`);
     }
+    for (const name of OPTIONAL_ENV[harness] ?? []) {
+        const value = process.env[name];
+        if (value) flags.push("-e", `${name}=${value}`);
+    }
     return flags;
 }
 
-export async function* createRunContainer(workspace: Workspace, task:string,harness:string,runId:string): AsyncIterable<RunEvent>{
+export async function* createRunContainer(workspace: Workspace, task:string,harness:string,runId:string, options: ContainerOptions = {}): AsyncIterable<RunEvent>{
     const controlDir = await mkdtemp(
         path.join(tmpdir(),"run-control-"),
     );
@@ -44,6 +61,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         const config:ControlConfig = {
             task,
             harness,
+            resume: options.resume,
         };
 
         await writeFile(
@@ -77,6 +95,8 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             "-e",
             "CONTROL_CONFIG_PATH=/control/config.json",
+
+            ...(options.homeDir ? ["-v", `${options.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
 
             ...credentialFlags(harness),
 

@@ -21,6 +21,8 @@ const DecimalLike = z
 
 export const RunSchema = z.object({
   id: z.string(),
+  userId: z.string().nullable().optional(),
+  threadId: z.string().nullable().optional(),
   status: RunStatusSchema,
   createdAt: z.coerce.date(),
   leaseUntil: z.coerce.date().nullable(),

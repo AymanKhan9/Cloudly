@@ -127,3 +127,27 @@ test("cancellation: partial work is still committed, status is cancelled not fai
     await fixture.cleanup();
   }
 }, 30000);
+
+test("a turn that changes nothing succeeds without a commit", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const inserted = await prisma.run.create({
+      data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "just explain", harness: "native-claude" },
+    });
+    const claimed = await claimRun("worker-quiet");
+
+    async function* talkOnly() {
+      yield { seq: 0, ts: Date.now(), kind: "text" as const, data: "Nothing to change." };
+      yield { seq: 1, ts: Date.now(), kind: "done" as const, data: { result: "ok" } };
+    }
+
+    await processRun(claimed!, "worker-quiet", talkOnly);
+
+    const final = await prisma.run.findUniqueOrThrow({ where: { id: inserted.id } });
+    expect(final.status).toBe("succeeded");
+    expect(final.commitSha).toBeNull();
+    await prisma.run.delete({ where: { id: inserted.id } });
+  } finally {
+    await fixture.cleanup();
+  }
+}, 30000);

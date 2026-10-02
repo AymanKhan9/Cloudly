@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "start": "bun src/main.ts",
     "v0": "bun src/v0.ts",
     "test": "bun test"
   },

@@ -23,12 +23,12 @@ test("agent_message_chunk non-text block maps to raw", () => {
     ]);
 });
 
-test("agent_thought_chunk text block maps to text", () => {
+test("agent_thought_chunk maps to a raw thought, not reply text", () => {
     const update = {
         sessionUpdate: "agent_thought_chunk",
         content: { type: "text", text: "thinking..." },
     } as unknown as SessionUpdate;
-    expect(mapAcpUpdate(update)).toEqual([{ kind: "text", data: "thinking..." }]);
+    expect(mapAcpUpdate(update)).toEqual([{ kind: "raw", data: { thought: "thinking..." } }]);
 });
 
 test("tool_call maps to tool_call", () => {
@@ -80,4 +80,9 @@ test("user_message_chunk produces no events", () => {
 test("unrecognized update kind falls back to raw", () => {
     const update = { sessionUpdate: "plan", entries: [] } as unknown as SessionUpdate;
     expect(mapAcpUpdate(update)).toEqual([{ kind: "raw", data: update }]);
+});
+
+test("the startup command list is noise, not an event", () => {
+    const update = { sessionUpdate: "available_commands_update", availableCommands: [] } as unknown as SessionUpdate;
+    expect(mapAcpUpdate(update)).toEqual([]);
 });

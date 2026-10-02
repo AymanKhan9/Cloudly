@@ -1,23 +1,32 @@
 import { createMiddleware } from "hono/factory";
+import { getCookie } from "hono/cookie";
+import { prisma } from "@repo/db";
+import { hashToken, SESSION_COOKIE_NAME } from "../session";
 
+export interface SessionUser {
+  id: string;
+  login: string;
+  avatarUrl: string | null;
+}
 
-export const authMiddleware = createMiddleware(async (c,next)=>{
-    try{
-        const authorization = c.req.header("Authorization") || "";
-        if(!authorization.startsWith("Bearer ")){
-            return c.json({message: "Not a valid user"},401)
-        }
-        const token = authorization.slice(7).trim()
-        if(!token){
-            return c.json({message:"Token not found"},401);
-        }
-        if (token === process.env.TOKEN_SECRET){
-            await next();
-        }else{
-            return c.json({message:"Invalid user"},401)
-        }
-        
-    }catch(e){
-       return c.json({message:"Internal server error"},500)
-    }
-})
+export type AuthEnv = { Variables: { user: SessionUser } };
+
+export async function userFromSessionCookie(token: string | undefined): Promise<SessionUser | null> {
+  if (!token) return null;
+  const session = await prisma.session.findUnique({
+    where: { id: await hashToken(token) },
+    include: { user: true },
+  });
+  if (!session || session.expiresAt < new Date()) return null;
+  const { id, login, avatarUrl } = session.user;
+  return { id, login, avatarUrl };
+}
+
+export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
+  const user = await userFromSessionCookie(getCookie(c, SESSION_COOKIE_NAME));
+  if (!user) {
+    return c.json({ message: "Sign in required" }, 401);
+  }
+  c.set("user", user);
+  await next();
+});

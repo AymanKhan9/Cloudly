@@ -1,159 +1,67 @@
-# Turborepo starter
+# Cloudly
 
-This Turborepo starter is maintained by the Turborepo core team.
+Coding agents on a server you already own.
 
-## Using this example
+Cloudly runs Claude Code, Codex or Gemini CLI against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
 
-Run the following command:
+Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
-```sh
-npx create-turbo@latest
-```
+## What it does
 
-## What's inside?
+- **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
+- **Plug-and-play agents.** Claude Code and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
+- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused and in-flight runs are cancelled. Cancelled runs keep their work: the patch is stored and the branch pushed. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
+- **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys live in a `.env` on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
-This Turborepo includes the following packages/apps:
+## Install
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+On a fresh Ubuntu or Debian VM:
 
 ```sh
-cd my-turborepo
-turbo build
+curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
 ```
 
-Without global `turbo`, use your package manager:
+The installer sets up Docker, Bun, a swap file on small machines, and Postgres. It asks for your GitHub App and model keys, builds everything, and starts three systemd services. Re-run it any time to upgrade; it keeps your `.env`.
+
+Before you run it, create a GitHub App. [DEPLOY.md](DEPLOY.md) walks through the App, picking a VM on each provider, HTTPS, and upgrades.
+
+## Where to run it
+
+| Provider | What to use | Notes |
+|---|---|---|
+| Oracle Cloud | Always Free Ampere A1 (Arm) | The best free fit. Always Free gives 2 OCPUs and 12 GB of memory. |
+| Google Cloud | Always Free e2-micro | Free in us-west1, us-central1 and us-east1 only. 1 GB of RAM: one run at a time, with swap. |
+| AWS | t3.small / t4g.small | New accounts get time-limited credits rather than a permanent free VM. |
+| DigitalOcean | Basic droplet, 2 GB | No always-free VM. |
+
+Free tiers change. Check each provider's current terms before you rely on them.
+
+## How it works
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design: the Postgres job queue with leases and fencing, the run lifecycle, why GitHub side effects are idempotent, and how finalize treats agent output as untrusted.
+
+```
+apps/web       Next.js UI (landing, sign-in, runs, live run view, settings)
+apps/api       Hono API: GitHub OAuth sessions, runs, SSE stream, budget
+apps/worker    Claims runs, drives sandboxes, finalizes, pushes, opens PRs, enforces the limit
+packages/runner  In-sandbox runner with the Claude, Codex and ACP adapters
+packages/db    Prisma schema and migrations
+packages/shared  Zod contracts shared across the stack
+infra/images/base  The sandbox image
+deploy/        Postgres and optional Caddy (HTTPS) for the installer
+```
+
+## Develop
 
 ```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
+bun install
+cd packages/db && bunx prisma migrate dev && cd -
+bun --cwd apps/api run dev               # API on :8787
+bun --cwd apps/web run dev               # web on :3000, proxies /api to the API
+bun apps/worker/src/main.ts              # worker, run from the repo root
+bun --cwd apps/worker test               # worker tests (needs Postgres and Docker)
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## License
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-bun exec turbo build --filter=docs
-bun exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+MIT. See [LICENSE](LICENSE).

@@ -1,0 +1,131 @@
+{
+  "title": "Choose Cloudly's visual world",
+  "question": "The roll assigned the Cloud Atlas. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "The Cloud Atlas Station",
+      "kicker": "THE ROLL",
+      "lineage": "1896 International Cloud Atlas chromolithographs + WMO station-model notation",
+      "thesis": "Your VM is your observing station; every run is a classified, logged observation, with spend read off a barometer.",
+      "palette": ["#1F3F8C", "#E9EEF4", "#53627A", "#E8B9A6", "#FF5A1F"],
+      "materials": ["chromolithograph cloud plates", "numbered plate frames", "station-model notation", "barometer dial"],
+      "viewport": "A cobalt field holding Plate I: a live WebGL cumulus that grows course by course as a real run replays beside it, ending in a PR; the install command sits on a chalk card with an international-orange copy button.",
+      "risk": "A cloud brand drawing clouds can read as cute; meteorology must stay the second layer under plain labels ($1.42, Running), and the volumetric cloud needs a static plate fallback on weak GPUs.",
+      "raised": [
+        { "from": "clay coiled tower", "raise": "The run log is banded in strict horizontal courses, one event per course, a record built upward instead of a chat scroll." },
+        { "from": "multiplane cel dawn", "raise": "The page descends through the atlas's three altitude tiers (high, middle, low cloud) on real depth planes, landing on your station at ground level." },
+        { "from": "HyperCard stack", "raise": "The task composer and the run record are one object: the observation form you fill in becomes the logged observation." },
+        { "from": "Weimar cabaret bill", "raise": "Run states resolve hard, with no in-between tints; finished runs are inked closed." },
+        { "from": "warm consumer app", "raise": "International orange (the windsock colour) appears only on what can be pressed." }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "The Breaker Panel",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "residential electrical service panels and utility meters",
+      "thesis": "Each harness is a labeled breaker you flip on; the spend limit is the main breaker, and it really trips.",
+      "palette": ["#C9CCC6", "#1C1E1D", "#F2EDE1", "#D7261E", "#2C6E49"],
+      "materials": ["painted steel panel", "breaker toggles", "handwritten directory card", "utility meter dial"],
+      "viewport": "A 3D panel door swings open on a row of breakers labeled Claude Code, Codex, Gemini; flipping one starts a replayed run, and the main breaker trips at the limit.",
+      "risk": "The most mechanically literal reading of the spend limit; steel-and-toggle skeuomorphism can feel heavy on the dense app screens."
+    },
+    {
+      "id": "challenger-split-flap",
+      "label": "Split-Flap Concourse",
+      "verdict": "competitive",
+      "lineage": "rail concourse departure boards",
+      "thesis": "Runs as departures: rows flip from Queued to Running to PR opened, character by character.",
+      "palette": ["#111111", "#F4F4F0", "#9AA0A6", "#F2A900", "#B3261E"],
+      "materials": ["matte black flaps", "brushed steel frame", "amber row lamps"],
+      "viewport": "A live board of runs (repo, harness, status, spend) cascading as a replay plays, with the install line as the next departure.",
+      "case": "Fuses cleanly and developers identify with status boards; it holds audience identification but explains own-your-VM and the spend limit less clearly than the atlas.",
+      "risk": "A familiar dev-tool motif and the darkest card here, which edges toward the terminal look you ruled out.",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse.webp"
+    },
+    {
+      "id": "challenger-clay",
+      "label": "Coiled Earth Tower",
+      "verdict": "declined",
+      "lineage": "coil-built earthen towers",
+      "thesis": "Runs as courses coiled upward into a tower.",
+      "palette": ["#B5532E", "#6B4226", "#EFE6DA"],
+      "materials": ["terracotta coils", "slip seams"],
+      "viewport": "A tower rising one course per run event.",
+      "case": "Fuses poorly: developers who self-host don't identify with clay work, and it explains none of the mechanism.",
+      "risk": "Pure metaphor with no product facts behind it.",
+      "kept": "Strict horizontal banding: one event per course.",
+      "hero": "https://impeccable.style/worlds/cards/clay-ceramics-fracture-coiled-earth-tower-hero.webp"
+    },
+    {
+      "id": "challenger-cel",
+      "label": "Multiplane Cel Dawn",
+      "verdict": "declined",
+      "lineage": "multiplane cel animation",
+      "thesis": "Painted planes slide past as the camera sinks toward a lit cottage.",
+      "palette": ["#3E5B3A", "#8FA3B0", "#3A2A1E", "#F2B45C"],
+      "materials": ["gouache planes", "mist"],
+      "viewport": "Parallax forest sinking toward a lamp.",
+      "case": "Fuses weakly: lovely depth, but storybook warmth undercuts a tool about money and code.",
+      "risk": "Reads as a film title sequence, not a product.",
+      "kept": "Real depth planes traveled on scroll.",
+      "hero": "https://impeccable.style/worlds/cards/cinema-cinematography-editing-multiplane-cel-dawn-hero.webp"
+    },
+    {
+      "id": "challenger-hypercard",
+      "label": "HyperCard Stack",
+      "verdict": "declined",
+      "lineage": "1987 HyperCard stacks",
+      "thesis": "One-bit cards where reading and making are one mode.",
+      "palette": ["#000000", "#FFFFFF", "#8A8A8A"],
+      "materials": ["one-bit dither", "painted buttons"],
+      "viewport": "A card stack for tasks and runs.",
+      "case": "Fuses weakly: nostalgic for some developers, but it can't show runs, spend or where things run.",
+      "risk": "Retro novelty with no colour to signal state.",
+      "kept": "The form you fill in is the record it creates.",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-hypercard-stack-shoebox-hero.webp"
+    },
+    {
+      "id": "challenger-cabaret",
+      "label": "Weimar Cabaret Bill",
+      "verdict": "declined",
+      "lineage": "1920s Berlin cabaret posters",
+      "thesis": "Acid yellow on black, the programme leaning off vertical.",
+      "palette": ["#E4F21B", "#000000"],
+      "materials": ["two-ink cheap stock"],
+      "viewport": "A leaning programme of runs.",
+      "case": "Fuses poorly: theatrical where the audience wants plain cost and control.",
+      "risk": "Shouts over the facts.",
+      "kept": "Hard two-state run states; finished runs struck through.",
+      "hero": "https://impeccable.style/worlds/cards/posters-covers-sleeves-weimar-cabaret-bill-hero.webp"
+    },
+    {
+      "id": "challenger-warm-app",
+      "label": "Warm Consumer App",
+      "verdict": "declined",
+      "lineage": "consumer mobile app canon",
+      "thesis": "Soft cards, one action colour, friendly labels.",
+      "palette": ["#F6EFE7", "#FFFFFF", "#2F6BFF"],
+      "materials": ["soft cards", "spring press"],
+      "viewport": "A single column of friendly cards.",
+      "case": "Fuses blandly: clear, but it's the generic look you asked to avoid.",
+      "risk": "Indistinguishable from any app.",
+      "kept": "One action colour, reserved for what can be pressed.",
+      "hero": "https://impeccable.style/worlds/cards/digital-design-canon-warm-consumer-app-surface-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code" },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "The developer-tool landing page, played straight.",
+    "palette": ["#0A0A0A", "#FAFAFA", "#3B82F6"],
+    "materials": ["clean grid", "product screenshots", "terminal block"],
+    "viewport": "Headline and install command on the left, an app screenshot on the right, features underneath.",
+    "risk": "Indistinguishable from every other agent tool by design."
+  },
+  "steer": true
+}

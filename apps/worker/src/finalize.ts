@@ -34,6 +34,8 @@ export async function exportPatch(workspace: Workspace): Promise<string> {
 }
 
 export interface CommitInfo {
+  /** Defaults to agent/run-<runId>; threads keep one branch across turns. */
+  branch?: string;
   runId: string;
   task: string;
   createdAt: Date;
@@ -66,7 +68,7 @@ export async function publishCommit(
 
   // Checkout base_sha detached, then branch — never the mirror's current
   // default branch, which may have moved since the run started.
-  const branch = `agent/run-${info.runId}`;
+  const branch = info.branch ?? `agent/run-${info.runId}`;
   await Bun.$`git -C ${publishDir} checkout -b ${branch} ${workspace.baseSha}`;
 
   await writeFile(patchFile, patch, "utf-8");

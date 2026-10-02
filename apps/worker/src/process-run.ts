@@ -16,8 +16,35 @@ import {
 import { insertEvents } from "./events";
 import { heartbeat } from "./heartbeat";
 import { resolveCloneSource, isRepoSlug } from "./github";
+import { costFromDoneEvent } from "./cost";
+import { agentSessionIdFromEvent } from "./agent-session";
+import { promptWithHistory } from "./transcript";
+import { type ContainerOptions } from "./docker";
+import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import path from "node:path";
+import { enforceBudget } from "./budget";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
+
+// Agents whose own session storage is trusted to carry a conversation across
+// containers. Off by default: a follow-up otherwise starts a clean session and
+// gets the earlier conversation in its prompt, which works for every agent.
+// Gemini CLI is deliberately excluded: after one session/load it rewrites the
+// session file with only its startup context, losing the conversation.
+const NATIVE_RESUME = new Set((process.env.CLOUDLY_NATIVE_RESUME ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+
+/** Host dir that becomes the sandbox HOME for every turn of a thread. */
+export async function threadHome(threadId: string): Promise<string> {
+  const dir = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "threads", threadId, "home");
+  await mkdir(dir, { recursive: true });
+  return dir;
+}
+
+export function prTitle(prompt: string): string {
+  const firstLine = prompt.trim().split("\n")[0]!.replace(/\s+/g, " ");
+  return firstLine.length > 72 ? `${firstLine.slice(0, 71).trimEnd()}…` : firstLine;
+}
 
 export async function processRun(
   run: Run,
@@ -27,6 +54,7 @@ export async function processRun(
     task: string,
     harness: string,
     runId: string,
+    options?: ContainerOptions,
   ) => AsyncIterable<RunEvent> = createRunContainer,
   heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
 ): Promise<void> {
@@ -55,13 +83,46 @@ export async function processRun(
 
   let ws: Workspace | undefined;
   let publishResult: PublishResult | undefined;
+  // The container's stderr is usually empty; the agent's own error event isn't.
+  let agentError: string | undefined;
 
   try {
-    ws = await createWorkspace(await resolveCloneSource(run.repo));
+    const thread = run.threadId ? await prisma.thread.findUnique({ where: { id: run.threadId } }) : null;
+
+    ws = await createWorkspace(await resolveCloneSource(run.repo), {
+      branch: thread?.branch,
+      baseBranch: run.baseBranch,
+    });
+
+    const nativeResume = Boolean(thread) && NATIVE_RESUME.has(run.harness) && run.harness !== "gemini-acp";
+    const containerOptions: ContainerOptions = thread && nativeResume
+      ? { resume: thread.agentSessionId ?? undefined, homeDir: await threadHome(thread.id) }
+      : {};
+    const task = thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt;
 
     try {
-      for await (const event of runContainer(ws, run.prompt, run.harness, run.id)) {
+      for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {
         await insertEvents(run.id, [event]);
+        if (event.kind === "error") {
+          const d = event.data as { message?: unknown } | string | null;
+          agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
+        }
+
+        const agentSession = thread && nativeResume ? agentSessionIdFromEvent(run.harness, event) : null;
+        if (thread && agentSession) {
+          await prisma.thread.update({ where: { id: thread.id }, data: { agentSessionId: agentSession } });
+        }
+
+        // Record cost the moment the harness reports it, before finalize, so
+        // spend counts even if the push or PR step later fails.
+        const cost = costFromDoneEvent(run.harness, event);
+        if (cost) {
+          await prisma.run.updateMany({
+            where: { id: run.id, workerId, leaseGen: run.leaseGen },
+            data: { costUsd: cost.usd },
+          });
+          if (run.userId) await enforceBudget(run.userId);
+        }
       }
     } catch (err) {
       // A SIGINT-triggered abort throws the same way a genuine crash does —
@@ -86,7 +147,19 @@ export async function processRun(
     // only the (not-yet-built) PR step is what cancellation actually skips.
     const patch = await exportPatch(ws);
 
+    // A turn that only answered a question changes nothing: nothing to commit,
+    // push or open a PR for.
+    if (patch.trim() === "") {
+      if (leaseLost) return;
+      await prisma.run.updateMany({
+        where: { id: run.id, workerId, leaseGen: run.leaseGen },
+        data: { status: cancelled ? "cancelled" : "succeeded" },
+      });
+      return;
+    }
+
     const commitInfo: CommitInfo = {
+      branch: thread?.branch,
       runId: run.id,
       task: run.prompt,
       createdAt: run.createdAt,
@@ -97,19 +170,22 @@ export async function processRun(
 
     // Only GitHub-slug repos have a real remote to push to — every worker
     // test fixture uses a local path, same gate `resolveCloneSource` uses.
+    let prUrl: string | undefined;
     if (isRepoSlug(run.repo)) {
       await pushBranch(publishResult, run.repo);
 
       // Cancelled or not, the push above still lands — only PR creation is
       // what cancellation skips (see the comment above `exportPatch`).
       if (!cancelled) {
-        await openPullRequest({
+        const pr = await openPullRequest({
           repoSlug: run.repo,
           baseBranch: run.baseBranch,
           branch: publishResult.branch,
-          title: `Agent run: ${run.prompt}`,
-          body: `Opened by Cloud Agents for run \`${run.id}\`.`,
+          title: prTitle(thread?.title ?? run.prompt),
+          body: `Opened by Cloudly for run \`${run.id}\` (${run.harness}).\n\n**Task**\n\n${run.prompt}`,
         });
+        prUrl = pr.url;
+        if (thread) await prisma.thread.update({ where: { id: thread.id }, data: { prUrl: pr.url } });
       }
     }
 
@@ -120,6 +196,8 @@ export async function processRun(
       data: {
         status: cancelled ? "cancelled" : "succeeded",
         commitSha: publishResult.commitSha,
+        branch: publishResult.branch,
+        prUrl,
       },
     });
   } catch (err) {
@@ -127,7 +205,7 @@ export async function processRun(
       where: { id: run.id, workerId, leaseGen: run.leaseGen },
       data: {
         status: "failed",
-        error: err instanceof Error ? err.message : String(err),
+        error: agentError ?? (err instanceof Error ? err.message : String(err)),
       },
     });
     throw err;

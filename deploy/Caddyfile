@@ -1,0 +1,4 @@
+{$DOMAIN} {
+	# No `encode` here: compressing would buffer the live run stream (SSE).
+	reverse_proxy 127.0.0.1:3000
+}

@@ -1,0 +1,40 @@
+# Postgres for Cloudly, plus an optional HTTPS front door.
+# The web app, API and worker run as systemd services on the host (see
+# install.sh): the worker drives the host's Docker daemon directly and mounts
+# host paths into run sandboxes, which is simplest when it isn't containerised.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cloudly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: cloudly
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudly -d cloudly"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Only started when DOMAIN is set: `docker compose --profile https up -d`.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

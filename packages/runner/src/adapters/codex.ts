@@ -53,7 +53,7 @@ export class CodexAdapter implements RunAdapter {
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
-        const codex = new Codex();
+        const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
 
         const threadOptions = {
             workingDirectory: "/workspace",

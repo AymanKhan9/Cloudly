@@ -41,7 +41,7 @@ These are the decisions everything else in this document follows from.
 ```mermaid
 flowchart TB
     subgraph Client["Browser"]
-        UI["Web UI<br/>apps/web 🚧"]
+        UI["Web UI<br/>apps/web"]
     end
 
     subgraph Control["Control plane"]
@@ -436,9 +436,11 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   reaping exited child processes; Node/Bun don't do this automatically, so shells or dev servers
   the agent spawns pile up as zombies over a long run. Launch containers with `--init` (tini), and
   have the worker send SIGKILL after a grace period if SIGINT doesn't stop the runner.
-- **SSE auth can't use a bearer header.** The browser's native `EventSource` can't set an
-  `Authorization` header, so the dev-token auth this system currently plans won't reach the SSE
-  endpoint from a real web app. Needs a session cookie instead, once auth exists.
+- **SSE auth (fixed).** Sign-in is now a GitHub OAuth session cookie, which `EventSource` sends,
+  so the live stream works from the browser. A second SSE trap surfaced while wiring it: any gzip
+  layer in front (Next's rewrite proxy here, a CDN in general) buffered the stream until it ended,
+  so the browser saw nothing. The stream now sends `Cache-Control: no-cache, no-transform` and
+  `X-Accel-Buffering: no`; verified with a gzip-accepting client before and after.
 **Fixed since, while building the API (`apps/api`):**
 - **`AcpAdapter` didn't support `resume`.** `session/load` exists in the raw protocol but isn't
   wrapped by the fluent `SessionBuilder` convenience API the way `session/new` is. Fix: calls
@@ -480,6 +482,25 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   pings filled every gap, and the stream closed cleanly (`curl` exit code `0`) right after `done` —
   plus `Last-Event-ID` replay verified separately (reconnecting after `seq=1` correctly resumed
   from `seq=2` onward, not from the start).
+- **Sessions: follow-up messages, and why they don't use the agents' own saved sessions.**
+  A `Thread` holds many turns; each turn is a `Run` carrying `threadId`. All turns share one branch
+  (`agent/thread-<id>`) and one PR: a turn's workspace starts from the thread's branch when an earlier
+  turn pushed it (`createWorkspace(…, { branch, baseBranch })`; `baseBranch` used to be ignored),
+  commits on top, pushes a fast-forward, and `createPullRequest`'s existing idempotency returns the same
+  PR. Turns in a thread run one at a time (the claim query skips a queued turn while a sibling is
+  `running`/`finalizing`). A turn that changes no files now succeeds without a commit instead of
+  failing in `git apply`. **Memory:** the first design resumed each agent's own session
+  (`agentSessionId`, a per-thread `HOME` mounted into the sandbox). Testing against real Gemini CLI
+  showed that after one `session/load` it rewrites the session file with only its startup context, so
+  a second resume reports "No previous sessions found" and the conversation is lost. Follow-ups
+  therefore start a clean session with the earlier conversation written into the prompt
+  (`transcript.ts`, last 8 turns, bounded), which is independent of any agent's storage. Native
+  resume plumbing remains, off by default and never for Gemini
+  (`CLOUDLY_NATIVE_RESUME=native-claude,native-codex`), and is **untested** (no Anthropic or OpenAI
+  key on the dev machine). Also found: Gemini's default `auto` model router sends free-tier keys to
+  models with a free limit of 0 or an exhausted daily quota, then retries for minutes (turns took 3–6
+  minutes); pinning `gemini-3-flash-preview` through `session/set_model` brought a turn to ~30s. Failed
+  runs now report the agent's own error event instead of the container's usually-empty stderr.
 - **GitHub App auth, authenticated clone, push, and PR creation — built and live-tested against a
   real repo, including the full `processRun` pipeline producing a real PR end to end.**
   `apps/worker/src/github.ts` wraps `@octokit/auth-app` (RS256 JWT + installation-token exchange,
@@ -630,7 +651,7 @@ design, not after it:
 | Base sandbox image (Debian, non-root uid 1000, bun/git/python3/codex CLI) | `infra/images/base` | ✅ |
 | `RunAdapter` interface | `packages/runner/src/adapter.ts` | ✅ |
 | Claude Code adapter | `packages/runner/src/adapters/claude.ts` | ✅ tested live |
-| Codex adapter | `packages/runner/src/adapters/codex.ts` | ✅ tested live |
+| Codex adapter (API key via the SDK `apiKey` option, `approvalPolicy: "never"`) | `packages/runner/src/adapters/codex.ts` | ✅ tested live earlier; key-based auth not yet live-tested (no OpenAI key on the dev machine) |
 | Runner entrypoint (config load, harness selection, stdout printing) | `packages/runner/src/index.ts` | ✅ tested live in-container |
 | Worker v0 (no DB, `Bun.spawn` docker run, two-clone finalize per §11, print diff) | `apps/worker` | ✅ built, pending one live run with real credentials |
 | Finalize security test suite (symlink, FIFO, fsmonitor, determinism — §11) | `apps/worker/tests/` | ✅ 15 tests passing |
@@ -639,8 +660,12 @@ design, not after it:
 | API: `POST`/`GET /runs`, `GET /runs/:id` | `apps/api/src/index.ts` | ✅ built and tested live |
 | API: `POST /runs/:id/cancel` | `apps/api/src/index.ts` | ✅ built and tested live |
 | API: `GET /runs/:id/events` (SSE, replay via `Last-Event-ID`, keep-alive ping) | `apps/api/src/index.ts` | ✅ built and tested live |
-| Dev-token auth | `apps/api` | ✅ built and tested live |
-| Web UI | `apps/web` | 🚧 planned |
+| GitHub OAuth sign-in (PKCE, hashed session cookie, login allowlist), replacing dev-token auth | `apps/api` | ✅ tested live in a real browser |
+| Spend limit: per-run cost capture, 80% warning + email, 100% hard stop | `apps/worker/src/{cost,budget}.ts`, `apps/api` | ✅ unit + live Postgres tests; tripped live by a real run |
+| Production worker entrypoint | `apps/worker/src/main.ts` | ✅ ran a real Gemini job end to end to PR #3 |
+| Self-host installer (Docker, Bun, swap, Postgres, systemd, optional Caddy HTTPS) | `install.sh`, `deploy/` | 🚧 written and syntax-checked; every step verified individually, not yet run on a fresh VM |
+| Web UI: landing, sign-in, settings (finish-reviewed); sessions sidebar, new-session page, chat view | `apps/web` | ✅ landing/sign-in/settings reviewed; chat UI built and checked in a browser, not independently reviewed |
+| Sessions: a thread = many turns (runs) on one branch and one PR, with follow-up messages | `packages/db`, `apps/api`, `apps/worker` | ✅ tested live: 3-turn Gemini conversation, 2 commits on one PR, turn 3 answered from context with no commit |
 | GitHub App auth, authenticated clone, push, PR creation (idempotent) | `apps/worker/src/github.ts`, `finalize.ts` | ✅ tested live — real installation token, clone, push, PR created/closed on a real repo; login/repo-picker UX not built |
 | ACP adapter (Gemini CLI via `gemini --acp`), incl. `resume` via `session/load` | `packages/runner/src/adapters/acp.ts` | ✅ tested live end to end through the real worker → Docker path, resume tested across separate subprocesses |
 | Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
