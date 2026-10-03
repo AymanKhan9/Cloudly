@@ -78,17 +78,40 @@ $SUDO usermod -aG docker "$RUN_USER"
 say "Services will run as ${RUN_USER} (uid 1000)"
 
 # --- 4. Code ----------------------------------------------------------------------
-if [ -d "$DIR/.git" ]; then
-  say "Updating ${DIR}"
-  $SUDO -u "$RUN_USER" git -C "$DIR" pull --ff-only
-else
-  say "Cloning Cloudly into ${DIR}"
-  $SUDO mkdir -p "$DIR"
-  $SUDO chown "$RUN_USER" "$DIR"
-  $SUDO -u "$RUN_USER" git clone --depth 1 --branch "$BRANCH" "$REPO" "$DIR"
+# Prefer the prebuilt release (no 2 GB `next build` on a small VM). Falls back to
+# building from source if there is no release for this CPU, or CLOUDLY_FROM_SOURCE=1.
+PREBUILT=""
+case "$(uname -m)" in x86_64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; *) ARCH="" ;; esac
+if [ -z "${CLOUDLY_FROM_SOURCE:-}" ] && [ -n "$ARCH" ]; then
+  RELEASE_URL="${CLOUDLY_RELEASE_URL:-https://github.com/AymanKhan9/Cloudly/releases/latest/download/cloudly-linux-$ARCH.tar.gz}"
+  TARBALL=$(mktemp)
+  say "Downloading the Cloudly release"
+  if curl -fsSL "$RELEASE_URL" -o "$TARBALL"; then
+    $SUDO mkdir -p "$DIR"
+    $SUDO chown "$RUN_USER" "$DIR"
+    $SUDO chmod 644 "$TARBALL"
+    $SUDO -u "$RUN_USER" tar -xzf "$TARBALL" -C "$DIR"
+    PREBUILT=1
+  else
+    warn "No prebuilt release found; building from source instead."
+  fi
+  rm -f "$TARBALL"
+fi
+if [ -z "$PREBUILT" ]; then
+  if [ -d "$DIR/.git" ]; then
+    say "Updating ${DIR}"
+    $SUDO -u "$RUN_USER" git -C "$DIR" pull --ff-only
+  else
+    say "Cloning Cloudly into ${DIR}"
+    $SUDO mkdir -p "$DIR"
+    $SUDO chown "$RUN_USER" "$DIR"
+    $SUDO -u "$RUN_USER" git clone --depth 1 --branch "$BRANCH" "$REPO" "$DIR"
+  fi
 fi
 
-# --- 5. Configuration -----------------------------------------------------------------
+# --- 5. Configuration ---------------------------------------------------------------
+# Only the address is asked here. The GitHub App, model keys and sign-in list are
+# set up in the browser (first-run setup), where they're stored encrypted.
 ENV_FILE="$DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
   say "Configuring this station (press Enter to accept a default)"
@@ -96,21 +119,10 @@ if [ ! -f "$ENV_FILE" ]; then
   ask DOMAIN "Domain pointing at this VM, for HTTPS (leave empty to use the IP)" ""
   if [ -n "$DOMAIN" ]; then DEFAULT_URL="https://$DOMAIN"; else DEFAULT_URL="http://$IP:3000"; fi
   ask PUBLIC_URL "Public URL" "$DEFAULT_URL"
-  ask ALLOWED_GITHUB_LOGINS "GitHub login(s) allowed to sign in, comma-separated" ""
-  printf '\n  Create a GitHub App first: https://github.com/settings/apps/new\n' >"${TTY:-/dev/null}"
-  printf '  Callback URL: %s/api/auth/github/callback\n' "$PUBLIC_URL" >"${TTY:-/dev/null}"
-  printf '  Permissions: Contents (read & write), Pull requests (read & write).\n\n' >"${TTY:-/dev/null}"
-  ask GITHUB_APP_ID "GitHub App ID" ""
-  ask GITHUB_CLIENT_ID "GitHub App client ID" ""
-  ask GITHUB_CLIENT_SECRET "GitHub App client secret" "" secret
-  ask GITHUB_APP_INSTALLATION_ID "Installation ID (number at the end of the installation's settings URL)" ""
-  ask ANTHROPIC_API_KEY "Anthropic API key, for Claude Code (optional)" "" secret
-  ask OPENAI_API_KEY "OpenAI API key, for Codex (optional)" "" secret
-  ask GEMINI_API_KEY "Gemini API key, for Gemini CLI (optional)" "" secret
-  ask RESEND_API_KEY "Resend API key for budget emails (optional)" "" secret
 
   PG_PASS=$(openssl rand -hex 24)
-  umask 077
+  SETUP_TOKEN=$(openssl rand -hex 16)
+  SECRET_KEY=$(openssl rand -base64 32)
   $SUDO -u "$RUN_USER" sh -c "umask 077; cat > '$ENV_FILE'" <<EOF
 PUBLIC_URL=$PUBLIC_URL
 WEB_ORIGIN=$PUBLIC_URL
@@ -119,17 +131,8 @@ DOMAIN=$DOMAIN
 POSTGRES_PASSWORD=$PG_PASS
 DATABASE_URL=postgresql://cloudly:$PG_PASS@127.0.0.1:5432/cloudly
 API_PORT=8787
-GITHUB_CLIENT_ID=$GITHUB_CLIENT_ID
-GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
-GITHUB_APP_ID=$GITHUB_APP_ID
-GITHUB_APP_INSTALLATION_ID=$GITHUB_APP_INSTALLATION_ID
-GITHUB_APP_PRIVATE_KEY_PATH=$DIR/github-app.pem
-ALLOWED_GITHUB_LOGINS=$ALLOWED_GITHUB_LOGINS
-ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
-OPENAI_API_KEY=$OPENAI_API_KEY
-GEMINI_API_KEY=$GEMINI_API_KEY
-RESEND_API_KEY=$RESEND_API_KEY
-ALERT_FROM=Cloudly <onboarding@resend.dev>
+CLOUDLY_SETUP_TOKEN=$SETUP_TOKEN
+CLOUDLY_SECRET_KEY=$SECRET_KEY
 WORKER_CONCURRENCY=1
 EOF
 else
@@ -157,8 +160,10 @@ say "Installing dependencies"
 $SUDO -u "$RUN_USER" "$BUN" install --frozen-lockfile >/dev/null
 say "Migrating the database"
 $SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma migrate deploy >/dev/null && '$BUN' x prisma generate >/dev/null"
+if [ -z "$PREBUILT" ]; then
 say "Building the web app"
 $SUDO -u "$RUN_USER" sh -c "cd '$DIR/apps/web' && '$BUN' run build >/dev/null && cp -r .next/static .next/standalone/apps/web/.next/ && if [ -d public ]; then cp -r public .next/standalone/apps/web/; fi"
+fi
 say "Building the run sandbox image (a few minutes the first time)"
 $SUDO docker build -q -t cloud-agents-base infra/images/base >/dev/null
 
@@ -197,9 +202,9 @@ done
 # --- 9. Next steps --------------------------------------------------------------------
 . "$ENV_FILE" 2>/dev/null || true
 printf '\n\033[1;32mCloudly is running.\033[0m\n\n'
-printf '  Open %s\n\n' "${PUBLIC_URL:-http://<this-ip>:3000}"
-[ -f "$DIR/github-app.pem" ] || warn "Copy your GitHub App private key to $DIR/github-app.pem (owned by $RUN_USER, chmod 600), then: sudo systemctl restart cloudly-api cloudly-worker"
-printf '  GitHub App callback URL: %s/api/auth/github/callback\n' "${PUBLIC_URL:-}"
-printf '  Edit settings in %s, then: sudo systemctl restart cloudly-api cloudly-worker\n' "$ENV_FILE"
-printf '  Logs: journalctl -u cloudly-worker -f\n'
+printf '  1. Open  %s/setup\n' "${PUBLIC_URL:-http://<this-ip>:3000}"
+printf '  2. Enter this setup token:  %s\n' "${CLOUDLY_SETUP_TOKEN:-(see CLOUDLY_SETUP_TOKEN in the .env)}"
+printf '  3. Follow the three steps: who can sign in, create the GitHub App, choose repositories.\n'
+printf '  4. Sign in, then add a model key under Settings.\n\n'
+printf '  Config: %s   Logs: journalctl -u cloudly-worker -f\n' "$ENV_FILE"
 case "${PUBLIC_URL:-}" in http://*) warn "Open port 3000 in your cloud firewall, or set a domain for HTTPS on 443." ;; esac

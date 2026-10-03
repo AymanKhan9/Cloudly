@@ -1,7 +1,7 @@
-import { prisma, budgetStatus, currentMonth, type BudgetStatus } from "@repo/db";
+import { prisma, budgetStatus, currentMonth, config, type BudgetStatus } from "@repo/db";
 
 async function sendAlert(to: string | null, subject: string, text: string): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await config("RESEND_API_KEY");
   console.log(`[budget] ${subject}`);
   if (!apiKey || !to) return;
 

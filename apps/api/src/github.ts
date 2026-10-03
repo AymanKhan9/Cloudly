@@ -1,24 +1,17 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
+import { githubAppCredentials, credentialsFingerprint } from "@repo/db";
 
-let octokit: Octokit | undefined;
+let cached: { fingerprint: string; octokit: Octokit } | undefined;
 
 async function client(): Promise<Octokit> {
-  if (!octokit) {
-    const { GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, GITHUB_APP_INSTALLATION_ID } = process.env;
-    if (!GITHUB_APP_ID || !GITHUB_APP_PRIVATE_KEY_PATH || !GITHUB_APP_INSTALLATION_ID) {
-      throw new Error("GitHub App is not configured (GITHUB_APP_ID / _PRIVATE_KEY_PATH / _INSTALLATION_ID)");
-    }
-    octokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: {
-        appId: GITHUB_APP_ID,
-        privateKey: await Bun.file(GITHUB_APP_PRIVATE_KEY_PATH).text(),
-        installationId: GITHUB_APP_INSTALLATION_ID,
-      },
-    });
+  const creds = await githubAppCredentials();
+  if (!creds) throw new Error("The GitHub App isn't set up yet. Finish setup at /setup.");
+  const fingerprint = credentialsFingerprint(creds);
+  if (cached?.fingerprint !== fingerprint) {
+    cached = { fingerprint, octokit: new Octokit({ authStrategy: createAppAuth, auth: { ...creds } }) };
   }
-  return octokit;
+  return cached.octokit;
 }
 
 export interface InstallationRepo {

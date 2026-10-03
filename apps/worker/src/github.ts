@@ -1,46 +1,31 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
 import { RequestError } from "@octokit/request-error";
+import { githubAppCredentials, credentialsFingerprint } from "@repo/db";
 
-interface GitHubAppConfig {
-    appId: string;
-    privateKey: string;
-    installationId: string;
-    [key: string]: unknown;
+let octokit: { fingerprint: string; client: Octokit } | undefined;
+let auth: { fingerprint: string; strategy: ReturnType<typeof createAppAuth> } | undefined;
+
+async function credentials() {
+    const creds = await githubAppCredentials();
+    if (!creds) throw new Error("The GitHub App isn't set up yet. Finish setup in the web app.");
+    return { creds, fingerprint: credentialsFingerprint(creds) };
 }
-
-async function loadConfig(): Promise<GitHubAppConfig> {
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPath = process.env.GITHUB_APP_PRIVATE_KEY_PATH;
-    const installationId = process.env.GITHUB_APP_INSTALLATION_ID;
-
-    if (!appId || !privateKeyPath || !installationId) {
-        throw new Error(
-            "missing GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY_PATH / GITHUB_APP_INSTALLATION_ID",
-        );
-    }
-
-    const privateKey = await Bun.file(privateKeyPath).text();
-    return { appId, privateKey, installationId };
-}
-
-let octokit: Octokit | undefined;
-let auth: ReturnType<typeof createAppAuth> | undefined;
 
 async function getOctokit(): Promise<Octokit> {
-    if (!octokit) {
-        const config = await loadConfig();
-        octokit = new Octokit({ authStrategy: createAppAuth, auth: config });
+    const { creds, fingerprint } = await credentials();
+    if (octokit?.fingerprint !== fingerprint) {
+        octokit = { fingerprint, client: new Octokit({ authStrategy: createAppAuth, auth: { ...creds } }) };
     }
-    return octokit;
+    return octokit.client;
 }
 
 async function getAuth(): Promise<ReturnType<typeof createAppAuth>> {
-    if (!auth) {
-        const config = await loadConfig();
-        auth = createAppAuth(config);
+    const { creds, fingerprint } = await credentials();
+    if (auth?.fingerprint !== fingerprint) {
+        auth = { fingerprint, strategy: createAppAuth({ ...creds }) };
     }
-    return auth;
+    return auth.strategy;
 }
 
 /**

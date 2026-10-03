@@ -17,27 +17,7 @@ Open inbound ports in your provider's firewall or security group:
 - 22 for SSH.
 - Either 3000 (HTTP by IP) or 80 and 443 (HTTPS with a domain).
 
-## 2. Create a GitHub App
-
-On github.com go to **Settings → Developer settings → GitHub Apps → New GitHub App**.
-
-1. **Name.** Anything unique, e.g. `cloudly-yourname`.
-2. **Homepage URL.** Your instance URL.
-3. **Callback URL.** `<your public URL>/api/auth/github/callback`. Use `http://<vm-ip>:3000/api/auth/github/callback` without a domain, or `https://<domain>/api/auth/github/callback` with one.
-4. **Webhook.** Uncheck **Active**.
-5. **Repository permissions.**
-   - Contents: Read and write.
-   - Pull requests: Read and write.
-   - Metadata is read-only, which is the default.
-6. **Where can this App be installed.** Only on this account.
-
-After creating it:
-- Note the **App ID** and **Client ID**.
-- Generate a **client secret**.
-- Generate a **private key**, which downloads a `.pem` file.
-- **Install** the App on the repos Cloudly should work on. The installation ID is the number at the end of the installation's settings URL, e.g. `github.com/settings/installations/166837251`.
-
-## 3. Run the installer
+## 2. Run the installer
 
 SSH into the VM and run:
 
@@ -45,30 +25,26 @@ SSH into the VM and run:
 curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
 ```
 
-It asks for:
-- your domain, which is optional;
-- the GitHub logins allowed to sign in;
-- the GitHub App details;
-- the model keys for the agents you'll use;
-- an optional Resend key for budget emails.
+It asks for a domain (optional) and the public URL, then installs Docker, Bun, Postgres and the three services. It downloads a prebuilt release, so a small VM never has to compile the web app. If no release exists for your CPU it builds from source instead (set `CLOUDLY_FROM_SOURCE=1` to force that). When it finishes it prints a setup link and a one-time **setup token**. The token is also saved as `CLOUDLY_SETUP_TOKEN` in `/opt/cloudly/.env`.
 
-It writes everything to `/opt/cloudly/.env` with permissions 600.
+## 3. Finish setup in the browser
 
-Then copy the App's private key to the VM:
+Open `<your public URL>/setup` and enter the setup token. There are three steps:
 
-```sh
-scp cloudly-yourname.private-key.pem you@<vm-ip>:/tmp/github-app.pem
-ssh you@<vm-ip> 'sudo install -m 600 -o $(id -un 1000) /tmp/github-app.pem /opt/cloudly/github-app.pem && sudo systemctl restart cloudly-api cloudly-worker'
-```
+1. **Who can sign in.** Your GitHub username (several, comma-separated, if you share the instance).
+2. **Create the GitHub App.** One click opens GitHub with a pre-filled form (contents and pull requests, read and write); confirm it. GitHub sends you back and Cloudly stores the app's credentials encrypted. There is nothing to copy by hand.
+3. **Choose repositories.** GitHub shows which repos the app may touch, private ones included. You can change this later on GitHub.
 
-Open your public URL, sign in with GitHub, set a monthly limit under **Settings**, and start a run.
+Then sign in with GitHub and add a model key (Anthropic, OpenAI or Gemini) under **Settings**. Keys are stored encrypted on the VM and never shown again after saving. Start a session from the home page.
+
+Setup closes itself once all three steps are done, so nobody can claim the instance afterward. Later changes go through Settings.
 
 ## 4. HTTPS
 
 Point a DNS A record at the VM and enter the domain when the installer asks. Caddy then gets and renews a certificate automatically on ports 80 and 443. To add a domain later:
 1. Set `DOMAIN=` and `PUBLIC_URL=https://...` in `/opt/cloudly/.env`, and update `WEB_ORIGIN` and `API_ORIGIN` to match.
 2. Re-run the installer.
-3. Update the GitHub App's callback URL.
+3. Add the new callback URL (`https://<domain>/api/auth/github/callback`) to the GitHub App's settings on GitHub.
 
 ## 5. Day-to-day
 
@@ -91,3 +67,7 @@ Point a DNS A record at the VM and enter the domain when the installer asks. Cad
 ## Publishing the landing page on its own
 
 To host only the marketing page (for example on Vercel), deploy `apps/web` with `NEXT_PUBLIC_SITE_MODE=marketing`. Sign-in and the app routes are disabled in that mode, since there is no API behind it.
+
+## Publishing a release (maintainers)
+
+Push a tag such as `v0.1.0`. The `release` workflow builds the web app on x86-64 and Arm runners and attaches `cloudly-linux-amd64.tar.gz` and `cloudly-linux-arm64.tar.gz`. The installer fetches the latest release.

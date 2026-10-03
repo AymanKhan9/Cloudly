@@ -1,0 +1,36 @@
+# Builds the web app once per CPU type so small VMs never have to run `next build`.
+# Push a tag like v0.1.0 to publish; install.sh downloads the "latest" release.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, arch: amd64 }
+          - { runner: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: cd packages/db && bun x prisma generate
+      - run: |
+          cd apps/web
+          bun run build
+          cp -r .next/static .next/standalone/apps/web/.next/
+          if [ -d public ]; then cp -r public .next/standalone/apps/web/; fi
+      - name: Package source plus the built web app
+        run: |
+          mkdir stage
+          git archive HEAD | tar -x -C stage
+          mkdir -p stage/apps/web/.next
+          cp -r apps/web/.next/standalone stage/apps/web/.next/standalone
+          tar -czf cloudly-linux-${{ matrix.arch }}.tar.gz -C stage .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: cloudly-linux-${{ matrix.arch }}.tar.gz

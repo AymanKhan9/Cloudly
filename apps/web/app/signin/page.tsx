@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { CloudPlate } from "@/components/cloud-plate";
 import { GitHubIcon, Mark } from "@/components/icons";
+import { SetupNotice } from "@/components/setup-notice";
 
 const ERRORS: Record<string, string> = {
-  "not-allowed": "That GitHub account isn't on this instance's allowlist. Add the login to ALLOWED_GITHUB_LOGINS in the server's .env, then try again.",
+  "not-allowed": "That GitHub account isn't allowed on this instance. Ask the owner to add it under Settings.",
   expired: "The sign-in attempt expired before it finished. Try again.",
   github: "GitHub didn't complete the sign-in. Try again, and check the GitHub App's client ID and secret if it keeps failing.",
   server: "Something went wrong on this instance. The API logs have the details.",
@@ -41,6 +42,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         <div className="signin-card">
           <h1 className="display">Sign in to your station.</h1>
           <p>Use the GitHub account you listed when you set up this instance.</p>
+          <SetupNotice />
           {message ? (
             <div className="alert" role="alert">
               {message}
@@ -51,7 +53,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
             Continue with GitHub
           </a>
           <p className="signin-fine">
-            Only logins in <code className="mono">ALLOWED_GITHUB_LOGINS</code> can sign in. Cloudly asks GitHub for your
+            Only the GitHub accounts listed during setup can sign in. Cloudly asks GitHub for your
             public profile only; repository access comes from the GitHub App you installed.
           </p>
         </div>

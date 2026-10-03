@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
+import { config } from "@repo/db";
 
 interface ControlConfig{
     task:string,
@@ -31,7 +32,7 @@ const OPTIONAL_ENV: Record<string, string[]> = {
     "gemini-acp": ["GEMINI_MODEL"],
 };
 
-function credentialFlags(harness: string): string[] {
+async function credentialFlags(harness: string): Promise<string[]> {
     const required = HARNESS_CREDENTIALS[harness];
     if (!required) {
         throw new Error(`unsupported harness: ${harness}`);
@@ -39,9 +40,9 @@ function credentialFlags(harness: string): string[] {
 
     const flags: string[] = [];
     for (const name of required) {
-        const value = process.env[name];
+        const value = await config(name);
         if (!value) {
-            throw new Error(`harness "${harness}" requires ${name} to be set`);
+            throw new Error(`harness "${harness}" needs ${name}. Add it under Settings, or in the server's .env.`);
         }
         flags.push("-e", `${name}=${value}`);
     }
@@ -98,7 +99,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             ...(options.homeDir ? ["-v", `${options.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
 
-            ...credentialFlags(harness),
+            ...(await credentialFlags(harness)),
 
             "--user",
             "1000:1000",

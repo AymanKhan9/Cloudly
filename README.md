@@ -11,7 +11,7 @@ Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 - **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
 - **Plug-and-play agents.** Claude Code and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
 - **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused and in-flight runs are cancelled. Cancelled runs keep their work: the patch is stored and the branch pushed. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
-- **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys live in a `.env` on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
+- **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys are stored encrypted on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
 ## Install
 
@@ -21,9 +21,9 @@ On a fresh Ubuntu or Debian VM:
 curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
 ```
 
-The installer sets up Docker, Bun, a swap file on small machines, and Postgres. It asks for your GitHub App and model keys, builds everything, and starts three systemd services. Re-run it any time to upgrade; it keeps your `.env`.
+The installer sets up Docker, Bun, a swap file on small machines, and Postgres, builds everything, and starts three systemd services. It then prints a link to a setup page where you create the GitHub App with one click, choose repositories, and later add model keys under Settings (stored encrypted, never shown again). Re-run it any time to upgrade; it keeps your `.env`.
 
-Before you run it, create a GitHub App. [DEPLOY.md](DEPLOY.md) walks through the App, picking a VM on each provider, HTTPS, and upgrades.
+[DEPLOY.md](DEPLOY.md) covers picking a VM on each provider, HTTPS, and upgrades.
 
 ## Where to run it
 
@@ -56,10 +56,10 @@ deploy/        Postgres and optional Caddy (HTTPS) for the installer
 ```sh
 bun install
 cd packages/db && bunx prisma migrate dev && cd -
-bun --cwd apps/api run dev               # API on :8787
-bun --cwd apps/web run dev               # web on :3000, proxies /api to the API
-bun apps/worker/src/main.ts              # worker, run from the repo root
-bun --cwd apps/worker test               # worker tests (needs Postgres and Docker)
+bun run --filter @repo/api dev           # API on :8787
+bun run --filter web dev                 # web on :3000, proxies /api to the API
+bun --env-file=apps/worker/.env --env-file=packages/runner/.env apps/worker/src/main.ts   # worker, from the repo root
+bun run --filter @repo/worker test       # worker tests (needs Postgres and Docker)
 ```
 
 ## License

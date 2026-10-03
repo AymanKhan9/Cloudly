@@ -1874,11 +1874,27 @@ textarea {
   gap: 14px;
 }
 .reply {
-  margin: 0;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-width: 68ch;
 }
+.reply > :first-child { margin-top: 0; }
+.reply > :last-child { margin-bottom: 0; }
+.reply p, .reply ul, .reply ol, .reply pre { margin: 0 0 12px; }
+.reply ul, .reply ol { padding-left: 22px; }
+.reply code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.9em;
+  background: rgba(20, 30, 70, 0.07);
+  padding: 1px 5px;
+}
+.reply pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  background: rgba(20, 30, 70, 0.07);
+  border: 1px solid var(--hair-ink);
+}
+.reply pre code { background: none; padding: 0; font-size: 13px; }
+.reply a { text-decoration: underline; }
 .thought {
   color: var(--slate);
   font-size: 14px;
@@ -2020,4 +2036,74 @@ textarea {
   .chat-head {
     flex-direction: column;
   }
+}
+
+/* ---------- First-run setup ---------- */
+
+.setup {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 28px var(--gutter) 80px;
+}
+.setup h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 36px 0 12px;
+}
+.setup-lede {
+  color: var(--mist);
+  margin: 0 0 28px;
+}
+.setup-wait {
+  color: var(--mist);
+}
+.setup-card {
+  color: var(--ink);
+}
+.setup-step[data-done] .field-label {
+  color: var(--ink);
+}
+.setup-step[data-done] .field-label::after {
+  content: "  done";
+  font-weight: 500;
+  color: var(--slate);
+}
+
+.secret-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--hair-ink);
+}
+.secret-row:last-child {
+  border-bottom: 0;
+}
+.secret-row .secret-name {
+  font-weight: 500;
+  font-size: 14.5px;
+}
+.secret-row .secret-state {
+  font-size: 13px;
+  color: var(--slate);
+}
+.secret-row form {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+.secret-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--chalk-3);
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.secret-row input:focus {
+  outline: none;
+  border-color: var(--atlas);
+  box-shadow: 0 0 0 3px rgba(31, 63, 140, 0.18);
 }

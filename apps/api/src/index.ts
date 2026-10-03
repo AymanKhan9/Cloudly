@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { prisma, budgetStatus } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec } from "@repo/db";
+import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
 import { streamSSE } from 'hono/streaming';
@@ -10,7 +11,7 @@ import { listInstallationRepos } from './github';
 
 const app = new Hono<AuthEnv>()
 
-for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget']) {
+for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -43,6 +44,8 @@ const RUN_LIST_FIELDS = {
   id: true, status: true, createdAt: true, repo: true, baseBranch: true, prompt: true,
   harness: true, costUsd: true, prUrl: true, branch: true, error: true, cancelRequested: true,
 } as const;
+
+app.route('/setup', setup)
 
 app.get('/health', (c) => c.json({ ok: true }))
 
@@ -315,6 +318,24 @@ app.put('/budget', zValidator('json', BudgetSchema), async (c) => {
   return c.json({ ...(await budgetStatus(user.id)), alertEmail });
 })
 
+// Keys and connections entered in the browser. Values are write-only: once
+// saved, only the last four characters of a secret ever come back.
+app.get('/settings/secrets', async (c) => c.json({ settings: await listSettings() }))
+
+app.put('/settings/secrets/:name', zValidator('json', z.object({ value: z.string().trim().min(1).max(20_000) })), async (c) => {
+  const name = c.req.param('name');
+  if (!settingSpec(name)) return c.json({ message: 'Unknown setting' }, 404);
+  await setSetting(name, c.req.valid('json').value);
+  return c.json({ ok: true });
+})
+
+app.delete('/settings/secrets/:name', async (c) => {
+  const name = c.req.param('name');
+  if (!settingSpec(name)) return c.json({ message: 'Unknown setting' }, 404);
+  await deleteSetting(name);
+  return c.json({ ok: true });
+})
+
 function randomToken(byteLength = 32): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(byteLength))).toString("base64url");
 }
@@ -328,8 +349,11 @@ app.get('/auth/github/login', async (c) => {
   setCookie(c, "oauth_state", state, { httpOnly: true, sameSite: "Lax", maxAge: 600, path: '/' });
   setCookie(c, "oauth_verifier", codeVerifier, { httpOnly: true, sameSite: "Lax", maxAge: 600, path: '/' });
 
+  const clientId = await config("GITHUB_CLIENT_ID");
+  if (!clientId) return c.redirect(`${process.env.WEB_ORIGIN}/setup`);
+
   const url = new URL("https://github.com/login/oauth/authorize");
-  url.searchParams.set("client_id", process.env.GITHUB_CLIENT_ID!);
+  url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", `${process.env.API_ORIGIN}/auth/github/callback`);
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", codeChallenge);
@@ -358,8 +382,8 @@ app.get('/auth/github/callback', async (c) => {
       method: 'POST',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_CLIENT_ID,
-        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        client_id: await config("GITHUB_CLIENT_ID"),
+        client_secret: await config("GITHUB_CLIENT_SECRET"),
         code,
         redirect_uri: `${process.env.API_ORIGIN}/auth/github/callback`,
         code_verifier: codeVerifier,
@@ -377,7 +401,7 @@ app.get('/auth/github/callback', async (c) => {
     if (!userResponse.ok) return c.redirect(signinError('github'));
     const githubUser = await userResponse.json();
 
-    const allowedLogins = (process.env.ALLOWED_GITHUB_LOGINS ?? '')
+    const allowedLogins = ((await config('ALLOWED_GITHUB_LOGINS')) ?? '')
       .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     if (!allowedLogins.includes(String(githubUser.login).toLowerCase())) {
       return c.redirect(signinError('not-allowed'));

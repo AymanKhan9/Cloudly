@@ -5,6 +5,7 @@ import { api, ApiError } from "@/lib/api";
 import { useApp } from "@/components/app-context";
 import { Barometer, STATE_WORD } from "@/components/notation";
 import { HARNESSES, usd } from "@/lib/harness";
+import { SecretsPanel } from "@/components/secrets-panel";
 
 export default function SettingsPage() {
   const { budget, refreshBudget } = useApp();
@@ -106,6 +107,8 @@ export default function SettingsPage() {
         </form>
       </div>
 
+      <SecretsPanel />
+
       <section className="sheet" style={{ marginTop: 28 }} aria-labelledby="harness-heading">
         <div className="sheet-head">
           <span id="harness-heading" className="caps" style={{ color: "var(--slate)" }}>
@@ -131,7 +134,7 @@ export default function SettingsPage() {
           </tbody>
         </table>
         <p className="field-hint" style={{ padding: "0 16px 16px" }}>
-          API keys are read from the server's .env. Nothing here stores a key in the database.
+          An agent runs only if its key is set above (or in the server's .env).
         </p>
       </section>
     </>

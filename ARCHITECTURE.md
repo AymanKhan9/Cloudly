@@ -663,11 +663,13 @@ design, not after it:
 | GitHub OAuth sign-in (PKCE, hashed session cookie, login allowlist), replacing dev-token auth | `apps/api` | ✅ tested live in a real browser |
 | Spend limit: per-run cost capture, 80% warning + email, 100% hard stop | `apps/worker/src/{cost,budget}.ts`, `apps/api` | ✅ unit + live Postgres tests; tripped live by a real run |
 | Production worker entrypoint | `apps/worker/src/main.ts` | ✅ ran a real Gemini job end to end to PR #3 |
-| Self-host installer (Docker, Bun, swap, Postgres, systemd, optional Caddy HTTPS) | `install.sh`, `deploy/` | 🚧 written and syntax-checked; every step verified individually, not yet run on a fresh VM |
+| Self-host installer (Docker, Bun, swap, Postgres, systemd, optional Caddy HTTPS) | `install.sh`, `deploy/` | 🚧 written and syntax-checked; downloads a prebuilt per-arch release (`.github/workflows/release.yml`) and falls back to building from source; the workflow and the download path have not run for real, and the installer has not run on a fresh VM |
 | Web UI: landing, sign-in, settings (finish-reviewed); sessions sidebar, new-session page, chat view | `apps/web` | ✅ landing/sign-in/settings reviewed; chat UI built and checked in a browser, not independently reviewed |
 | Sessions: a thread = many turns (runs) on one branch and one PR, with follow-up messages | `packages/db`, `apps/api`, `apps/worker` | ✅ tested live: 3-turn Gemini conversation, 2 commits on one PR, turn 3 answered from context with no commit |
 | GitHub App auth, authenticated clone, push, PR creation (idempotent) | `apps/worker/src/github.ts`, `finalize.ts` | ✅ tested live — real installation token, clone, push, PR created/closed on a real repo; login/repo-picker UX not built |
 | ACP adapter (Gemini CLI via `gemini --acp`), incl. `resume` via `session/load` | `packages/runner/src/adapters/acp.ts` | ✅ tested live end to end through the real worker → Docker path, resume tested across separate subprocesses |
+| Browser-set config: AES-256-GCM `Setting` table (`config(name)` = DB, then env), write-only keys panel in Settings; worker and API both read it | `packages/db/src/{secrets,github-credentials}.ts`, `apps/web/components/secrets-panel.tsx` | ✅ unit tests (roundtrip, tamper, precedence); DB-only GitHub token and DB-only Gemini run verified live. Master key is `CLOUDLY_SECRET_KEY` or `~/.cloudly/secret.key`; losing it loses the stored keys |
+| First-run setup (`/setup`): one-time `CLOUDLY_SETUP_TOKEN`, GitHub App created via the manifest flow, installation verified against the app JWT, closes itself when complete | `apps/api/src/setup.ts`, `apps/web/app/setup` | ✅ tested live against github.com: manifest create, install and callback on a fresh instance |
 | Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |

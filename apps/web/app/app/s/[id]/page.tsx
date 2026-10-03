@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Markdown from "react-markdown";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, type ThreadView, type Turn } from "@/lib/api";
 import { harnessById, oktasFor, STATUS_LABEL, usd, type RunStatus } from "@/lib/harness";
@@ -30,7 +31,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
 
       <div className="msg-agent">
         {blocks.map((b, i) => {
-          if (b.t === "text") return <p key={i} className="reply">{b.text}</p>;
+          if (b.t === "text") return <div key={i} className="reply"><Markdown>{b.text}</Markdown></div>;
           if (b.t === "thought")
             return (
               <details key={i} className="thought">

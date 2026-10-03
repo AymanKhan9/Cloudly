@@ -44,6 +44,15 @@ model Thread {
   @@index([userId, updatedAt])
 }
 
+// Instance configuration entered in the browser (model keys, the GitHub App's
+// credentials, the sign-in allowlist). `value` is AES-256-GCM ciphertext; a
+// value here wins over the same name in .env.
+model Setting {
+  name      String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // Monthly model-spend limit. warnedMonth/stoppedMonth hold "YYYY-MM" so each
 // threshold notifies once per calendar month (UTC), not on every run.
 model Budget {
