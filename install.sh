@@ -245,10 +245,23 @@ done
 # Read values instead of sourcing the file: a database URL can contain & or $.
 PUBLIC_URL=$(grep '^PUBLIC_URL=' "$ENV_FILE" | cut -d= -f2- || true)
 CLOUDLY_SETUP_TOKEN=$(grep '^CLOUDLY_SETUP_TOKEN=' "$ENV_FILE" | cut -d= -f2- || true)
+API_PORT=$(grep '^API_PORT=' "$ENV_FILE" | cut -d= -f2- || true)
+# An upgrade of a set-up instance shouldn't print first-run steps (or the token).
+STATUS=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  STATUS=$(curl -fsS --max-time 3 "http://127.0.0.1:${API_PORT:-8787}/setup/status" 2>/dev/null) && break
+  sleep 2
+done
 printf '\n\033[1;32mCloudly is running.\033[0m\n\n'
-printf '  1. Open  %s/setup\n' "${PUBLIC_URL:-http://<this-ip>:3000}"
-printf '  2. Enter this setup token:  %s\n' "${CLOUDLY_SETUP_TOKEN:-(see CLOUDLY_SETUP_TOKEN in the .env)}"
-printf '  3. Follow the three steps: who can sign in, create the GitHub App, choose repositories.\n'
-printf '  4. Sign in, then add a model key under Settings.\n\n'
+case "$STATUS" in
+  *'"needsSetup":false'*)
+    printf '  Setup is complete; your settings, sessions and keys were kept.\n'
+    printf '  Open  %s\n\n' "${PUBLIC_URL:-http://<this-ip>:3000}" ;;
+  *)
+    printf '  1. Open  %s/setup\n' "${PUBLIC_URL:-http://<this-ip>:3000}"
+    printf '  2. Enter this setup token:  %s\n' "${CLOUDLY_SETUP_TOKEN:-(see CLOUDLY_SETUP_TOKEN in the .env)}"
+    printf '  3. Follow the three steps: who can sign in, create the GitHub App, choose repositories.\n'
+    printf '  4. Sign in, then add a model key under Settings.\n\n' ;;
+esac
 printf '  Config: %s   Logs: journalctl -u cloudly-worker -f\n' "$ENV_FILE"
 case "${PUBLIC_URL:-}" in http://*) warn "Open port 3000 in your cloud firewall, or set a domain for HTTPS on 443." ;; esac
