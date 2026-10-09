@@ -1,5 +1,5 @@
 import { createWorkspace, destroyWorkspace, type Workspace } from "./workspace";
-import { createRunContainer, runContainerCommand } from "./docker";
+import { createRunContainer, runContainerCommand, sandboxUser } from "./docker";
 import { exportPatch, type CommitInfo, publishCommit, type PublishResult, destroyPublish } from "./finalize";
 
 export async function v0(
@@ -29,7 +29,7 @@ export async function v0(
             const { exitCode, stdout, stderr } = await runContainerCommand([
                 "-v", `${ws.runDir}:/workspace`,
                 "--network", "none",
-                "--user", "1000:1000",
+                "--user", sandboxUser(),
                 "cloud-agents-base",
                 "sh", "-c",
                 `cd /workspace && ${checkCommand}`,

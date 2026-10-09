@@ -22,7 +22,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://cloudly:cloudly@127.0.0.1:5432/cloudly
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bun x prisma generate && bun x prisma migrate deploy

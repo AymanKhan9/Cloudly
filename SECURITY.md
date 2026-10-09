@@ -24,5 +24,5 @@ These are documented and planned, not new findings. The details are in [ARCHITEC
 
 - The model API key is in the run container's environment and the container has open internet access. A repository that prompt-injects the agent could exfiltrate that key. Use a separate key with a low limit for Cloudly.
 - Docker is the isolation boundary. It's weaker than a microVM, so only connect repositories you'd be comfortable running on the VM.
-- uid 1000 inside the container is uid 1000 on the host.
+- The run container uses the worker's own uid (1000 on installs), so a container escape lands as that user, who can run Docker.
 - Without a domain, Cloudly serves plain HTTP, so the session cookie and anything typed into Settings cross the network unencrypted. Set a domain for HTTPS.

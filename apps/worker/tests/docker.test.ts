@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 
-import { credentialFlags, runnerMountFlags, SANDBOX_LIMITS } from "../src/docker";
+import { credentialFlags, runnerMountFlags, SANDBOX_LIMITS, sandboxUser } from "../src/docker";
 
 test("the sandbox never sees the install dir, only read-only runner pieces", () => {
   const flags = runnerMountFlags("/opt/cloudly");
@@ -33,4 +33,8 @@ test("every sandbox gets memory, process and privilege limits", () => {
     expect(SANDBOX_LIMITS).toContain(flag);
   }
   expect(SANDBOX_LIMITS).toContain("no-new-privileges");
+});
+
+test("the sandbox runs as the worker's own uid, so it can write the workspace", () => {
+  expect(sandboxUser()).toBe(`${process.getuid!()}:${process.getgid!()}`);
 });

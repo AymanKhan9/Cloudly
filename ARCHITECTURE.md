@@ -293,7 +293,8 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   replicating into `CodexAdapter` as a platform-wide requirement.
 - **Non-root by construction.** The base image runs as uid 1000 (`infra/images/base/Dockerfile`,
   built on the official Node image's built-in `node` user), and the worker launches every
-  container with `--user 1000:1000` explicitly regardless.
+  container as its own uid (`sandboxUser()`), so the sandbox can write the workspace the worker
+  created. The installer makes that uid 1000; the worker refuses to start a sandbox as root.
 - **The sandbox sees only the runner, never the install dir.** The worker runs from `/opt/cloudly`,
   whose `.env` holds the master key, the database URL and the setup token. Run containers get an
   explicit read-only allowlist instead (`RUNNER_MOUNTS` in `apps/worker/src/docker.ts`: root
@@ -328,8 +329,8 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   that, as defense in depth. LiteLLM is still the endgame for key injection (so the raw key never
   enters the container at all) and per-run cost metering, but that's a bigger lift than the
   exfiltration fix alone needs — don't reach for it before the smaller fix is in place.
-- **Container uid 1000 is host uid 1000.** The worker's user owns the workspace, so the sandbox
-  uses the same uid to write it. That only matters after a container escape, which would land as
+- **The container's uid is the worker's host uid** (1000 on installs). The worker's user owns
+  the workspace, so the sandbox uses the same uid to write it. That only matters after a container escape, which would land as
   the docker-group user. Fix: user-namespace remapping or rootless Docker, with workspace
   ownership mapped accordingly.
 - **One-way egress only.** Once the allowlisting proxy above exists, the sandbox's outbound network

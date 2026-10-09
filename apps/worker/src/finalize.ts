@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { runContainerCommand } from "./docker";
+import { runContainerCommand, sandboxUser } from "./docker";
 import { validatePatch } from "./patch";
 import { type Workspace } from "./workspace";
 import { authenticatedCloneUrl, createPullRequest, parseRepoSlug } from "./github";
@@ -17,7 +17,7 @@ export async function exportPatch(workspace: Workspace): Promise<string> {
       "-v", `${workspace.runDir}:/workspace`,
       "-v", `${outputDir}:/output`,
       "--network", "none",
-      "--user", "1000:1000",
+      "--user", sandboxUser(),
       "cloud-agents-base",
       "sh", "-c",
       `git -C /workspace add -A && git -C /workspace diff --binary --no-ext-diff --no-textconv --cached ${workspace.baseSha} > /output/patch.diff`,

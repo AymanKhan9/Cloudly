@@ -62,6 +62,16 @@ export const SANDBOX_LIMITS = [
 ];
 
 /**
+ * The sandbox runs as the worker's own uid, which owns the workspace it writes
+ * (1000 on installs). Never root: that uid is also the container's.
+ */
+export function sandboxUser(): string {
+    const uid = process.getuid!();
+    if (uid === 0) throw new Error("Run the worker as a non-root user; the sandbox runs as the same uid.");
+    return `${uid}:${process.getgid!()}`;
+}
+
+/**
  * Keys go in as `-e NAME` with the value in the docker client's environment,
  * so they never appear on a command line (world-readable in /proc).
  */
@@ -142,7 +152,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             ...credentials.flags,
 
             "--user",
-            "1000:1000",
+            sandboxUser(),
 
             "cloud-agents-base",
 
