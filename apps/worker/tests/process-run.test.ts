@@ -152,7 +152,7 @@ test("a turn that changes nothing succeeds without a commit", async () => {
   }
 }, 30000);
 
-test("a run gets what's left of the monthly limit as its cap, and none once it's spent", async () => {
+test("a run's cap is what's left of the month plus the overshoot allowance, and none starts once it's spent", async () => {
   const fixture = await createFixtureRepo();
   const user = await prisma.user.create({
     data: { githubId: Math.floor(Math.random() * 1e9), login: `cap-test-${Date.now()}` },
@@ -170,7 +170,7 @@ test("a run gets what's left of the monthly limit as its cap, and none once it's
 
     await prisma.run.create({ data: { ...base, status: "queued" } });
     await processRun((await claimRun("worker-1"))!, "worker-1", stubContainer as any);
-    expect(seenCap).toBeCloseTo(0.7);
+    expect(seenCap).toBeCloseTo(0.7 + 0.25);
 
     // $1.00 of $1 spent: the next run fails before any container starts.
     seenCap = undefined;
@@ -183,6 +183,34 @@ test("a run gets what's left of the monthly limit as its cap, and none once it's
   } finally {
     await prisma.run.deleteMany({ where: { userId: user.id } });
     await prisma.user.delete({ where: { id: user.id } });
+    await fixture.cleanup();
+  }
+}, 30000);
+
+test("a turn stopped at the spend ceiling keeps the work it finished", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const inserted = await prisma.run.create({
+      data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "big task", harness: "native-claude" },
+    });
+
+    // What the runner does at the ceiling: the error result, then a non-zero exit.
+    async function* stubContainer(ws: { runDir: string }) {
+      await Bun.write(`${ws.runDir}/half-done.txt`, "finished part\n");
+      yield { seq: 0, ts: Date.now(), kind: "error" as const, data: { subtype: "error_max_budget_usd", totalCostUsd: 1.25 } };
+      throw new Error("Run container exited with code 1");
+    }
+
+    await processRun((await claimRun("worker-1"))!, "worker-1", stubContainer);
+
+    const final = await prisma.run.findUniqueOrThrow({ where: { id: inserted.id } });
+    expect(final.status).toBe("cancelled");
+    expect(final.commitSha).toBeTruthy();
+    expect(final.error).toContain("spend-limit ceiling");
+    expect(final.costUsd?.toNumber()).toBeCloseTo(1.25);
+
+    await prisma.run.delete({ where: { id: inserted.id } });
+  } finally {
     await fixture.cleanup();
   }
 }, 30000);

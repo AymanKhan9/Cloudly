@@ -46,6 +46,9 @@ export function prTitle(prompt: string): string {
   return firstLine.length > 72 ? `${firstLine.slice(0, 71).trimEnd()}…` : firstLine;
 }
 
+/** How far past the monthly limit a turn that's already running may go. */
+export const OVERSHOOT_RATIO = 0.25;
+
 export async function processRun(
   run: Run,
   workerId: string,
@@ -85,6 +88,7 @@ export async function processRun(
   let publishResult: PublishResult | undefined;
   // The container's stderr is usually empty; the agent's own error event isn't.
   let agentError: string | undefined;
+  let stopNote: string | undefined;
 
   try {
     const thread = run.threadId ? await prisma.thread.findUnique({ where: { id: run.threadId } }) : null;
@@ -98,15 +102,17 @@ export async function processRun(
     const containerOptions: ContainerOptions = thread && nativeResume
       ? { resume: thread.agentSessionId ?? undefined, homeDir: await threadHome(thread.id) }
       : {};
-    // The spend limit only sees a run's cost when it ends, so Claude, which can stop
-    // itself mid-run, gets whatever is left of the month as its own cap.
-    // ponytail: every concurrent run gets the whole remainder, so with
+    // A turn that starts under the limit may finish past it, so a task isn't cut
+    // off halfway, but only up to a ceiling of 25% of the monthly limit beyond it.
+    // Claude enforces that itself mid-run; Codex and Gemini can't, so for them the
+    // limit only applies between turns.
+    // ponytail: every concurrent run gets the whole allowance, so with
     // WORKER_CONCURRENCY > 1 they can overshoot together. Split it if that matters.
     const budget = run.userId ? await budgetStatus(run.userId) : null;
     if (budget?.limitUsd != null) {
       const remaining = budget.limitUsd - budget.spentUsd;
       if (remaining <= 0) throw new Error("Monthly spend limit reached");
-      containerOptions.maxBudgetUsd = remaining;
+      containerOptions.maxBudgetUsd = remaining + budget.limitUsd * OVERSHOOT_RATIO;
     }
     const task = thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt;
 
@@ -114,8 +120,13 @@ export async function processRun(
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {
         await insertEvents(run.id, [event]);
         if (event.kind === "error") {
-          const d = event.data as { message?: unknown } | string | null;
+          const d = event.data as { message?: unknown; subtype?: unknown } | string | null;
           agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
+          // Stopped at the ceiling: keep what it finished, the same way a cancel does.
+          if (typeof d === "object" && d?.subtype === "error_max_budget_usd") {
+            cancelled = true;
+            stopNote = "Stopped at the spend-limit ceiling. The work it finished is committed to the branch.";
+          }
         }
 
         const agentSession = thread && nativeResume ? agentSessionIdFromEvent(run.harness, event) : null;
@@ -163,7 +174,7 @@ export async function processRun(
       if (leaseLost) return;
       await prisma.run.updateMany({
         where: { id: run.id, workerId, leaseGen: run.leaseGen },
-        data: { status: cancelled ? "cancelled" : "succeeded" },
+        data: { status: cancelled ? "cancelled" : "succeeded", error: stopNote },
       });
       return;
     }
@@ -205,6 +216,7 @@ export async function processRun(
       where: { id: run.id, workerId, leaseGen: run.leaseGen },
       data: {
         status: cancelled ? "cancelled" : "succeeded",
+        error: stopNote,
         commitSha: publishResult.commitSha,
         branch: publishResult.branch,
         prUrl,

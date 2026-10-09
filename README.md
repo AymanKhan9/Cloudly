@@ -10,7 +10,7 @@ Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
 - **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
 - **Plug-and-play agents.** Claude Code and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
-- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused and in-flight runs are cancelled. Cancelled runs keep their work: the patch is stored and the branch pushed. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
+- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Code turns stop at 25% over the limit and keep the work they finished on the branch. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
 - **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys are stored encrypted on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
 ## Install

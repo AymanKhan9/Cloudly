@@ -45,18 +45,16 @@ export async function enforceBudget(userId: string): Promise<BudgetStatus> {
     });
     if (claimed.count === 0) return status;
 
+    // Queued runs never start. A turn already running is left to finish, so a
+    // task isn't cut off halfway; its own ceiling (process-run.ts) bounds it.
     await prisma.run.updateMany({
       where: { userId, status: "queued" },
       data: { status: "cancelled", cancelRequested: true, error: "Monthly spend limit reached" },
     });
-    await prisma.run.updateMany({
-      where: { userId, status: { in: ["running", "finalizing"] } },
-      data: { cancelRequested: true },
-    });
     await sendAlert(
       budget?.alertEmail ?? null,
       `Cloudly stopped: spend limit reached (${spent})`,
-      `Your Cloudly runs have spent ${spent} this month. New runs are blocked and in-flight runs were cancelled. Raise the limit in Settings to continue.`,
+      `Your Cloudly runs have spent ${spent} this month. New runs are blocked; a turn that was already running finishes first. Raise the limit in Settings to continue.`,
     );
     return status;
   }
@@ -69,7 +67,7 @@ export async function enforceBudget(userId: string): Promise<BudgetStatus> {
     await sendAlert(
       budget?.alertEmail ?? null,
       `Cloudly: 80% of your monthly spend limit used (${spent})`,
-      `Your Cloudly runs have spent ${spent} this month. At 100% new runs are blocked and in-flight runs are cancelled.`,
+      `Your Cloudly runs have spent ${spent} this month. At 100% new runs are blocked; a turn already running finishes first.`,
     );
   }
   return status;

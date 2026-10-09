@@ -94,7 +94,6 @@ export default function SessionPage() {
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const bottomRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
   useEffect(() => {
@@ -125,8 +124,10 @@ export default function SessionPage() {
   }, []);
 
   const eventCount = Object.values(events).reduce((n, l) => n + l.length, 0);
+  // To the page's real bottom: an anchor above the sticky composer would scroll
+  // the page up on every event and hide the newest output behind the composer.
   useEffect(() => {
-    if (stickRef.current) bottomRef.current?.scrollIntoView({ block: "end" });
+    if (stickRef.current) window.scrollTo({ top: document.documentElement.scrollHeight });
   }, [eventCount, view?.turns.length]);
 
   useEffect(() => {
@@ -218,7 +219,6 @@ export default function SessionPage() {
         {turns.map((t) => (
           <TurnView key={t.id} turn={t} events={events[t.id] ?? []} harness={thread.harness} now={now} />
         ))}
-        <div ref={bottomRef} />
       </div>
 
       <form className="composer" onSubmit={send}>
