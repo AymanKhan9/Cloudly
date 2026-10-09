@@ -9,7 +9,10 @@ Run from this directory (`textstats/`), with Python 3.8+:
 ```sh
 python -m textstats FILE     # read a UTF-8 text file
 python -m textstats -        # read from stdin
+python -m textstats --top 10 FILE   # show the 10 most common words (default: 5)
 ```
+
+`--top N` must be a whole number of at least 1. If the text has fewer than N distinct words, all of them are shown.
 
 Example output:
 

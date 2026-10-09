@@ -146,6 +146,39 @@ class CliTests(unittest.TestCase):
             out.getvalue(), "Words: 0\nSentences: 0\nMost common words:\n  (none)\n"
         )
 
+    def test_main_top_limits_words(self):
+        path = self._write_temp("a a a b b c d e f g")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = main(["--top", "2", path])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.getvalue().endswith("Most common words:\n  a: 3\n  b: 2\n"))
+
+    def test_main_top_larger_than_vocabulary(self):
+        path = self._write_temp("x y x")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = main([path, "--top", "50"])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.getvalue().endswith("Most common words:\n  x: 2\n  y: 1\n"))
+
+    def test_main_default_top_is_five(self):
+        path = self._write_temp("a b c d e f g")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            main([path])
+        self.assertEqual(out.getvalue().count("\n  "), 5)
+
+    def test_main_top_rejects_invalid_values(self):
+        path = self._write_temp("a b c")
+        for bad in ["0", "-1", "two", "1.5"]:
+            with self.subTest(top=bad):
+                err = io.StringIO()
+                with redirect_stderr(err), self.assertRaises(SystemExit) as cm:
+                    main(["--top", bad, path])
+                self.assertEqual(cm.exception.code, 2)
+                self.assertIn("--top", err.getvalue())
+
     def test_main_missing_file(self):
         err = io.StringIO()
         with redirect_stderr(err):

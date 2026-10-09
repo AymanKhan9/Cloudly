@@ -6,14 +6,28 @@ import sys
 from .core import count_sentences, count_words, most_common_words
 
 
-def format_stats(text):
+DEFAULT_TOP = 5
+
+
+def positive_int(value):
+    """argparse type: an integer >= 1."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid integer: {value!r}") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {number}")
+    return number
+
+
+def format_stats(text, top=DEFAULT_TOP):
     """Return a human-readable report of the stats for ``text``."""
     lines = [
         f"Words: {count_words(text)}",
         f"Sentences: {count_sentences(text)}",
         "Most common words:",
     ]
-    common = most_common_words(text, 5)
+    common = most_common_words(text, top)
     if common:
         lines.extend(f"  {word}: {count}" for word, count in common)
     else:
@@ -27,6 +41,13 @@ def main(argv=None):
         description="Print word, sentence and most-common-word stats for a text file.",
     )
     parser.add_argument("file", help="path to a UTF-8 text file, or - for stdin")
+    parser.add_argument(
+        "--top",
+        type=positive_int,
+        default=DEFAULT_TOP,
+        metavar="N",
+        help=f"number of most common words to show (default: {DEFAULT_TOP})",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -39,7 +60,7 @@ def main(argv=None):
         print(f"textstats: cannot read {args.file}: {exc}", file=sys.stderr)
         return 1
 
-    print(format_stats(text))
+    print(format_stats(text, args.top))
     return 0
 
 
