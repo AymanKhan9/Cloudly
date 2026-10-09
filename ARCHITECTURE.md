@@ -294,8 +294,26 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
 - **Non-root by construction.** The base image runs as uid 1000 (`infra/images/base/Dockerfile`,
   built on the official Node image's built-in `node` user), and the worker launches every
   container with `--user 1000:1000` explicitly regardless.
-- **Only the worker touches the Docker socket** — effectively root on the host, so it's the one
-  process with that privilege, not the API, not anything reachable from the browser.
+- **The sandbox sees only the runner, never the install dir.** The worker runs from `/opt/cloudly`,
+  whose `.env` holds the master key, the database URL and the setup token. Run containers get an
+  explicit read-only allowlist instead (`RUNNER_MOUNTS` in `apps/worker/src/docker.ts`: root
+  `package.json` and `node_modules`, `packages/shared`, and the runner's `src`, manifest and
+  `node_modules`). Until this was fixed the whole install dir was mounted at `/repo`, and an agent
+  could read the master key; with bring-your-own Postgres, that plus the reachable database
+  would have exposed every stored secret, including the GitHub App private key.
+- **Resource and privilege limits on every container** (`SANDBOX_LIMITS`): `--memory` (host RAM
+  minus 768 MB, at least 512 MB, or `SANDBOX_MEMORY`), `--pids-limit 2048`, `--cap-drop ALL`,
+  `no-new-privileges`. Memory is the one that matters most: without it a runaway build could
+  take Postgres and the worker down with it on a 1 GB VM.
+- **Model keys stay off command lines.** They're passed as `-e NAME` with the value in the docker
+  client's environment, so they don't appear in the host's process list (`/proc/*/cmdline` is
+  world-readable). They're still in the container's environment, and `docker inspect` shows them
+  to anyone with Docker access, who is root anyway.
+- **Only the worker can reach Docker.** The docker group is root-equivalent, so only the worker's
+  user (uid 1000) is in it. The API and web app, the internet-facing processes, run as a separate
+  `cloudly-app` system user with no Docker access; `.env` is `0640`, readable by the API through
+  its group and by no one else. The web app gets no `.env` at all (it needs nothing at runtime,
+  and `next build` would copy one into its standalone output). Every unit sets `NoNewPrivileges`.
 
 ### Planned, not yet built
 
@@ -310,6 +328,10 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   that, as defense in depth. LiteLLM is still the endgame for key injection (so the raw key never
   enters the container at all) and per-run cost metering, but that's a bigger lift than the
   exfiltration fix alone needs — don't reach for it before the smaller fix is in place.
+- **Container uid 1000 is host uid 1000.** The worker's user owns the workspace, so the sandbox
+  uses the same uid to write it. That only matters after a container escape, which would land as
+  the docker-group user. Fix: user-namespace remapping or rootless Docker, with workspace
+  ownership mapped accordingly.
 - **One-way egress only.** Once the allowlisting proxy above exists, the sandbox's outbound network
   routes through it exclusively, and nothing external has an inbound path to a running sandbox.
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
@@ -670,6 +692,9 @@ design, not after it:
 | ACP adapter (Gemini CLI via `gemini --acp`), incl. `resume` via `session/load` | `packages/runner/src/adapters/acp.ts` | ✅ tested live end to end through the real worker → Docker path, resume tested across separate subprocesses |
 | Browser-set config: AES-256-GCM `Setting` table (`config(name)` = DB, then env), write-only keys panel in Settings; worker and API both read it | `packages/db/src/{secrets,github-credentials}.ts`, `apps/web/components/secrets-panel.tsx` | ✅ unit tests (roundtrip, tamper, precedence); DB-only GitHub token and DB-only Gemini run verified live. Master key is `CLOUDLY_SECRET_KEY` or `~/.cloudly/secret.key`; losing it loses the stored keys |
 | First-run setup (`/setup`): one-time `CLOUDLY_SETUP_TOKEN`, GitHub App created via the manifest flow, installation verified against the app JWT, closes itself when complete | `apps/api/src/setup.ts`, `apps/web/app/setup` | ✅ tested live against github.com: manifest create, install and callback on a fresh instance |
+| Sandbox and service hardening: allowlisted read-only mounts (no install dir, no `.env`), memory/pids/capability limits, keys off the command line, API and web as a non-Docker `cloudly-app` user, `.env` 0640 | `apps/worker/src/docker.ts`, `install.sh` | ✅ `tests/docker.test.ts`; a real Gemini turn ran through the hardened container, and an inspected container sees only the runner with limits applied. The installer's user split, `.env` permissions and systemd units haven't run on a fresh VM yet |
+| CI: type-check every package, run db/runner/worker tests with Postgres and the real sandbox image | `.github/workflows/test.yml` | 🚧 every command passes locally; the workflow hasn't run on GitHub yet |
+| Bring-your-own Postgres: installer takes an external `DATABASE_URL` and skips the bundled database (`LOCAL_POSTGRES=0`) | `install.sh` | ✅ installer logic tested in isolation; migrate and queries verified against a separate Postgres 17 with a URL-encoded password. Not yet tried against a hosted provider that requires TLS (Neon, Supabase, RDS) |
 | Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |

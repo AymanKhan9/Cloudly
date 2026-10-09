@@ -25,7 +25,7 @@ SSH into the VM and run:
 curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
 ```
 
-It asks for a domain (optional) and the public URL, then installs Docker, Bun, Postgres and the three services. It downloads a prebuilt release, so a small VM never has to compile the web app. If no release exists for your CPU it builds from source instead (set `CLOUDLY_FROM_SOURCE=1` to force that). When it finishes it prints a setup link and a one-time **setup token**. The token is also saved as `CLOUDLY_SETUP_TOKEN` in `/opt/cloudly/.env`.
+It asks for a domain (optional), the public URL and, optionally, your own Postgres URL (see [Using your own Postgres](#using-your-own-postgres)), then installs Docker, Bun, Postgres and the three services. It downloads a prebuilt release, so a small VM never has to compile the web app. If no release exists for your CPU it builds from source instead (set `CLOUDLY_FROM_SOURCE=1` to force that). When it finishes it prints a setup link and a one-time **setup token**. The token is also saved as `CLOUDLY_SETUP_TOKEN` in `/opt/cloudly/.env`.
 
 ## 3. Finish setup in the browser
 
@@ -46,22 +46,32 @@ Point a DNS A record at the VM and enter the domain when the installer asks. Cad
 2. Re-run the installer.
 3. Add the new callback URL (`https://<domain>/api/auth/github/callback`) to the GitHub App's settings on GitHub.
 
+## Using your own Postgres
+
+By default Cloudly runs Postgres on the VM. To keep your data in a database you already manage (Neon, Supabase, RDS, your own server), paste its connection URL when the installer asks. The installer then skips the bundled Postgres and migrates yours.
+
+- If your provider offers both a pooled and a direct URL, use the direct one. Migrations need a direct connection.
+- Allow connections from the VM's IP address.
+- Keys saved under Settings are encrypted with `CLOUDLY_SECRET_KEY`, which stays in the VM's `.env`, not in the database. Back it up. Without it the stored keys can't be read, and a copy of the database alone doesn't expose them.
+- To switch an existing install, set `LOCAL_POSTGRES=0` and `DATABASE_URL=` in `/opt/cloudly/.env` and re-run the installer. Existing data isn't copied over; move it with `pg_dump` and `pg_restore` first.
+
 ## 5. Day-to-day
 
 | Task | Command |
 |---|---|
 | Upgrade | Re-run the install command. It pulls, migrates, rebuilds and restarts, and keeps your `.env`. |
 | Logs | `journalctl -u cloudly-worker -f` (also `cloudly-api`, `cloudly-web`) |
+| Run-container limits | `SANDBOX_MEMORY` (default: RAM minus 768 MB) and `SANDBOX_PIDS` (default 2048) in `.env` |
 | Restart after editing `.env` | `sudo systemctl restart cloudly-api cloudly-worker cloudly-web` |
 | Change agent prices | Set `PRICE_CODEX_*` / `PRICE_GEMINI_*` in `.env` (USD per million tokens) |
 | Add a user | Append their GitHub login to `ALLOWED_GITHUB_LOGINS` |
 
 ## What runs where
 
-- `cloudly-web`: the Next.js UI on port 3000. It proxies `/api` to the API.
-- `cloudly-api`: the Hono API on `127.0.0.1:8787`. It is not exposed.
-- `cloudly-worker`: claims runs, starts one Docker container per run, finalizes, pushes and opens the PR, and enforces the spend limit.
-- Postgres runs in Docker, bound to `127.0.0.1:5432`.
+- `cloudly-web`: the Next.js UI on port 3000. It proxies `/api` to the API. Runs as `cloudly-app`, with no Docker access.
+- `cloudly-api`: the Hono API on `127.0.0.1:8787`. It is not exposed. Runs as `cloudly-app`, with no Docker access.
+- `cloudly-worker`: runs as the uid-1000 user, the only one in the `docker` group. Claims runs, starts one Docker container per run, finalizes, pushes and opens the PR, and enforces the spend limit.
+- Postgres runs in Docker, bound to `127.0.0.1:5432`, unless you use your own.
 - The `cloud-agents-base` image holds the sandbox: the agent CLIs, running as a non-root user.
 
 ## Publishing the landing page on its own

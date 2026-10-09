@@ -1,0 +1,39 @@
+# Type-checks every package and runs the tests, including the worker's, which
+# start real sandbox containers and need Postgres.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cloudly
+          POSTGRES_PASSWORD: cloudly
+          POSTGRES_DB: cloudly
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U cloudly -d cloudly" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://cloudly:cloudly@127.0.0.1:5432/cloudly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: cd packages/db && bun x prisma generate && bun x prisma migrate deploy
+      - name: Type-check
+        run: |
+          for d in packages/db packages/runner apps/api apps/worker; do
+            (cd "$d" && bunx tsc --noEmit) || exit 1
+          done
+          cd apps/web && bun run check-types
+      - name: Build the sandbox image
+        run: docker build -q -t cloud-agents-base infra/images/base
+      - run: cd packages/db && bun test
+      - run: cd packages/runner && bun test
+      - run: cd apps/worker && bun test

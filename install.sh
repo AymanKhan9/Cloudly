@@ -51,11 +51,12 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 $SUDO systemctl enable --now docker >/dev/null 2>&1 || true
 
-if ! command -v bun >/dev/null 2>&1; then
+# System-wide, so every service user can run it (a copy in someone's ~/.bun can't).
+BUN=/usr/local/bin/bun
+if [ ! -x "$BUN" ]; then
   say "Installing Bun"
   curl -fsSL https://bun.sh/install | $SUDO env BUN_INSTALL=/usr/local bash >/dev/null
 fi
-BUN=$(command -v bun)
 
 # --- 2. Swap on small VMs ---------------------------------------------------------
 MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
@@ -75,7 +76,11 @@ if [ -z "$RUN_USER" ]; then
   RUN_USER=cloudly
 fi
 $SUDO usermod -aG docker "$RUN_USER"
-say "Services will run as ${RUN_USER} (uid 1000)"
+# The API and web app face the internet, so they run as a user without Docker
+# access (the docker group is root in all but name). Only the worker starts containers.
+APP_USER=cloudly-app
+id "$APP_USER" >/dev/null 2>&1 || $SUDO useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$APP_USER"
+say "The worker runs as ${RUN_USER} (uid 1000); the API and web app run as ${APP_USER}"
 
 # --- 4. Code ----------------------------------------------------------------------
 # Prefer the prebuilt release (no 2 GB `next build` on a small VM). Falls back to
@@ -119,8 +124,16 @@ if [ ! -f "$ENV_FILE" ]; then
   ask DOMAIN "Domain pointing at this VM, for HTTPS (leave empty to use the IP)" ""
   if [ -n "$DOMAIN" ]; then DEFAULT_URL="https://$DOMAIN"; else DEFAULT_URL="http://$IP:3000"; fi
   ask PUBLIC_URL "Public URL" "$DEFAULT_URL"
+  ask DB_URL "Your own Postgres URL (leave empty to run Postgres on this VM)" ""
+  case "$DB_URL" in
+    ""|postgres://*|postgresql://*) ;;
+    *) die "The database URL must start with postgres:// or postgresql://" ;;
+  esac
+  # Bun expands $NAME inside .env values, which would silently mangle a password.
+  DB_URL=$(printf '%s' "$DB_URL" | sed 's/\$/%24/g')
 
   PG_PASS=$(openssl rand -hex 24)
+  if [ -n "$DB_URL" ]; then LOCAL_PG=0; else LOCAL_PG=1; DB_URL="postgresql://cloudly:$PG_PASS@127.0.0.1:5432/cloudly"; fi
   SETUP_TOKEN=$(openssl rand -hex 16)
   SECRET_KEY=$(openssl rand -base64 32)
   $SUDO -u "$RUN_USER" sh -c "umask 077; cat > '$ENV_FILE'" <<EOF
@@ -129,7 +142,8 @@ WEB_ORIGIN=$PUBLIC_URL
 API_ORIGIN=$PUBLIC_URL/api
 DOMAIN=$DOMAIN
 POSTGRES_PASSWORD=$PG_PASS
-DATABASE_URL=postgresql://cloudly:$PG_PASS@127.0.0.1:5432/cloudly
+LOCAL_POSTGRES=$LOCAL_PG
+DATABASE_URL=$DB_URL
 API_PORT=8787
 CLOUDLY_SETUP_TOKEN=$SETUP_TOKEN
 CLOUDLY_SECRET_KEY=$SECRET_KEY
@@ -139,17 +153,36 @@ else
   say "Keeping existing ${ENV_FILE}"
 fi
 
+# Installs from before browser setup have no master key in .env. Reuse the one the
+# worker generated, if any, so stored keys stay readable now that the API runs as
+# another user and can't see that file.
+if ! grep -q '^CLOUDLY_SECRET_KEY=.' "$ENV_FILE"; then
+  OLD_KEY="$(getent passwd "$RUN_USER" | cut -d: -f6)/.cloudly/secret.key"
+  if $SUDO test -f "$OLD_KEY"; then KEY=$($SUDO cat "$OLD_KEY"); else KEY=$(openssl rand -base64 32); fi
+  echo "CLOUDLY_SECRET_KEY=$KEY" | $SUDO tee -a "$ENV_FILE" >/dev/null
+fi
+# Owner (worker) reads and writes, the API reads through the group, nobody else.
+$SUDO chgrp "$APP_USER" "$ENV_FILE"
+$SUDO chmod 640 "$ENV_FILE"
+
 # Bun only auto-loads the .env in its working directory; every package that
-# reads env points at the one file.
-for d in packages/db apps/api apps/worker apps/web; do
+# reads env points at the one file. Not apps/web: it needs nothing at runtime, and
+# `next build` copies whatever .env it loads into the standalone output.
+for d in packages/db apps/api apps/worker; do
   $SUDO -u "$RUN_USER" ln -sf "$ENV_FILE" "$DIR/$d/.env"
 done
+$SUDO rm -f "$DIR/apps/web/.env" "$DIR/apps/web/.next/standalone/apps/web/.env"
 
 # --- 6. Database ----------------------------------------------------------------------
-say "Starting Postgres"
 cd "$DIR"
 COMPOSE="docker compose -f deploy/docker-compose.yml --env-file $ENV_FILE"
-$SUDO $COMPOSE up -d --wait postgres >/dev/null
+# Older installs have no LOCAL_POSTGRES line; they always ran Postgres here.
+if grep -q '^LOCAL_POSTGRES=0' "$ENV_FILE"; then
+  say "Using your own Postgres (DATABASE_URL in ${ENV_FILE})"
+else
+  say "Starting Postgres"
+  $SUDO $COMPOSE up -d --wait postgres >/dev/null
+fi
 if grep -q '^DOMAIN=.\+' "$ENV_FILE"; then
   say "Starting Caddy for HTTPS"
   $SUDO $COMPOSE --profile https up -d caddy >/dev/null
@@ -159,7 +192,9 @@ fi
 say "Installing dependencies"
 $SUDO -u "$RUN_USER" "$BUN" install --frozen-lockfile >/dev/null
 say "Migrating the database"
-$SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma migrate deploy >/dev/null && '$BUN' x prisma generate >/dev/null"
+$SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma migrate deploy >/dev/null" \
+  || die "Couldn't migrate the database. Check DATABASE_URL in ${ENV_FILE}, and that the database accepts connections from this VM."
+$SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma generate >/dev/null"
 if [ -z "$PREBUILT" ]; then
 say "Building the web app"
 $SUDO -u "$RUN_USER" sh -c "cd '$DIR/apps/web' && '$BUN' run build >/dev/null && cp -r .next/static .next/standalone/apps/web/.next/ && if [ -d public ]; then cp -r public .next/standalone/apps/web/; fi"
@@ -176,10 +211,11 @@ After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-User=$RUN_USER
-WorkingDirectory=$2
-ExecStart=$3
-Environment=$4
+User=$2
+WorkingDirectory=$3
+ExecStart=$4
+Environment=$5
+NoNewPrivileges=yes
 Restart=always
 RestartSec=3
 KillSignal=SIGINT
@@ -189,9 +225,12 @@ TimeoutStopSec=60
 WantedBy=multi-user.target
 EOF
 }
-unit api "$DIR" "$BUN apps/api/src/index.ts" "NODE_ENV=production"
-unit worker "$DIR" "$BUN apps/worker/src/main.ts" "NODE_ENV=production"
-unit web "$DIR/apps/web/.next/standalone/apps/web" "$BUN server.js" "NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0"
+WEB_DIR="$DIR/apps/web/.next/standalone/apps/web"
+# The only place the web app writes.
+$SUDO install -d -o "$APP_USER" "$WEB_DIR/.next/cache"
+unit api "$APP_USER" "$DIR" "$BUN apps/api/src/index.ts" "NODE_ENV=production"
+unit worker "$RUN_USER" "$DIR" "$BUN apps/worker/src/main.ts" "NODE_ENV=production"
+unit web "$APP_USER" "$WEB_DIR" "$BUN server.js" "NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0"
 
 $SUDO systemctl daemon-reload
 for s in api worker web; do
@@ -200,7 +239,9 @@ for s in api worker web; do
 done
 
 # --- 9. Next steps --------------------------------------------------------------------
-. "$ENV_FILE" 2>/dev/null || true
+# Read values instead of sourcing the file: a database URL can contain & or $.
+PUBLIC_URL=$(grep '^PUBLIC_URL=' "$ENV_FILE" | cut -d= -f2- || true)
+CLOUDLY_SETUP_TOKEN=$(grep '^CLOUDLY_SETUP_TOKEN=' "$ENV_FILE" | cut -d= -f2- || true)
 printf '\n\033[1;32mCloudly is running.\033[0m\n\n'
 printf '  1. Open  %s/setup\n' "${PUBLIC_URL:-http://<this-ip>:3000}"
 printf '  2. Enter this setup token:  %s\n' "${CLOUDLY_SETUP_TOKEN:-(see CLOUDLY_SETUP_TOKEN in the .env)}"
