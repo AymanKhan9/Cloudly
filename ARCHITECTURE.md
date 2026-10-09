@@ -684,7 +684,7 @@ design, not after it:
 | API: `POST /runs/:id/cancel` | `apps/api/src/index.ts` | ✅ built and tested live |
 | API: `GET /runs/:id/events` (SSE, replay via `Last-Event-ID`, keep-alive ping) | `apps/api/src/index.ts` | ✅ built and tested live |
 | GitHub OAuth sign-in (PKCE, hashed session cookie, login allowlist), replacing dev-token auth | `apps/api` | ✅ tested live in a real browser |
-| Spend limit: per-run cost capture, 80% warning + email, 100% hard stop | `apps/worker/src/{cost,budget}.ts`, `apps/api` | ✅ unit + live Postgres tests; tripped live by a real run |
+| Spend limit: per-run cost capture, 80% warning + email, 100% hard stop | `apps/worker/src/{cost,budget}.ts`, `apps/api` | ✅ unit + live Postgres tests; tripped live by a real run. Cost is only known when a turn ends, so Claude runs get the month's remaining budget as the SDK's own `maxBudgetUsd` and stop themselves at the limit; Codex and Gemini turns can overshoot by one turn's cost. Failed Claude turns now count their cost too (before, an error result recorded $0) |
 | Production worker entrypoint | `apps/worker/src/main.ts` | ✅ ran a real Gemini job end to end to PR #3 |
 | Self-host installer (Docker, Bun, swap, Postgres, systemd, optional Caddy HTTPS) | `install.sh`, `deploy/` | 🚧 written and syntax-checked; downloads a prebuilt per-arch release (`.github/workflows/release.yml`) and falls back to building from source; the workflow and the download path have not run for real, and the installer has not run on a fresh VM |
 | Web UI: landing, sign-in, settings (finish-reviewed); sessions sidebar, new-session page, chat view | `apps/web` | ✅ landing/sign-in/settings reviewed; chat UI built and checked in a browser, not independently reviewed |

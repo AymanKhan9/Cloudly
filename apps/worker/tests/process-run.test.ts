@@ -151,3 +151,38 @@ test("a turn that changes nothing succeeds without a commit", async () => {
     await fixture.cleanup();
   }
 }, 30000);
+
+test("a run gets what's left of the monthly limit as its cap, and none once it's spent", async () => {
+  const fixture = await createFixtureRepo();
+  const user = await prisma.user.create({
+    data: { githubId: Math.floor(Math.random() * 1e9), login: `cap-test-${Date.now()}` },
+  });
+  try {
+    await prisma.budget.create({ data: { userId: user.id, monthlyLimitUsd: 1 } });
+    const base = { repo: fixture.repoPath, baseBranch: "main", prompt: "t", harness: "native-claude", userId: user.id };
+    await prisma.run.create({ data: { ...base, status: "succeeded", costUsd: 0.3 } });
+
+    let seenCap: number | undefined;
+    async function* stubContainer(_ws: unknown, _t: string, _h: string, _id: string, options?: { maxBudgetUsd?: number }) {
+      seenCap = options?.maxBudgetUsd;
+      yield { seq: 0, ts: Date.now(), kind: "done" as const, data: { totalCostUsd: 0.7 } };
+    }
+
+    await prisma.run.create({ data: { ...base, status: "queued" } });
+    await processRun((await claimRun("worker-1"))!, "worker-1", stubContainer as any);
+    expect(seenCap).toBeCloseTo(0.7);
+
+    // $1.00 of $1 spent: the next run fails before any container starts.
+    seenCap = undefined;
+    const blocked = await prisma.run.create({ data: { ...base, status: "queued" } });
+    await expect(processRun((await claimRun("worker-1"))!, "worker-1", stubContainer as any)).rejects.toThrow("spend limit");
+    expect(seenCap).toBeUndefined();
+    const final = await prisma.run.findUniqueOrThrow({ where: { id: blocked.id } });
+    expect(final.status).toBe("failed");
+    expect(final.error).toContain("spend limit");
+  } finally {
+    await prisma.run.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+    await fixture.cleanup();
+  }
+}, 30000);

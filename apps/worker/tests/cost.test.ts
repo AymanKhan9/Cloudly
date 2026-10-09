@@ -8,6 +8,13 @@ test("claude reports exact usd", () => {
   });
 });
 
+test("a failed claude run's cost still counts", () => {
+  expect(
+    costFromDoneEvent("native-claude", { kind: "error", data: { subtype: "error_max_budget_usd", totalCostUsd: 0.73 } }),
+  ).toEqual({ usd: 0.73, estimated: false });
+  expect(costFromDoneEvent("native-codex", { kind: "error", data: { usage: { input_tokens: 9, output_tokens: 9 } } })).toBeNull();
+});
+
 test("codex estimates from token usage", () => {
   const cost = costFromDoneEvent("native-codex", {
     kind: "done",

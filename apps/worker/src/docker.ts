@@ -9,7 +9,8 @@ import { config } from "@repo/db";
 interface ControlConfig{
     task:string,
     harness:string,
-    resume?:string
+    resume?:string,
+    maxBudgetUsd?:number
 }
 
 export interface ContainerOptions {
@@ -17,6 +18,8 @@ export interface ContainerOptions {
     resume?: string;
     /** Host dir mounted as the sandbox HOME so ~/.claude, ~/.codex and ~/.gemini persist. */
     homeDir?: string;
+    /** Remaining monthly budget; Claude stops itself there. */
+    maxBudgetUsd?: number;
 }
 
 // Codex takes an API key through the SDK's `apiKey` option (it becomes
@@ -111,6 +114,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             task,
             harness,
             resume: options.resume,
+            maxBudgetUsd: options.maxBudgetUsd,
         };
 
         await writeFile(

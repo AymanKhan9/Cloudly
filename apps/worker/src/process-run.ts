@@ -1,4 +1,4 @@
-import { prisma } from "@repo/db";
+import { prisma, budgetStatus } from "@repo/db";
 import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
@@ -98,6 +98,16 @@ export async function processRun(
     const containerOptions: ContainerOptions = thread && nativeResume
       ? { resume: thread.agentSessionId ?? undefined, homeDir: await threadHome(thread.id) }
       : {};
+    // The spend limit only sees a run's cost when it ends, so Claude, which can stop
+    // itself mid-run, gets whatever is left of the month as its own cap.
+    // ponytail: every concurrent run gets the whole remainder, so with
+    // WORKER_CONCURRENCY > 1 they can overshoot together. Split it if that matters.
+    const budget = run.userId ? await budgetStatus(run.userId) : null;
+    if (budget?.limitUsd != null) {
+      const remaining = budget.limitUsd - budget.spentUsd;
+      if (remaining <= 0) throw new Error("Monthly spend limit reached");
+      containerOptions.maxBudgetUsd = remaining;
+    }
     const task = thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt;
 
     try {

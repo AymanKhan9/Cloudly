@@ -85,8 +85,9 @@ export default function SettingsPage() {
               <input id="limit" type="number" min={0} step="0.5" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} required className="num" />
             </div>
             <p className="field-hint">
-              At 80% you get a banner and one email. At 100% new runs are refused and running ones are cancelled. Covers
-              model spend only; your VM is billed by your cloud provider.
+              At 80% you get a banner and one email. At 100% new runs are refused and running ones are cancelled. Claude
+              Code stops itself exactly at the limit; Codex and Gemini can go over by one turn. Covers model spend only;
+              your VM is billed by your cloud provider.
             </p>
           </div>
           <div className="field field-wide">

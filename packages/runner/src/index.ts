@@ -9,10 +9,12 @@ type RunConfig = {
     task: string;
     resume?: string;
     harness:string;
+    /** What's left of the monthly limit; only Claude can enforce it mid-run. */
+    maxBudgetUsd?: number;
 };
 
-const adapters: Record<string,()=>RunAdapter> = {
-    "native-claude" : ()=> new ClaudeAdapter(),
+const adapters: Record<string,(config: RunConfig)=>RunAdapter> = {
+    "native-claude" : (config)=> new ClaudeAdapter(config.maxBudgetUsd),
     "native-codex": ()=> new CodexAdapter(),
     "gemini-acp": ()=> new AcpAdapter(),
 };
@@ -22,7 +24,7 @@ async function loadConfig(): Promise<RunConfig> {
     if (typeof raw.task !== "string") {
         throw new Error(`invalid config at ${CONFIG_PATH}: missing "task"`);
     }
-    return { task: raw.task, resume: raw.resume, harness:raw.harness };
+    return { task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd };
 }
 
 let lastSeq = -1;
@@ -33,7 +35,7 @@ async function main() {
     if(!makeAdapter){
         throw new Error(`unknown harness: ${config.harness}`);
     }
-    const adapter : RunAdapter = makeAdapter();
+    const adapter : RunAdapter = makeAdapter(config);
 
     process.on("SIGINT", () => {
         adapter.interrupt();

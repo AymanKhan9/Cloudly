@@ -67,6 +67,18 @@ test("result success maps to done", () => {
     ]);
 });
 
+test("a failed result keeps its cost so the worker can count it", () => {
+    const msg = {
+        type: "result",
+        subtype: "error_max_budget_usd",
+        errors: ["budget reached"],
+        total_cost_usd: 0.73,
+    } as unknown as SDKMessage;
+    expect(mapClaudeMessage(msg)).toEqual([
+        { kind: "error", data: { subtype: "error_max_budget_usd", errors: ["budget reached"], totalCostUsd: 0.73 } },
+    ]);
+});
+
 test("result error_max_turns maps to error", () => {
     const msg = {
         type: "result",

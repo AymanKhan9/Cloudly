@@ -54,9 +54,10 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
                     },
                 }];
             }
+            // Failed results (max budget, crashes) cost money too; the worker counts it.
             return [{
                 kind: "error",
-                data: { subtype: message.subtype, errors: message.errors },
+                data: { subtype: message.subtype, errors: message.errors, totalCostUsd: message.total_cost_usd },
             }];
 
         default:
@@ -66,6 +67,9 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
 
 export class ClaudeAdapter implements RunAdapter {
     private controller?: AbortController;
+
+    /** The SDK stops the run itself once it has spent this much. */
+    constructor(private maxBudgetUsd = 20) {}
 
     async *start(
         task: string,
@@ -82,8 +86,7 @@ export class ClaudeAdapter implements RunAdapter {
                 permissionMode: "default",
                 canUseTool,
                 disallowedTools: ["Bash(git push *)"],
-                maxTurns: 5,
-                maxBudgetUsd: 20,
+                maxBudgetUsd: this.maxBudgetUsd,
                 resume,
                 abortController: this.controller,
             },

@@ -27,12 +27,17 @@ function num(value: unknown): number {
 
 /** Cost of a run from its `done` event, or null when the harness reported nothing usable. */
 export function costFromDoneEvent(harness: string, event: Pick<RunEvent, "kind" | "data">): RunCost | null {
-  if (event.kind !== "done" || !event.data || typeof event.data !== "object") return null;
+  if (!event.data || typeof event.data !== "object") return null;
   const data = event.data as Record<string, any>;
 
+  // Claude reports cost on failed results too (budget reached, crashes); that spend counts.
+  if (harness === "native-claude") {
+    if (event.kind !== "done" && event.kind !== "error") return null;
+    return typeof data.totalCostUsd === "number" ? { usd: data.totalCostUsd, estimated: false } : null;
+  }
+  if (event.kind !== "done") return null;
+
   switch (harness) {
-    case "native-claude":
-      return typeof data.totalCostUsd === "number" ? { usd: data.totalCostUsd, estimated: false } : null;
 
     case "native-codex": {
       const usage = data.usage;
