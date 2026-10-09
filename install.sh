@@ -192,7 +192,10 @@ fi
 say "Installing dependencies"
 $SUDO -u "$RUN_USER" "$BUN" install --frozen-lockfile >/dev/null
 say "Migrating the database"
-$SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma migrate deploy >/dev/null" \
+# Without Prisma's advisory lock: through a connection pooler (Neon's pooled URL,
+# Supabase's pooler) the unlock can land on another connection and leave the lock
+# held, and every later upgrade times out on it. The installer is the only migrator.
+$SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 '$BUN' x prisma migrate deploy >/dev/null" \
   || die "Couldn't migrate the database. Check DATABASE_URL in ${ENV_FILE}, and that the database accepts connections from this VM."
 $SUDO -u "$RUN_USER" sh -c "cd '$DIR/packages/db' && '$BUN' x prisma generate >/dev/null"
 if [ -z "$PREBUILT" ]; then

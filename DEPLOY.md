@@ -50,7 +50,7 @@ Point a DNS A record at the VM and enter the domain when the installer asks. Cad
 
 By default Cloudly runs Postgres on the VM. To keep your data in a database you already manage (Neon, Supabase, RDS, your own server), paste its connection URL when the installer asks. The installer then skips the bundled Postgres and migrates yours.
 
-- If your provider offers both a pooled and a direct URL, use the direct one. Migrations need a direct connection.
+- Pooled and direct URLs both work (tested with Neon's pooled URL). The installer migrates without Prisma's advisory lock, which poolers can leave stuck.
 - Allow connections from the VM's IP address.
 - Keys saved under Settings are encrypted with `CLOUDLY_SECRET_KEY`, which stays in the VM's `.env`, not in the database. Back it up. Without it the stored keys can't be read, and a copy of the database alone doesn't expose them.
 - To switch an existing install, set `LOCAL_POSTGRES=0` and `DATABASE_URL=` in `/opt/cloudly/.env` and re-run the installer. Existing data isn't copied over; move it with `pg_dump` and `pg_restore` first.
