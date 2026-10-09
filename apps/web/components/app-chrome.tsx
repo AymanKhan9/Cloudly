@@ -71,7 +71,7 @@ export function AppChrome() {
             {state === "storm" ? <StormFlag /> : null}
             <span>
               {state === "storm"
-                ? `Spend limit reached: ${usd(budget.spentUsd)} of ${usd(budget.limitUsd)}. New runs are blocked and running ones were cancelled.`
+                ? `Spend limit reached: ${usd(budget.spentUsd)} of ${usd(budget.limitUsd)}. New runs are blocked; a turn that was already running finished first.`
                 : `${Math.round(budget.ratio * 100)}% of this month's limit used (${usd(budget.spentUsd)} of ${usd(budget.limitUsd)}).`}
             </span>
             <Link href="/app/settings">{state === "storm" ? "Raise the limit" : "Review limit"}</Link>

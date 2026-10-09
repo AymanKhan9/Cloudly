@@ -9,10 +9,19 @@ import { authenticatedCloneUrl, createPullRequest, parseRepoSlug } from "./githu
 
 const MAX_PATCH_BYTES = 10 * 1024 * 1024; // 10 MB
 
+// Files that only exist because the agent ran something (tests, installs), on top
+// of the repo's own .gitignore. Only untracked files are affected, so anything a
+// repo deliberately commits still goes through.
+const RUN_ARTIFACTS = [
+  "__pycache__/", "*.py[cod]", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/",
+  ".tox/", ".venv/", "node_modules/", ".DS_Store",
+].join("\n");
+
 export async function exportPatch(workspace: Workspace): Promise<string> {
   const outputDir = await mkdtemp(path.join(tmpdir(), "export-output-"));
 
   try {
+    await writeFile(path.join(outputDir, "excludes"), RUN_ARTIFACTS + "\n");
     const { exitCode, stderr } = await runContainerCommand([
       "-v", `${workspace.runDir}:/workspace`,
       "-v", `${outputDir}:/output`,
@@ -20,7 +29,7 @@ export async function exportPatch(workspace: Workspace): Promise<string> {
       "--user", sandboxUser(),
       "cloud-agents-base",
       "sh", "-c",
-      `git -C /workspace add -A && git -C /workspace diff --binary --no-ext-diff --no-textconv --cached ${workspace.baseSha} > /output/patch.diff`,
+      `git -C /workspace -c core.excludesFile=/output/excludes add -A && git -C /workspace diff --binary --no-ext-diff --no-textconv --cached ${workspace.baseSha} > /output/patch.diff`,
     ]);
 
     if (exitCode !== 0) {

@@ -30,6 +30,28 @@ test("exportPatch captures modified and new files", async () => {
   }
 }, 30000);
 
+test("exportPatch leaves out caches the agent created by running code", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const ws = await createWorkspace(fixture.repoPath);
+    try {
+      await Bun.write(path.join(ws.runDir, "pkg/core.py"), "def f():\n    return 1\n");
+      await Bun.write(path.join(ws.runDir, "pkg/__pycache__/core.cpython-311.pyc"), "bytecode");
+      await Bun.write(path.join(ws.runDir, ".pytest_cache/v/cache/lastfailed"), "{}");
+
+      const patch = await exportPatch(ws);
+
+      expect(patch).toContain("pkg/core.py");
+      expect(patch).not.toContain("__pycache__");
+      expect(patch).not.toContain(".pytest_cache");
+    } finally {
+      await destroyWorkspace(ws);
+    }
+  } finally {
+    await fixture.cleanup();
+  }
+}, 30000);
+
 test("publishCommit is deterministic given the same inputs", async () => {
   const fixture = await createFixtureRepo();
   try {
