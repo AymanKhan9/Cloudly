@@ -20,6 +20,8 @@ export interface ContainerOptions {
     homeDir?: string;
     /** Remaining monthly budget; Claude stops itself there. */
     maxBudgetUsd?: number;
+    /** Built from the setup script in Settings; the base image when there is none. */
+    image?: string;
 }
 
 // Codex takes an API key through the SDK's `apiKey` option (it becomes
@@ -158,7 +160,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             "--user",
             sandboxUser(),
 
-            "cloud-agents-base",
+            options.image ?? "cloud-agents-base",
 
             "bun",
             "src/index.ts"

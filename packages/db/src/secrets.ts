@@ -9,7 +9,7 @@ export interface SettingSpec {
   label: string;
   /** Secret values are never shown again after saving. */
   secret: boolean;
-  group: "github" | "models" | "alerts" | "access";
+  group: "github" | "models" | "alerts" | "access" | "sandbox";
 }
 
 export const SETTINGS: SettingSpec[] = [
@@ -24,6 +24,7 @@ export const SETTINGS: SettingSpec[] = [
   { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" },
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" },
   { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" },
+  { name: "SANDBOX_SETUP_SCRIPT", label: "Sandbox setup script", secret: false, group: "sandbox" },
 ];
 
 export function settingSpec(name: string): SettingSpec | undefined {

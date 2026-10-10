@@ -6,6 +6,7 @@ import { useApp } from "@/components/app-context";
 import { Barometer, STATE_WORD } from "@/components/notation";
 import { HARNESSES, usd } from "@/lib/harness";
 import { SecretsPanel } from "@/components/secrets-panel";
+import { SandboxPanel } from "@/components/sandbox-panel";
 
 export default function SettingsPage() {
   const { budget, refreshBudget } = useApp();
@@ -48,7 +49,7 @@ export default function SettingsPage() {
       <div className="page-head">
         <div>
           <h1 className="display">Settings</h1>
-          <p>Spend limit and alerts for this instance.</p>
+          <p>Spend limit, keys and sandbox tools for this instance.</p>
         </div>
       </div>
 
@@ -109,6 +110,8 @@ export default function SettingsPage() {
       </div>
 
       <SecretsPanel />
+
+      <SandboxPanel />
 
       <section className="sheet" style={{ marginTop: 28 }} aria-labelledby="harness-heading">
         <div className="sheet-head">

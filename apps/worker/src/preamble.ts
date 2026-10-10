@@ -1,12 +1,11 @@
-/** What every sandbox has; sandbox tools chosen in Settings are added to it. */
-export const BASE_TOOLS = "Node 22, Bun, Python 3, git, C build tools (gcc, make)";
+import { BASE_TOOLS_LABEL } from "@repo/db";
 
 /**
  * The rules of the sandbox, put in front of every task. Without them an agent
  * tried to open PRs itself: it made its own branches, switched back, and the
  * worker found nothing to commit.
  */
-export function withPreamble(task: string, tools: string = BASE_TOOLS): string {
+export function withPreamble(task: string, tools: string = BASE_TOOLS_LABEL): string {
   return [
     "You're running inside Cloudly, in a sandbox with the repository checked out at /workspace.",
     "- Work on the branch that's already checked out. Don't create or switch branches, commit, push, or open pull requests: when you finish, Cloudly commits your changes and opens or updates this session's pull request.",

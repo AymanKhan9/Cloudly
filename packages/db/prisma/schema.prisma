@@ -135,3 +135,15 @@ enum RunEventEnum{
   error
   done
 }
+/// The sandbox image built from the user's setup script (one row, id 1).
+model SandboxImage {
+  id         Int      @id @default(1)
+  /// Hash of the base image and script the latest build was for.
+  scriptHash String   @default("")
+  /// pending | building | ready | failed
+  status     String   @default("ready")
+  log        String   @default("")
+  /// The last image that built successfully; runs use it.
+  image      String   @default("cloud-agents-base")
+  updatedAt  DateTime @updatedAt
+}

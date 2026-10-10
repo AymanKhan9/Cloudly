@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { processRun } from "./process-run";
 import { runPollLoop } from "./poll";
 import { runRecoverySweepLoop } from "./recovery";
+import { runSandboxImageLoop } from "./sandbox-image";
 
 const workerId = process.env.WORKER_ID ?? `${hostname()}-${process.pid}`;
 // ponytail: poll and recovery each cap at this, so the true ceiling is 2x; share one counter if that matters.
@@ -20,4 +21,5 @@ const run = (r: Parameters<typeof processRun>[0]) => processRun(r, workerId);
 await Promise.all([
   runPollLoop(workerId, concurrency, run, controller.signal),
   runRecoverySweepLoop(workerId, concurrency, run, controller.signal),
+  runSandboxImageLoop(controller.signal),
 ]);

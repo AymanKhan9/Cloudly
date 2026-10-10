@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, SANDBOX_PRESETS, presetBlock } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
@@ -334,6 +334,33 @@ app.delete('/settings/secrets/:name', async (c) => {
   if (!settingSpec(name)) return c.json({ message: 'Unknown setting' }, 404);
   await deleteSetting(name);
   return c.json({ ok: true });
+})
+
+// The sandbox setup script. The API only stores it; the worker, the one process
+// with Docker access, builds the image and reports back through SandboxImage.
+async function sandboxView() {
+  const image = await prisma.sandboxImage.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
+  return {
+    script: (await config('SANDBOX_SETUP_SCRIPT')) ?? '',
+    presets: SANDBOX_PRESETS.map((p) => ({ id: p.id, label: p.label, note: p.note, block: presetBlock(p) })),
+    build: { status: image.status, log: image.log, image: image.image, updatedAt: image.updatedAt },
+  };
+}
+
+app.get('/settings/sandbox', async (c) => c.json(await sandboxView()))
+
+app.put('/settings/sandbox', zValidator('json', z.object({ script: z.string().max(20_000) })), async (c) => {
+  const script = c.req.valid('json').script.trim();
+  if (script) await setSetting('SANDBOX_SETUP_SCRIPT', script);
+  else await deleteSetting('SANDBOX_SETUP_SCRIPT');
+  await prisma.sandboxImage.upsert({ where: { id: 1 }, update: { status: 'pending' }, create: { id: 1, status: 'pending' } });
+  return c.json(await sandboxView());
+})
+
+// Retries a failed build without changing the script.
+app.post('/settings/sandbox/rebuild', async (c) => {
+  await prisma.sandboxImage.upsert({ where: { id: 1 }, update: { status: 'pending' }, create: { id: 1, status: 'pending' } });
+  return c.json(await sandboxView());
 })
 
 function randomToken(byteLength = 32): string {

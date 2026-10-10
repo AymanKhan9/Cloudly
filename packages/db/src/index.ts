@@ -3,6 +3,7 @@ import { prisma, Prisma } from "./client"
 export { prisma, Prisma }
 export * from "./secrets"
 export * from "./github-credentials"
+export * from "./sandbox"
 
 export function currentMonth(now = new Date()): string {
   return now.toISOString().slice(0, 7)

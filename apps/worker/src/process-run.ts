@@ -1,4 +1,4 @@
-import { prisma, budgetStatus } from "@repo/db";
+import { prisma, budgetStatus, sandboxToolsLabel } from "@repo/db";
 import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
@@ -20,6 +20,7 @@ import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
 import { withPreamble } from "./preamble";
+import { sandboxImage, setupScript } from "./sandbox-image";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -115,8 +116,10 @@ export async function processRun(
       if (remaining <= 0) throw new Error("Monthly spend limit reached");
       containerOptions.maxBudgetUsd = remaining + budget.limitUsd * OVERSHOOT_RATIO;
     }
+    containerOptions.image = await sandboxImage();
     const task = withPreamble(
       thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt,
+      sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript()),
     );
 
     try {

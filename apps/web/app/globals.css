@@ -2107,3 +2107,58 @@ textarea {
   border-color: var(--atlas);
   box-shadow: 0 0 0 3px rgba(31, 63, 140, 0.18);
 }
+
+/* Sandbox tools (Settings) */
+.preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--chalk-3);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.preset:has(input:checked) {
+  border-color: var(--atlas);
+  box-shadow: inset 0 0 0 1px var(--atlas);
+}
+.field .preset input {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--atlas);
+}
+.field textarea.setup-script {
+  min-height: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.build-log {
+  padding: 0 20px 16px;
+  font-size: 13px;
+  color: var(--slate);
+}
+.build-log summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.build-log pre {
+  margin: 8px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  background: rgba(20, 30, 70, 0.06);
+  border: 1px solid var(--hair-ink);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
