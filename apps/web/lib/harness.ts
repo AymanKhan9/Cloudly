@@ -11,7 +11,7 @@ export interface Harness {
 }
 
 export const HARNESSES: Harness[] = [
-  { id: "native-claude", name: "Claude Code", genus: "Cumulus", species: "congestus", genusIndex: 0, cost: "exact" },
+  { id: "native-claude", name: "Claude Agent", genus: "Cumulus", species: "congestus", genusIndex: 0, cost: "exact" },
   { id: "native-codex", name: "Codex", genus: "Altocumulus", species: "stratiformis", genusIndex: 1, cost: "estimated" },
   { id: "gemini-acp", name: "Gemini CLI", genus: "Cirrus", species: "fibratus", genusIndex: 2, cost: "estimated" },
 ];

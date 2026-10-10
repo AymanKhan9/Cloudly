@@ -19,10 +19,10 @@ const DIALECTS = [
 ];
 
 const DEMO_LOG = [
-  { oktas: 3, task: "Add per-key rate limiting to POST /invoices", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Code", status: "Running", cost: "$0.21", est: false, pr: null },
+  { oktas: 3, task: "Add per-key rate limiting to POST /invoices", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Agent", status: "Running", cost: "$0.21", est: false, pr: null },
   { oktas: 8, task: "Upgrade the test runner and fix the two flaky specs", repo: "acme/web", genus: "Cirrus", harness: "Gemini CLI", status: "PR opened", cost: "~$0.07", est: true, pr: "#88" },
   { oktas: 8, task: "Write a migration that backfills invoice currency", repo: "acme/billing-api", genus: "Altocumulus", harness: "Codex", status: "PR opened", cost: "~$0.44", est: true, pr: "#213" },
-  { oktas: 8, task: "Refactor invoice export to streaming CSV", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Code", status: "Cancelled", cost: "$1.12", est: false, pr: null, struck: true },
+  { oktas: 8, task: "Refactor invoice export to streaming CSV", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Agent", status: "Cancelled", cost: "$1.12", est: false, pr: null, struck: true },
 ];
 
 export default function Landing() {
@@ -54,7 +54,7 @@ export default function Landing() {
           <div>
             <h1 className="display">Coding agents on a server you already own.</h1>
             <p className="lede">
-              Cloudly runs <strong>Claude Code, Codex or Gemini CLI</strong> against your GitHub repos on a VM in your
+              Cloudly runs <strong>Claude Agent, Codex or Gemini CLI</strong> against your GitHub repos on a VM in your
               own cloud account. Hand it a task, close the laptop, and come back to a pull request. It stops spending
               when you reach your monthly limit. Free and MIT-licensed.
             </p>
@@ -117,7 +117,7 @@ export default function Landing() {
           <AltitudeStrip plate="III" genus={1} name="Altocumulus stratiformis" altitude="4 000 m" />
           <h2 className="display">Set a limit. It actually stops.</h2>
           <p className="section-lede">
-            Pick a monthly model-spend limit. Claude Code reports exact cost per run; Codex and Gemini report tokens,
+            Pick a monthly model-spend limit. Claude Agent reports exact cost per run; Codex and Gemini report tokens,
             which Cloudly prices from a table you control and marks as an estimate.
           </p>
           <SpendDemo />
@@ -138,7 +138,7 @@ export default function Landing() {
               <li key={d.out}>
                 <strong>{d.out}</strong>
                 <dl>
-                  <dt className="latin">Cumulus · Claude Code</dt>
+                  <dt className="latin">Cumulus · Claude Agent</dt>
                   <dd className="mono">{d.claude}</dd>
                   <dt className="latin">Altocumulus · Codex</dt>
                   <dd className="mono">{d.codex}</dd>
@@ -154,7 +154,7 @@ export default function Landing() {
                 <tr>
                   <th scope="col">
                     <span className="latin">Cumulus</span>
-                    <span>Claude Code · Agent SDK</span>
+                    <span>Claude Agent · Agent SDK</span>
                   </th>
                   <th scope="col">
                     <span className="latin">Altocumulus</span>

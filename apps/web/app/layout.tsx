@@ -11,7 +11,7 @@ const bodoni = Bodoni_Moda({ subsets: ["latin"], style: ["italic"], variable: "-
 export const metadata: Metadata = {
   title: "Cloudly — coding agents on a server you already own",
   description:
-    "Run Claude Code, Codex or Gemini against your GitHub repos on a VM in your own cloud account, with a monthly spend limit that actually stops runs. Free and MIT-licensed.",
+    "Run Claude Agent, Codex or Gemini against your GitHub repos on a VM in your own cloud account, with a monthly spend limit that actually stops runs. Free and MIT-licensed.",
 };
 
 export const viewport: Viewport = {

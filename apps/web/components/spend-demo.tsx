@@ -67,7 +67,7 @@ export function SpendDemo() {
               <StormFlag size={26} />
               Storm. Then it stops.
             </h3>
-            <p>At 100%, new runs are refused. A turn that's already running finishes, so nothing is left half done. Claude Code turns can't run past 25% over your limit.</p>
+            <p>At 100%, new runs are refused. A turn that's already running finishes, so nothing is left half done. Claude Agent turns can't run past 25% over your limit.</p>
             <div className="mail">
               <div className="from">Cloudly · to you</div>
               <div className="subj">Cloudly stopped: spend limit reached ({spentOf})</div>

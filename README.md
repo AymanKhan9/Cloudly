@@ -2,15 +2,15 @@
 
 Coding agents on a server you already own.
 
-Cloudly runs Claude Code, Codex or Gemini CLI against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
+Cloudly runs Claude Agent, Codex or Gemini CLI against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
 
 Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
 ## What it does
 
 - **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
-- **Plug-and-play agents.** Claude Code and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
-- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Code turns stop at 25% over the limit and keep the work they finished on the branch. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
+- **Plug-and-play agents.** Claude (via the Claude Agent SDK) and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
+- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Agent turns stop at 25% over the limit and keep the work they finished on the branch. Claude Agent reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
 - **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys are stored encrypted on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
 ## Install

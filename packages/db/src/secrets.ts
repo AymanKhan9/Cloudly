@@ -20,7 +20,7 @@ export const SETTINGS: SettingSpec[] = [
   { name: "GITHUB_CLIENT_ID", label: "GitHub App client ID", secret: false, group: "github" },
   { name: "GITHUB_CLIENT_SECRET", label: "GitHub App client secret", secret: true, group: "github" },
   { name: "GITHUB_APP_PRIVATE_KEY", label: "GitHub App private key", secret: true, group: "github" },
-  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Code)", secret: true, group: "models" },
+  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" },
   { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" },
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" },
   { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" },

@@ -86,7 +86,7 @@ export default function SettingsPage() {
             </div>
             <p className="field-hint">
               At 80% you get a banner and one email. At 100% new runs are refused. A turn that's already running
-              finishes first, so a task isn't left half done; Claude Code stops itself at 25% over the limit, and Codex and
+              finishes first, so a task isn't left half done; Claude Agent stops itself at 25% over the limit, and Codex and
               Gemini can go over by that one turn. Covers model spend only; your VM is billed by your cloud provider.
             </p>
           </div>

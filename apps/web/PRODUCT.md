@@ -27,11 +27,11 @@ A cheap, user-owned alternative to managed cloud agent products. The user brings
 
 ## Capabilities and Constraints
 
-- Harnesses available today: Claude Code (`native-claude`), OpenAI Codex (`native-codex`), Gemini CLI over the Agent Client Protocol (`gemini-acp`). The harness layer is designed to accept more.
+- Harnesses available today: Claude Agent (`native-claude`), OpenAI Codex (`native-codex`), Gemini CLI over the Agent Client Protocol (`gemini-acp`). The harness layer is designed to accept more.
 - GitHub integration is a GitHub App: sign-in via GitHub OAuth, clone/push/PR via short-lived installation tokens. Sign-in is invite-only through an allowlist of GitHub logins.
 - Live run output streams to the browser over Server-Sent Events with replay on reconnect.
-- Spend limit: the user sets a monthly model-spend limit. At 80% they get an in-app alert and an email; at 100% new runs are blocked; a turn already running finishes (Claude Code turns stop at 25% over the limit, keeping their finished work). Email is sent via Resend when the user sets a Resend key; without one, alerts are in-app only. SMTP is not supported yet.
-- Cost accuracy differs by harness: Claude Code reports exact USD per run; Codex and Gemini report token usage, so their cost is an estimate from token counts and a configured price table. The product must label estimates as estimates.
+- Spend limit: the user sets a monthly model-spend limit. At 80% they get an in-app alert and an email; at 100% new runs are blocked; a turn already running finishes (Claude Agent turns stop at 25% over the limit, keeping their finished work). Email is sent via Resend when the user sets a Resend key; without one, alerts are in-app only. SMTP is not supported yet.
+- Cost accuracy differs by harness: Claude Agent reports exact USD per run; Codex and Gemini report token usage, so their cost is an estimate from token counts and a configured price table. The product must label estimates as estimates.
 - The spend limit covers model spend only. Cloud VM cost is the user's own cloud bill and is not metered by Cloudly.
 - Free-tier VMs typically have about 1 GB of RAM; running Postgres, the control plane and an agent container together on that is tight. Concurrency is one run at a time on the smallest machines. Specific free-tier offers per provider must be verified against each provider's current terms before being claimed anywhere.
 - Undecided: multi-user/multi-installation support (currently one GitHub App installation per deployment).
@@ -55,3 +55,5 @@ A cheap, user-owned alternative to managed cloud agent products. The user brings
 3. Plug-and-play harnesses: switching agents is a dropdown, not a migration.
 4. Setup is one command on a VM the user already has; anything that needs a second service must be optional.
 5. Untrusted agent output is treated as untrusted, end to end.
+
+- Branding: label the Claude harness "Claude Agent", never "Claude Code" (Anthropic's Agent SDK branding rules).

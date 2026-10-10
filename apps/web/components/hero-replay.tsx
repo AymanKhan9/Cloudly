@@ -23,7 +23,7 @@ const REPLAYS: Record<HarnessId, Step[]> = {
     { kind: "tool_call", body: "Bash  bun test" },
     { kind: "tool_result", body: "41 pass · 0 fail" },
     { kind: "text", body: "Added a token bucket keyed on the API key, 60 req/min." },
-    { kind: "done", body: "Turn complete · cost reported by Claude Code", cost: 0.38 },
+    { kind: "done", body: "Turn complete · cost reported by Claude", cost: 0.38 },
     { kind: "status", body: "Patch exported · commit 7f3a2d1 · pushed agent/run-c41e" },
     { kind: "pr", body: "acme/billing-api #214 opened" },
   ],
