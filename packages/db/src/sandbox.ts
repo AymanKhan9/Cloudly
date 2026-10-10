@@ -74,3 +74,43 @@ export function sandboxToolsLabel(script: string): string {
     .some((line) => line.trim() && !line.trim().startsWith("#") && !SANDBOX_PRESETS.some((p) => p.snippet.includes(line.trim())));
   return [BASE_TOOLS_LABEL, ...picked].join(", ") + (custom ? ", plus whatever the instance's custom setup script installs" : "");
 }
+
+/**
+ * Where a run container may connect, through the egress proxy. Subdomains of
+ * each entry are included. Extra hosts from Settings are added; "*" there
+ * allows everything.
+ */
+export const EGRESS_DEFAULT_HOSTS = [
+  // Model APIs
+  "api.anthropic.com",
+  "api.openai.com",
+  "chatgpt.com",
+  "generativelanguage.googleapis.com",
+  "cloudcode-pa.googleapis.com",
+  "oauth2.googleapis.com",
+  // Package registries
+  "registry.npmjs.org",
+  "registry.yarnpkg.com",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "crates.io",
+  "static.rust-lang.org",
+  "proxy.golang.org",
+  "sum.golang.org",
+  "rubygems.org",
+  "repo.maven.apache.org",
+  "repo1.maven.org",
+  "plugins.gradle.org",
+  "services.gradle.org",
+  // Git dependencies, Go modules fetched directly, release downloads
+  "github.com",
+  "githubusercontent.com",
+];
+
+/** Extra hosts from Settings, one per line or comma-separated. */
+export function parseHostList(text: string): string[] {
+  return text
+    .split(/[\s,]+/)
+    .map((h) => h.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+    .filter((h) => h === "*" || /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h));
+}

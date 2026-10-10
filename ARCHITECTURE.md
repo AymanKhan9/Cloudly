@@ -318,23 +318,17 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
 
 ### Planned, not yet built
 
-- **Model API keys currently DO enter the sandbox.** `ANTHROPIC_API_KEY` (and the equivalent for
-  Codex) has to reach the container as an env var for the SDKs to function, and the container has
-  open internet. Combined with an agent that reads an untrusted repo's contents (including its
-  README), this is a real prompt-injection-to-key-exfiltration path today, not a closed one.
-  Nearest fix, and the right-sized one for what's actually needed right now: an internal Docker
-  network plus a small allowlisting proxy (model API + package registries only) — about a day of
-  work, closes the exfiltration path without needing key injection or cost metering yet. Pair it
-  with a separate, low-spend-limit API key used only for sandbox runs, if the provider supports
-  that, as defense in depth. LiteLLM is still the endgame for key injection (so the raw key never
-  enters the container at all) and per-run cost metering, but that's a bigger lift than the
-  exfiltration fix alone needs — don't reach for it before the smaller fix is in place.
-- **The container's uid is the worker's host uid** (1000 on installs). The worker's user owns
-  the workspace, so the sandbox uses the same uid to write it. That only matters after a container escape, which would land as
-  the docker-group user. Fix: user-namespace remapping or rootless Docker, with workspace
-  ownership mapped accordingly.
-- **One-way egress only.** Once the allowlisting proxy above exists, the sandbox's outbound network
-  routes through it exclusively, and nothing external has an inbound path to a running sandbox.
+- **Model API keys still enter the sandbox, but can only leave through an allowlist.** Run
+  containers join an internal Docker network (`cloudly-sandbox`) with no route out and no outside
+  DNS. The only way out is the `cloudly-egress` proxy container (`apps/worker/src/egress-proxy.ts`),
+  which tunnels HTTPS to allowed hosts only: the model APIs, the main package registries and GitHub
+  (`EGRESS_DEFAULT_HOSTS`), plus extra hosts from Settings (`*` allows all). Verified live: Claude,
+  Codex and Gemini all reach their APIs through it, npm/pip/Bun/Node fetch work, arbitrary hosts,
+  direct connections, DNS lookups and plain HTTP don't. What it doesn't close: an allowed host that
+  accepts uploads (npm publish, a GitHub gist) is still a channel if a malicious repo hands the agent
+  the attacker's own token for it. The complete fix is key injection: the key never enters the
+  container and the proxy adds it to model API requests on the way out (LiteLLM-style, or TLS
+  interception in the proxy).
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
   and explicit `setting_sources` prevent a malicious repo from smuggling in hooks or MCP servers
   the platform didn't choose. Not yet wired up.

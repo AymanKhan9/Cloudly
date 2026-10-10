@@ -15,6 +15,7 @@ interface SandboxView {
   script: string;
   presets: Preset[];
   build: { status: "pending" | "building" | "ready" | "failed"; log: string; image: string; updatedAt: string };
+  network: { defaults: string[]; extra: string };
 }
 
 const marker = (id: string) => `# cloudly:${id}`;
@@ -39,6 +40,7 @@ const STATUS: Record<SandboxView["build"]["status"], string> = {
 export function SandboxPanel() {
   const [view, setView] = useState<SandboxView | null>(null);
   const [script, setScript] = useState("");
+  const [hosts, setHosts] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +51,12 @@ export function SandboxPanel() {
   }, []);
 
   useEffect(() => {
-    load().then((v) => setScript(v.script)).catch(() => setError("Couldn't load the sandbox settings."));
+    load()
+      .then((v) => {
+        setScript(v.script);
+        setHosts(v.network.extra);
+      })
+      .catch(() => setError("Couldn't load the sandbox settings."));
   }, [load]);
 
   // Poll only while a build is queued or running.
@@ -67,6 +74,7 @@ export function SandboxPanel() {
       const v = await api<SandboxView>(path, init);
       setView(v);
       setScript(v.script);
+      setHosts(v.network.extra);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save.");
     } finally {
@@ -145,6 +153,37 @@ export function SandboxPanel() {
           ) : null}
         </form>
       )}
+      {view ? (
+        <form
+          className="network-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send("/settings/sandbox/network", { method: "PUT", body: JSON.stringify({ hosts }) });
+          }}
+        >
+          <div className="field field-wide">
+            <label className="field-label" htmlFor="egress-hosts">
+              Network: extra hosts the agent may reach
+            </label>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Runs can only reach the model APIs, the main package registries and GitHub, so a malicious repo can&apos;t make the
+              agent send your key somewhere else. Add hosts here, one per line; subdomains are included. <span className="mono">*</span> allows
+              everything. Applies from the next run.
+            </p>
+            <textarea id="egress-hosts" className="mono setup-script" rows={3} value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="docs.example.com" spellCheck={false} />
+            <details className="build-log" style={{ padding: 0, marginTop: 8 }}>
+              <summary>Always allowed ({view.network.defaults.length})</summary>
+              <pre className="mono">{view.network.defaults.join("\n")}</pre>
+            </details>
+          </div>
+          <div className="sheet-foot">
+            <span />
+            <button type="submit" className="btn btn-signal" disabled={saving || hosts.trim() === view.network.extra.trim()}>
+              Save hosts
+            </button>
+          </div>
+        </form>
+      ) : null}
     </section>
   );
 }

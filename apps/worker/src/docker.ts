@@ -5,6 +5,7 @@ import path from "node:path";
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
 import { config } from "@repo/db";
+import { ensureEgress, EGRESS_FLAGS } from "./egress";
 
 interface ControlConfig{
     task:string,
@@ -126,12 +127,14 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         );
 
         const credentials = await credentialFlags(harness);
+        await ensureEgress();
         const proc = Bun.spawn([
             "docker",
             "run",
             "--rm",
 
             ...SANDBOX_LIMITS,
+            ...EGRESS_FLAGS,
 
             "--name",
             `run-${runId}`,

@@ -2162,3 +2162,7 @@ textarea {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.network-form {
+  border-top: 1px solid var(--hair-ink);
+  padding-top: 4px;
+}

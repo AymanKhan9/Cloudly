@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, SANDBOX_PRESETS, presetBlock } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
@@ -344,6 +344,7 @@ async function sandboxView() {
     script: (await config('SANDBOX_SETUP_SCRIPT')) ?? '',
     presets: SANDBOX_PRESETS.map((p) => ({ id: p.id, label: p.label, note: p.note, block: presetBlock(p) })),
     build: { status: image.status, log: image.log, image: image.image, updatedAt: image.updatedAt },
+    network: { defaults: EGRESS_DEFAULT_HOSTS, extra: (await config('SANDBOX_EGRESS_HOSTS')) ?? '' },
   };
 }
 
@@ -354,6 +355,15 @@ app.put('/settings/sandbox', zValidator('json', z.object({ script: z.string().ma
   if (script) await setSetting('SANDBOX_SETUP_SCRIPT', script);
   else await deleteSetting('SANDBOX_SETUP_SCRIPT');
   await prisma.sandboxImage.upsert({ where: { id: 1 }, update: { status: 'pending' }, create: { id: 1, status: 'pending' } });
+  return c.json(await sandboxView());
+})
+
+// Extra hosts run containers may reach through the egress proxy; "*" allows all.
+// The worker writes the proxy's list when the next run starts.
+app.put('/settings/sandbox/network', zValidator('json', z.object({ hosts: z.string().max(5_000) })), async (c) => {
+  const hosts = parseHostList(c.req.valid('json').hosts);
+  if (hosts.length) await setSetting('SANDBOX_EGRESS_HOSTS', hosts.join('\n'));
+  else await deleteSetting('SANDBOX_EGRESS_HOSTS');
   return c.json(await sandboxView());
 })
 

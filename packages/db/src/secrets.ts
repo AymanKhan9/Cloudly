@@ -25,6 +25,7 @@ export const SETTINGS: SettingSpec[] = [
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" },
   { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" },
   { name: "SANDBOX_SETUP_SCRIPT", label: "Sandbox setup script", secret: false, group: "sandbox" },
+  { name: "SANDBOX_EGRESS_HOSTS", label: "Extra hosts the sandbox may reach", secret: false, group: "sandbox" },
 ];
 
 export function settingSpec(name: string): SettingSpec | undefined {

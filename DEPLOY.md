@@ -62,6 +62,7 @@ By default Cloudly runs Postgres on the VM. To keep your data in a database you 
 | Upgrade | Re-run the install command. It pulls, migrates, rebuilds and restarts, and keeps your `.env`. |
 | Logs | `journalctl -u cloudly-worker -f` (also `cloudly-api`, `cloudly-web`) |
 | Add languages to the sandbox (Rust, Go, Java…) | Settings → Sandbox tools. The worker builds the image in the background; runs use the previous image until it's ready |
+| Let runs reach another host (docs site, private registry) | Settings → Sandbox tools → Network. Runs can only reach model APIs, package registries and GitHub by default; `*` allows everything |
 | Run-container limits | `SANDBOX_MEMORY` (default: RAM minus 768 MB) and `SANDBOX_PIDS` (default 2048) in `.env` |
 | Restart after editing `.env` | `sudo systemctl restart cloudly-api cloudly-worker cloudly-web` |
 | Change agent prices | Set `PRICE_CODEX_*` / `PRICE_GEMINI_*` in `.env` (USD per million tokens) |

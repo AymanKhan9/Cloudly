@@ -22,7 +22,7 @@ Only the latest release is supported.
 
 These are documented and planned, not new findings. The details are in [ARCHITECTURE.md §8](ARCHITECTURE.md#8-security-boundaries).
 
-- The model API key is in the run container's environment and the container has open internet access. A repository that prompt-injects the agent could exfiltrate that key. Use a separate key with a low limit for Cloudly.
+- The model API key is in the run container's environment. Run containers can only reach an allowlist of hosts (model APIs, package registries, GitHub, plus any you add), so a prompt-injected agent can't send the key to an arbitrary server. It could still upload it to an allowed service, such as publishing to npm, if the repository supplies the attacker's own credentials for it. Use a separate key with a low limit for Cloudly.
 - Docker is the isolation boundary. It's weaker than a microVM, so only connect repositories you'd be comfortable running on the VM.
 - The run container uses the worker's own uid (1000 on installs), so a container escape lands as that user, who can run Docker.
 - Without a domain, Cloudly serves plain HTTP, so the session cookie and anything typed into Settings cross the network unencrypted. Set a domain for HTTPS.
