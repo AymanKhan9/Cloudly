@@ -85,6 +85,8 @@ model Run {
   attempts   Int      @default(0)
   cancelRequested Boolean @default(false)
   costUsd    Decimal?   @default(0)
+  /// Ran on the user's Claude or ChatGPT plan: no per-run cost, not counted toward the spend limit.
+  onPlan     Boolean    @default(false)
   repo       String
   baseBranch String
   branch     String?

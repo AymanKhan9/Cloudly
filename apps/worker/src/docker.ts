@@ -1,10 +1,10 @@
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { tmpdir, totalmem } from "node:os";
+import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import { tmpdir, totalmem, homedir } from "node:os";
 import path from "node:path";
 
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
-import { config } from "@repo/db";
+import { config, setSetting } from "@repo/db";
 import { ensureEgress, EGRESS_FLAGS } from "./egress";
 
 interface ControlConfig{
@@ -79,9 +79,16 @@ export function sandboxUser(): string {
 
 /**
  * Keys go in as `-e NAME` with the value in the docker client's environment,
- * so they never appear on a command line (world-readable in /proc).
+ * so they never appear on a command line (world-readable in /proc). A plan
+ * sign-in (Claude token, ChatGPT auth.json) is used instead of the API key when
+ * one is saved.
  */
-export async function credentialFlags(harness: string): Promise<{ flags: string[]; env: Record<string, string> }> {
+export async function credentialFlags(harness: string): Promise<{
+    flags: string[];
+    env: Record<string, string>;
+    /** Host dir holding Codex's auth.json; saved back after the run. */
+    codexHome?: string;
+}> {
     const required = HARNESS_CREDENTIALS[harness];
     if (!required) {
         throw new Error(`unsupported harness: ${harness}`);
@@ -89,13 +96,25 @@ export async function credentialFlags(harness: string): Promise<{ flags: string[
 
     const flags: string[] = [];
     const env: Record<string, string> = {};
-    for (const name of required) {
-        const value = await config(name);
-        if (!value) {
-            throw new Error(`harness "${harness}" needs ${name}. Add it under Settings, or in the server's .env.`);
+    let codexHome: string | undefined;
+
+    const claudeToken = harness === "native-claude" ? await config("CLAUDE_CODE_OAUTH_TOKEN") : undefined;
+    const codexAuth = harness === "native-codex" ? await config("CODEX_AUTH_JSON") : undefined;
+    if (claudeToken) {
+        flags.push("-e", "CLAUDE_CODE_OAUTH_TOKEN");
+        env.CLAUDE_CODE_OAUTH_TOKEN = claudeToken;
+    } else if (codexAuth) {
+        codexHome = await writeCodexHome(codexAuth);
+        flags.push("-v", `${codexHome}:/codex-home`, "-e", "CODEX_HOME=/codex-home");
+    } else {
+        for (const name of required) {
+            const value = await config(name);
+            if (!value) {
+                throw new Error(`harness "${harness}" needs ${name}. Add it under Settings, or in the server's .env.`);
+            }
+            flags.push("-e", name);
+            env[name] = value;
         }
-        flags.push("-e", name);
-        env[name] = value;
     }
     for (const name of OPTIONAL_ENV[harness] ?? []) {
         const value = process.env[name];
@@ -104,7 +123,25 @@ export async function credentialFlags(harness: string): Promise<{ flags: string[
             env[name] = value;
         }
     }
-    return { flags, env };
+    return { flags, env, codexHome };
+}
+
+// ponytail: one shared Codex home, so two Codex runs at once (WORKER_CONCURRENCY
+// > 1) can race on a token refresh. Give each run a copy and merge if that bites.
+const CODEX_HOME = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "codex-home");
+
+async function writeCodexHome(authJson: string): Promise<string> {
+    await mkdir(CODEX_HOME, { recursive: true, mode: 0o700 });
+    await writeFile(path.join(CODEX_HOME, "auth.json"), authJson, { mode: 0o600 });
+    return CODEX_HOME;
+}
+
+/** Codex refreshes its tokens during a run; keep the refreshed copy. */
+export async function saveCodexAuth(codexHome: string): Promise<void> {
+    const file = Bun.file(path.join(codexHome, "auth.json"));
+    if (!(await file.exists())) return;
+    const latest = await file.text();
+    if (latest.trim() && latest !== (await config("CODEX_AUTH_JSON"))) await setSetting("CODEX_AUTH_JSON", latest);
 }
 
 export async function* createRunContainer(workspace: Workspace, task:string,harness:string,runId:string, options: ContainerOptions = {}): AsyncIterable<RunEvent>{
@@ -112,6 +149,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         path.join(tmpdir(),"run-control-"),
     );
 
+    let credentials: Awaited<ReturnType<typeof credentialFlags>> | undefined;
     try{
         const config:ControlConfig = {
             task,
@@ -126,7 +164,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             "utf-8",
         );
 
-        const credentials = await credentialFlags(harness);
+        credentials = await credentialFlags(harness);
         await ensureEgress();
         const proc = Bun.spawn([
             "docker",
@@ -230,6 +268,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         );
         }
     }finally{
+        if (credentials?.codexHome) await saveCodexAuth(credentials.codexHome).catch((err) => console.error("[codex] couldn't save refreshed sign-in:", err));
         await rm(controlDir,{
             recursive:true,
             force:true

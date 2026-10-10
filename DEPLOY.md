@@ -46,6 +46,15 @@ Point a DNS A record at the VM and enter the domain when the installer asks. Cad
 2. Re-run the installer.
 3. Add the new callback URL (`https://<domain>/api/auth/github/callback`) to the GitHub App's settings on GitHub.
 
+## Using your Claude or ChatGPT plan instead of an API key
+
+Claude and Codex can run on your subscription instead of a pay-as-you-go key. Sign in with the vendor's own CLI on your computer, then paste the result under **Settings → Keys and connections**:
+
+- **Claude:** run `claude setup-token` and paste the token it prints into "Claude plan token".
+- **Codex:** run `codex login`, then paste the whole contents of `~/.codex/auth.json` into "ChatGPT plan sign-in". Cloudly saves the file back whenever Codex refreshes its tokens.
+
+When a plan sign-in is set, it's used instead of that agent's API key. Turns on a plan have no per-run cost: they show "on your plan", don't count toward the spend limit, and still run when the limit is reached. Your plan's own usage limits apply instead, and a long run can pause when it reaches them.
+
 ## Using your own Postgres
 
 By default Cloudly runs Postgres on the VM. To keep your data in a database you already manage (Neon, Supabase, RDS, your own server), paste its connection URL when the installer asks. The installer then skips the bundled Postgres and migrates yours.

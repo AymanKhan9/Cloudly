@@ -85,6 +85,7 @@ export const EGRESS_DEFAULT_HOSTS = [
   "api.anthropic.com",
   "api.openai.com",
   "chatgpt.com",
+  "auth.openai.com", // Codex refreshes a ChatGPT sign-in here
   "generativelanguage.googleapis.com",
   "cloudcode-pa.googleapis.com",
   "oauth2.googleapis.com",

@@ -83,6 +83,8 @@ export interface Turn {
   status: RunStatus;
   createdAt: string;
   costUsd: number | null;
+  /** Ran on the user's Claude or ChatGPT plan: no per-run cost. */
+  onPlan: boolean;
   prUrl: string | null;
   error: string | null;
   cancelRequested: boolean;

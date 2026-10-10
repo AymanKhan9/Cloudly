@@ -66,7 +66,9 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
             {turn.cancelRequested && active ? "Cancelling" : turn.status === "succeeded" && !turn.prUrl ? "Done" : STATUS_LABEL[turn.status]}
           </span>
           {active ? <span className="num">{elapsed(turn.createdAt, now)}</span> : null}
-          {turn.costUsd !== null ? (
+          {turn.onPlan ? (
+            <span className="num">on your plan</span>
+          ) : turn.costUsd !== null ? (
             <span className="num">
               {usd(turn.costUsd, h.cost === "estimated")}
               {h.cost === "estimated" ? <span className="est"> est.</span> : null}

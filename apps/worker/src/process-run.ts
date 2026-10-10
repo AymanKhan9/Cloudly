@@ -1,4 +1,4 @@
-import { prisma, budgetStatus, sandboxToolsLabel } from "@repo/db";
+import { prisma, budgetStatus, sandboxToolsLabel, harnessUsesPlan } from "@repo/db";
 import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
@@ -110,7 +110,10 @@ export async function processRun(
     // limit only applies between turns.
     // ponytail: every concurrent run gets the whole allowance, so with
     // WORKER_CONCURRENCY > 1 they can overshoot together. Split it if that matters.
-    const budget = run.userId ? await budgetStatus(run.userId) : null;
+    // On the user's own plan there's no per-run cost: no cap, nothing counted.
+    const onPlan = await harnessUsesPlan(run.harness);
+    if (onPlan) await prisma.run.updateMany({ where: { id: run.id, workerId, leaseGen: run.leaseGen }, data: { onPlan: true } });
+    const budget = run.userId && !onPlan ? await budgetStatus(run.userId) : null;
     if (budget?.limitUsd != null) {
       const remaining = budget.limitUsd - budget.spentUsd;
       if (remaining <= 0) throw new Error("Monthly spend limit reached");
@@ -142,7 +145,7 @@ export async function processRun(
 
         // Record cost the moment the harness reports it, before finalize, so
         // spend counts even if the push or PR step later fails.
-        const cost = costFromDoneEvent(run.harness, event);
+        const cost = onPlan ? null : costFromDoneEvent(run.harness, event);
         if (cost) {
           await prisma.run.updateMany({
             where: { id: run.id, workerId, leaseGen: run.leaseGen },

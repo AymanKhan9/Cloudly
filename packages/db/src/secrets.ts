@@ -23,6 +23,8 @@ export const SETTINGS: SettingSpec[] = [
   { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" },
   { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" },
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" },
+  { name: "CLAUDE_CODE_OAUTH_TOKEN", label: "Claude plan token (from `claude setup-token`; used instead of the API key)", secret: true, group: "models" },
+  { name: "CODEX_AUTH_JSON", label: "ChatGPT plan sign-in for Codex (contents of ~/.codex/auth.json; used instead of the API key)", secret: true, group: "models" },
   { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" },
   { name: "SANDBOX_SETUP_SCRIPT", label: "Sandbox setup script", secret: false, group: "sandbox" },
   { name: "SANDBOX_EGRESS_HOSTS", label: "Extra hosts the sandbox may reach", secret: false, group: "sandbox" },
@@ -121,4 +123,11 @@ export async function listSettings(): Promise<SettingStatus[]> {
     const preview = raw ? (spec.secret ? `…${raw.slice(-4)}` : raw) : null;
     return { ...spec, set: Boolean(raw), source, preview };
   });
+}
+
+/** Which harnesses run on the user's subscription instead of an API key. */
+export async function harnessUsesPlan(harness: string): Promise<boolean> {
+  if (harness === "native-claude") return Boolean(await config("CLAUDE_CODE_OAUTH_TOKEN"));
+  if (harness === "native-codex") return Boolean(await config("CODEX_AUTH_JSON"));
+  return false;
 }

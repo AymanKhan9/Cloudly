@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
@@ -64,7 +64,8 @@ app.get('/runs', async (c) => {
 app.post('/runs', zValidator('json', CreateRunSchema), async (c) => {
   const user = c.get('user');
   const budget = await budgetStatus(user.id);
-  if (budget.state === 'storm') {
+  // A run on the user's own plan doesn't spend API money, so the limit doesn't apply.
+  if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new runs.', budget }, 402);
   }
 
@@ -163,7 +164,7 @@ function threadTitle(prompt: string): string {
 }
 
 const TURN_FIELDS = {
-  id: true, prompt: true, status: true, createdAt: true, costUsd: true,
+  id: true, prompt: true, status: true, createdAt: true, costUsd: true, onPlan: true,
   prUrl: true, error: true, cancelRequested: true,
 } as const;
 
@@ -195,7 +196,7 @@ app.get('/threads', async (c) => {
 app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   const user = c.get('user');
   const budget = await budgetStatus(user.id);
-  if (budget.state === 'storm') {
+  if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
   const { repo, baseBranch, prompt, harness } = c.req.valid('json');
@@ -226,7 +227,7 @@ app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) =
   if (active > 0) return c.json({ message: 'Wait for the current turn to finish, or cancel it.' }, 409);
 
   const budget = await budgetStatus(user.id);
-  if (budget.state === 'storm') {
+  if (budget.state === 'storm' && !(await harnessUsesPlan(thread.harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to continue.', budget }, 402);
   }
 
@@ -325,7 +326,11 @@ app.get('/settings/secrets', async (c) => c.json({ settings: await listSettings(
 app.put('/settings/secrets/:name', zValidator('json', z.object({ value: z.string().trim().min(1).max(20_000) })), async (c) => {
   const name = c.req.param('name');
   if (!settingSpec(name)) return c.json({ message: 'Unknown setting' }, 404);
-  await setSetting(name, c.req.valid('json').value);
+  const value = c.req.valid('json').value;
+  if (name === 'CODEX_AUTH_JSON') {
+    try { JSON.parse(value); } catch { return c.json({ message: "That isn't valid JSON. Paste the whole contents of ~/.codex/auth.json." }, 400); }
+  }
+  await setSetting(name, value);
   return c.json({ ok: true });
 })
 

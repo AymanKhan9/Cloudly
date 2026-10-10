@@ -138,7 +138,7 @@ export default function SettingsPage() {
           </tbody>
         </table>
         <p className="field-hint" style={{ padding: "0 16px 16px" }}>
-          An agent runs only if its key is set above (or in the server's .env).
+          An agent runs only if its key or plan sign-in is set above (or in the server's .env). Turns on a plan show "on your plan" and don't count toward the spend limit.
         </p>
       </section>
     </>
