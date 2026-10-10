@@ -19,6 +19,7 @@ import { resolveCloneSource, isRepoSlug } from "./github";
 import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
+import { withPreamble } from "./preamble";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -114,7 +115,9 @@ export async function processRun(
       if (remaining <= 0) throw new Error("Monthly spend limit reached");
       containerOptions.maxBudgetUsd = remaining + budget.limitUsd * OVERSHOOT_RATIO;
     }
-    const task = thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt;
+    const task = withPreamble(
+      thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt,
+    );
 
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {

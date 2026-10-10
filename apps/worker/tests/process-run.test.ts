@@ -214,3 +214,26 @@ test("a turn stopped at the spend ceiling keeps the work it finished", async () 
     await fixture.cleanup();
   }
 }, 30000);
+
+test("the agent gets the sandbox rules before the task; the chat keeps what the user typed", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const inserted = await prisma.run.create({
+      data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "open two PRs", harness: "native-claude" },
+    });
+    let seenTask = "";
+    async function* stubContainer(_ws: unknown, task: string) {
+      seenTask = task;
+      yield { seq: 0, ts: Date.now(), kind: "done" as const, data: { result: "ok" } };
+    }
+    await processRun((await claimRun("worker-1"))!, "worker-1", stubContainer as any);
+
+    expect(seenTask).toContain("Don't create or switch branches");
+    expect(seenTask).toContain("One session produces one pull request");
+    expect(seenTask.endsWith("open two PRs")).toBe(true);
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: inserted.id } })).prompt).toBe("open two PRs");
+    await prisma.run.delete({ where: { id: inserted.id } });
+  } finally {
+    await fixture.cleanup();
+  }
+}, 30000);
