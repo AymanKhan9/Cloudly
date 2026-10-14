@@ -2166,3 +2166,25 @@ textarea {
   border-top: 1px solid var(--hair-ink);
   padding-top: 4px;
 }
+
+/* "/" command suggestions above the message box */
+.command-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.command-suggest button {
+  border: 1px solid var(--chalk-3);
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 4px 9px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.command-suggest button:hover,
+.command-suggest button:focus-visible {
+  border-color: var(--atlas);
+  outline: none;
+}

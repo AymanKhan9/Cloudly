@@ -46,8 +46,17 @@ export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
                 },
             }];
 
-        case "user_message_chunk":
         case "available_commands_update":
+            // Same shape as Claude's init message, so the chat can offer them after "/".
+            return [{
+                kind: "status",
+                data: {
+                    type: "commands",
+                    slash_commands: update.availableCommands.map((c) => c.name),
+                },
+            }];
+
+        case "user_message_chunk":
             return [];
 
         default:

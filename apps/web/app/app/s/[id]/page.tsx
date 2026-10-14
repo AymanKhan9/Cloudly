@@ -126,6 +126,19 @@ export default function SessionPage() {
   }, []);
 
   const eventCount = Object.values(events).reduce((n, l) => n + l.length, 0);
+
+  // The agent announces its commands (built-ins, bundled skills, the repo's own)
+  // at the start of every turn; the latest list is what "/" offers.
+  const commands = useMemo(() => {
+    let latest: string[] = [];
+    for (const list of Object.values(events)) {
+      for (const e of list) {
+        const names = (e.data as { slash_commands?: unknown } | null)?.slash_commands;
+        if (Array.isArray(names)) latest = names.filter((n): n is string => typeof n === "string");
+      }
+    }
+    return [...new Set(latest)].sort();
+  }, [events]);
   // To the page's real bottom: an anchor above the sticky composer would scroll
   // the page up on every event and hide the newest output behind the composer.
   useEffect(() => {
@@ -161,6 +174,10 @@ export default function SessionPage() {
   const latest = turns.at(-1);
   const busy = latest ? ACTIVE.includes(latest.status) : false;
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
+
+  // While typing a command name: "/" alone or "/co", but not once arguments start.
+  const typing = /^\/([\w:.-]*)$/.exec(draft);
+  const suggestions = typing ? commands.filter((c) => c.startsWith(typing[1]!) && c !== typing[1]).slice(0, 10) : [];
 
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
@@ -224,16 +241,30 @@ export default function SessionPage() {
       </div>
 
       <form className="composer" onSubmit={send}>
+        {suggestions.length > 0 ? (
+          <div className="command-suggest" role="listbox" aria-label="Agent commands">
+            {suggestions.map((name) => (
+              <button key={name} type="button" role="option" aria-selected={false} className="mono" onClick={() => setDraft(`/${name} `)}>
+                /{name}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
+            if (e.key === "Tab" && suggestions.length > 0) {
+              e.preventDefault();
+              setDraft(`/${suggestions[0]} `);
+              return;
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               send();
             }
           }}
-          placeholder={busy ? "The agent is working. You can type the next message now." : "Ask for a change, or a question about the code"}
+          placeholder={busy ? "The agent is working. You can type the next message now." : commands.length ? "Ask for a change, or type / for the agent's commands" : "Ask for a change, or a question about the code"}
           rows={2}
           maxLength={8000}
           aria-label="Message"

@@ -11,7 +11,8 @@ interface ControlConfig{
     task:string,
     harness:string,
     resume?:string,
-    maxBudgetUsd?:number
+    maxBudgetUsd?:number,
+    systemAppend?:string
 }
 
 export interface ContainerOptions {
@@ -21,6 +22,8 @@ export interface ContainerOptions {
     homeDir?: string;
     /** Remaining monthly budget; Claude stops itself there. */
     maxBudgetUsd?: number;
+    /** Added to the agent's own system prompt (Claude); other agents get it in the task. */
+    systemAppend?: string;
     /** Built from the setup script in Settings; the base image when there is none. */
     image?: string;
 }
@@ -156,6 +159,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             harness,
             resume: options.resume,
             maxBudgetUsd: options.maxBudgetUsd,
+            systemAppend: options.systemAppend,
         };
 
         await writeFile(

@@ -11,10 +11,12 @@ type RunConfig = {
     harness:string;
     /** What's left of the monthly limit; only Claude can enforce it mid-run. */
     maxBudgetUsd?: number;
+    /** Cloudly's sandbox rules, appended to Claude Code's own system prompt. */
+    systemAppend?: string;
 };
 
 const adapters: Record<string,(config: RunConfig)=>RunAdapter> = {
-    "native-claude" : (config)=> new ClaudeAdapter(config.maxBudgetUsd),
+    "native-claude" : (config)=> new ClaudeAdapter(config.maxBudgetUsd, config.systemAppend),
     "native-codex": ()=> new CodexAdapter(),
     "gemini-acp": ()=> new AcpAdapter(),
 };
@@ -24,7 +26,7 @@ async function loadConfig(): Promise<RunConfig> {
     if (typeof raw.task !== "string") {
         throw new Error(`invalid config at ${CONFIG_PATH}: missing "task"`);
     }
-    return { task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd };
+    return { task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend };
 }
 
 let lastSeq = -1;

@@ -68,8 +68,12 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
 export class ClaudeAdapter implements RunAdapter {
     private controller?: AbortController;
 
-    /** The SDK stops the run itself once it has spent this much. */
-    constructor(private maxBudgetUsd = 20) {}
+    /**
+     * maxBudgetUsd: the SDK stops the run itself once it has spent this much
+     * (none on a subscription). systemAppend: added to Claude Code's own system
+     * prompt, so the user's message (and any /command) reaches it untouched.
+     */
+    constructor(private maxBudgetUsd?: number, private systemAppend?: string) {}
 
     async *start(
         task: string,
@@ -87,6 +91,8 @@ export class ClaudeAdapter implements RunAdapter {
                 canUseTool,
                 disallowedTools: ["Bash(git push *)"],
                 maxBudgetUsd: this.maxBudgetUsd,
+                // Claude Code's own system prompt, as in the CLI, plus Cloudly's rules.
+                systemPrompt: { type: "preset", preset: "claude_code", append: this.systemAppend },
                 resume,
                 abortController: this.controller,
             },

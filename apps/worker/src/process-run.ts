@@ -19,22 +19,33 @@ import { resolveCloneSource, isRepoSlug } from "./github";
 import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
-import { withPreamble } from "./preamble";
+import { withPreamble, sandboxRules, isCommand } from "./preamble";
 import { sandboxImage, setupScript } from "./sandbox-image";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { enforceBudget } from "./budget";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 
-// Agents whose own session storage is trusted to carry a conversation across
-// containers. Off by default: a follow-up otherwise starts a clean session and
-// gets the earlier conversation in its prompt, which works for every agent.
-// Gemini CLI is deliberately excluded: after one session/load it rewrites the
-// session file with only its startup context, losing the conversation.
-const NATIVE_RESUME = new Set((process.env.CLOUDLY_NATIVE_RESUME ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+// Agents that resume their own session across turns, so /compact, /context and
+// their automatic compaction work on the whole conversation. Claude by default;
+// the others start each turn clean and get the earlier conversation in the
+// prompt. Gemini CLI can't: after one session/load it rewrites the session file
+// with only its startup context, losing the conversation.
+const NATIVE_RESUME = new Set(
+  (process.env.CLOUDLY_NATIVE_RESUME ?? "native-claude").split(",").map((s) => s.trim()).filter(Boolean),
+);
+
+/** Claude Code keeps a session at ~/.claude/projects/<cwd with / as ->/<id>.jsonl. */
+function claudeSessionExists(home: string, sessionId: string): boolean {
+  return existsSync(path.join(home, ".claude", "projects", "-workspace", `${sessionId}.jsonl`));
+}
+
+// Without a monthly limit, an API-key run still stops here. Plan runs have no dollar cap.
+const BACKSTOP_USD = 20;
 
 /** Host dir that becomes the sandbox HOME for every turn of a thread. */
 export async function threadHome(threadId: string): Promise<string> {
@@ -101,9 +112,20 @@ export async function processRun(
     });
 
     const nativeResume = Boolean(thread) && NATIVE_RESUME.has(run.harness) && run.harness !== "gemini-acp";
-    const containerOptions: ContainerOptions = thread && nativeResume
-      ? { resume: thread.agentSessionId ?? undefined, homeDir: await threadHome(thread.id) }
-      : {};
+    const containerOptions: ContainerOptions = {};
+    // Whether this turn continues the agent's own session, or starts clean and
+    // gets the earlier conversation written into its prompt.
+    let resumed = false;
+    if (thread && nativeResume) {
+      const home = await threadHome(thread.id);
+      containerOptions.homeDir = home;
+      const id = thread.agentSessionId;
+      // A missing session file (cleaned data dir, older install) falls back to the transcript.
+      if (id && (run.harness !== "native-claude" || claudeSessionExists(home, id))) {
+        containerOptions.resume = id;
+        resumed = true;
+      }
+    }
     // A turn that starts under the limit may finish past it, so a task isn't cut
     // off halfway, but only up to a ceiling of 25% of the monthly limit beyond it.
     // Claude enforces that itself mid-run; Codex and Gemini can't, so for them the
@@ -118,12 +140,23 @@ export async function processRun(
       const remaining = budget.limitUsd - budget.spentUsd;
       if (remaining <= 0) throw new Error("Monthly spend limit reached");
       containerOptions.maxBudgetUsd = remaining + budget.limitUsd * OVERSHOOT_RATIO;
+    } else if (!onPlan) {
+      containerOptions.maxBudgetUsd = BACKSTOP_USD;
     }
     containerOptions.image = await sandboxImage();
-    const task = withPreamble(
-      thread && !nativeResume ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt) : run.prompt,
-      sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript()),
-    );
+    const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
+    // A command goes to the agent as typed; history in front of it would turn it into text.
+    const prompt = thread && !resumed && !isCommand(run.prompt)
+      ? await promptWithHistory(thread.id, run.id, run.harness, run.prompt)
+      : run.prompt;
+    let task: string;
+    if (run.harness === "native-claude") {
+      // Claude takes the rules in its system prompt, so the message reaches it untouched.
+      containerOptions.systemAppend = sandboxRules(tools);
+      task = prompt.trim();
+    } else {
+      task = withPreamble(prompt, tools);
+    }
 
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {

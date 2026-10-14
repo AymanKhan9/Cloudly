@@ -82,7 +82,10 @@ test("unrecognized update kind falls back to raw", () => {
     expect(mapAcpUpdate(update)).toEqual([{ kind: "raw", data: update }]);
 });
 
-test("the startup command list is noise, not an event", () => {
-    const update = { sessionUpdate: "available_commands_update", availableCommands: [] } as unknown as SessionUpdate;
-    expect(mapAcpUpdate(update)).toEqual([]);
+test("the agent's command list is passed on so the chat can offer it", () => {
+    const update = {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [{ name: "compress", description: "Compress the context" }, { name: "memory", description: "" }],
+    } as unknown as SessionUpdate;
+    expect(mapAcpUpdate(update)).toEqual([{ kind: "status", data: { type: "commands", slash_commands: ["compress", "memory"] } }]);
 });

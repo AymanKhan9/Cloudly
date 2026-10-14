@@ -215,24 +215,43 @@ test("a turn stopped at the spend ceiling keeps the work it finished", async () 
   }
 }, 30000);
 
-test("the agent gets the sandbox rules before the task; the chat keeps what the user typed", async () => {
+test("Claude gets the sandbox rules in its system prompt; other agents in front of the task; the chat keeps what was typed", async () => {
   const fixture = await createFixtureRepo();
   try {
-    const inserted = await prisma.run.create({
-      data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "open two PRs", harness: "native-claude" },
-    });
+    const seen: { task: string; append?: string }[] = [];
+    async function* stub(_ws: unknown, task: string, _h: string, _id: string, o?: { systemAppend?: string }) {
+      seen.push({ task, append: o?.systemAppend });
+      yield { seq: 0, ts: Date.now(), kind: "done" as const, data: { result: "ok" } };
+    }
+    for (const harness of ["native-claude", "native-codex"]) {
+      const r = await prisma.run.create({ data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "open two PRs", harness } });
+      await processRun((await claimRun("worker-1"))!, "worker-1", stub as any);
+      expect((await prisma.run.findUniqueOrThrow({ where: { id: r.id } })).prompt).toBe("open two PRs");
+      await prisma.run.delete({ where: { id: r.id } });
+    }
+    const [claude, codex] = seen;
+    expect(claude!.task).toBe("open two PRs");
+    expect(claude!.append).toContain("Don't create or switch branches");
+    expect(codex!.task).toContain("One session produces one pull request");
+    expect(codex!.task.endsWith("open two PRs")).toBe(true);
+    expect(codex!.append).toBeUndefined();
+  } finally {
+    await fixture.cleanup();
+  }
+}, 30000);
+
+test("a /command reaches the agent exactly as typed, with nothing in front of it", async () => {
+  const fixture = await createFixtureRepo();
+  try {
     let seenTask = "";
-    async function* stubContainer(_ws: unknown, task: string) {
+    async function* stub(_ws: unknown, task: string) {
       seenTask = task;
       yield { seq: 0, ts: Date.now(), kind: "done" as const, data: { result: "ok" } };
     }
-    await processRun((await claimRun("worker-1"))!, "worker-1", stubContainer as any);
-
-    expect(seenTask).toContain("Don't create or switch branches");
-    expect(seenTask).toContain("One session produces one pull request");
-    expect(seenTask.endsWith("open two PRs")).toBe(true);
-    expect((await prisma.run.findUniqueOrThrow({ where: { id: inserted.id } })).prompt).toBe("open two PRs");
-    await prisma.run.delete({ where: { id: inserted.id } });
+    const r = await prisma.run.create({ data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "/compact", harness: "native-codex" } });
+    await processRun((await claimRun("worker-1"))!, "worker-1", stub as any);
+    expect(seenTask).toBe("/compact");
+    await prisma.run.delete({ where: { id: r.id } });
   } finally {
     await fixture.cleanup();
   }
