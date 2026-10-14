@@ -261,7 +261,8 @@ export async function processRun(
       if (leaseLost) return;
       await prisma.run.updateMany({
         where: { id: run.id, workerId, leaseGen: run.leaseGen },
-        data: { status: cancelled ? "cancelled" : "succeeded", error: stopNote },
+        // Stopped before changing anything: say so, rather than "work committed".
+        data: { status: cancelled ? "cancelled" : "succeeded", error: stopNote && "Stopped at the spend-limit ceiling before it changed any files." },
       });
       return;
     }

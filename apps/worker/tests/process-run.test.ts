@@ -256,3 +256,24 @@ test("a /command reaches the agent exactly as typed, with nothing in front of it
     await fixture.cleanup();
   }
 }, 30000);
+
+test("a turn stopped at the ceiling before changing anything says so, with no commit", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const inserted = await prisma.run.create({
+      data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "big task", harness: "native-claude" },
+    });
+    async function* stub() {
+      yield { seq: 0, ts: Date.now(), kind: "error" as const, data: { subtype: "error_max_budget_usd", totalCostUsd: 0.03 } };
+      throw new Error("Run container exited with code 1");
+    }
+    await processRun((await claimRun("worker-1"))!, "worker-1", stub as any);
+    const final = await prisma.run.findUniqueOrThrow({ where: { id: inserted.id } });
+    expect(final.status).toBe("cancelled");
+    expect(final.commitSha).toBeNull();
+    expect(final.error).toContain("before it changed any files");
+    await prisma.run.delete({ where: { id: inserted.id } });
+  } finally {
+    await fixture.cleanup();
+  }
+}, 30000);
