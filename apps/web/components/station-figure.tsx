@@ -62,10 +62,10 @@ export function StationFigure() {
             non-root
           </text>
           <text x={44 + i * 99} y="386" fill={dim} style={{ fontSize: 11 }}>
-            no GitHub
+            no keys or
           </text>
           <text x={44 + i * 99} y="401" fill={dim} style={{ fontSize: 11 }}>
-            creds
+            GitHub creds
           </text>
         </g>
       ))}
@@ -75,7 +75,7 @@ export function StationFigure() {
       <path d="M100 518 L100 560" stroke={chalk} strokeWidth="1.25" markerEnd="url(#arrowhead-tall)" />
       <path d="M262 518 L262 560" stroke={rose} strokeWidth="1.25" markerEnd="url(#arrowhead-tall)" />
       {box(20, 566, 158, 62, "GitHub", "push + PR, App token")}
-      {box(186, 566, 154, 62, "Model API", "called with your key")}
+      {box(186, 566, 154, 62, "Model API", "via the key gateway")}
     </svg>
   );
 
@@ -122,7 +122,10 @@ export function StationFigure() {
               non-root
             </text>
             <text x={202 + i * 116} y="338" fill={dim} style={{ fontSize: 11.5 }}>
-              no GitHub creds
+              no keys or
+            </text>
+            <text x={202 + i * 116} y="354" fill={dim} style={{ fontSize: 11.5 }}>
+              GitHub creds
             </text>
           </g>
         ))}
@@ -135,7 +138,7 @@ export function StationFigure() {
         {box(10, 112, 118, 50, "Your browser")}
         {arrow("M128 137 L186 137", "", 0, 0)}
 
-        {box(600, 290, 150, 62, "Model API", "called with your key")}
+        {box(600, 290, 150, 62, "Model API", "via the key gateway")}
         {arrow("M538 330 L594 322", "", 0, 0, rose)}
 
         {box(600, 178, 150, 62, "GitHub", "push + PR, App token")}

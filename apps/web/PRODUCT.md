@@ -16,7 +16,7 @@ Cloudly is a self-hosted control plane for cloud coding agents. The user deploys
 
 ## Positioning
 
-A cheap, user-owned alternative to managed cloud agent products. The user brings their own cloud (aiming for free-tier VMs on AWS, GCP, DigitalOcean and similar), their own model keys, and their own GitHub; Cloudly is free and MIT-licensed. Nothing runs on infrastructure the user does not control, and the user's code and keys never pass through a third-party agent service. Harness choice is plug-and-play rather than locked to one vendor's model.
+Cloud coding agents the user owns end to end: their own VM (free tiers work), their own database if they want, their own model keys or their existing Claude or ChatGPT plan, and their own GitHub. Cloudly is free and MIT-licensed. The pitch is control, plus easy setup and a spend limit, not price alone. Nothing runs on infrastructure the user does not control, and the user's code and keys never pass through a third-party agent service. Harness choice is plug-and-play rather than locked to one vendor's model.
 
 ## Operating Context
 

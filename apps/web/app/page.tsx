@@ -52,15 +52,19 @@ export default function Landing() {
 
         <div className="wrap hero">
           <div>
-            <h1 className="display">Coding agents on a server you already own.</h1>
+            <h1 className="display">Coding agents you own, end to end.</h1>
             <p className="lede">
               Cloudly runs <strong>Claude Agent, Codex or Gemini CLI</strong> against your GitHub repos on a VM in your
-              own cloud account. Hand it a task, close the laptop, and come back to a pull request. It stops spending
-              when you reach your monthly limit. Free and MIT-licensed.
+              own cloud account, on your API keys or the Claude or ChatGPT plan you already pay for. Hand it a task,
+              close the laptop, and come back to a pull request. Your server, your database, your keys, your limit.
+              Free and MIT-licensed.
             </p>
             <div className="hero-actions">
               <InstallCard />
-              <p className="hero-note">Run it on a fresh Linux VM. It installs Docker and walks you through the setup.</p>
+              <p className="hero-note">
+                Run it on a fresh Linux VM. It installs Docker, gets an HTTPS certificate even without a domain, and
+                finishes setup in the browser.
+              </p>
               <a href={REPO_URL} className="link-arrow">
                 <GitHubIcon width={15} height={15} />
                 Read the source on GitHub
@@ -77,17 +81,21 @@ export default function Landing() {
           <AltitudeStrip plate="II" genus={2} name="Cirrus fibratus" altitude="9 000 m" />
           <h2 className="display">Nothing runs anywhere you don't control.</h2>
           <p className="section-lede">
-            One VM in your account runs everything: the web app, the API, the worker and Postgres. Each run gets its
-            own throwaway container. Your keys live in a <span className="mono">.env</span> file on that VM, and your
-            code is never sent to an agent service in between.
+            One VM in your account runs the web app, the API and the worker, with Postgres on the same VM or in a
+            database you already run. Each run gets its own throwaway container. Your keys are stored encrypted on that
+            VM, and your code is never sent to an agent service in between.
           </p>
           <div className="station">
             <StationFigure />
             <div>
               <ul className="station-facts">
                 <li>
-                  <strong>Your keys, your bill</strong>
-                  <span>The sandbox calls Anthropic, OpenAI or Google directly with your API key. Cloudly adds no markup and has no account of its own.</span>
+                  <strong>Your keys and plan never enter the sandbox</strong>
+                  <span>Agents get a placeholder. A gateway outside the container adds your API key or Claude or ChatGPT plan token on the way to the vendor, so a malicious repo has nothing to steal. No markup, no Cloudly account.</span>
+                </li>
+                <li>
+                  <strong>The sandbox can't phone home</strong>
+                  <span>Run containers reach only the model APIs, the main package registries and GitHub, plus any hosts you add. Everything else, DNS included, is blocked.</span>
                 </li>
                 <li>
                   <strong>GitHub credentials never enter the sandbox</strong>
@@ -118,7 +126,8 @@ export default function Landing() {
           <h2 className="display">Set a limit. It actually stops.</h2>
           <p className="section-lede">
             Pick a monthly model-spend limit. Claude Agent reports exact cost per run; Codex and Gemini report tokens,
-            which Cloudly prices from a table you control and marks as an estimate.
+            which Cloudly prices from a table you control and marks as an estimate. Runs on your Claude or ChatGPT plan
+            cost nothing extra and don't count; your plan's own limits apply.
           </p>
           <SpendDemo />
         </div>
@@ -131,7 +140,10 @@ export default function Landing() {
           <p className="section-lede" style={{ marginBottom: 0 }}>
             Each agent reports its work in its own dialect. Cloudly translates all three into one event stream, so the
             run log, the cancel button, the spend limit and the pull request work the same whichever agent you pick.
-            Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way.
+            Each keeps its own session across your follow-ups, and its commands work as typed:{" "}
+            <span className="mono">/compact</span>, <span className="mono">/context</span>,{" "}
+            <span className="mono">/model</span> and the skills in your repo. Gemini CLI runs over the Agent Client
+            Protocol, so other ACP agents can plug in the same way.
           </p>
           <ul className="dialects-stacked">
             {DIALECTS.map((d) => (
@@ -258,7 +270,7 @@ export default function Landing() {
 
         <footer className="footer">
           <div className="wrap">
-            <span>Cloudly is free software under the MIT license. Bring your own cloud, keys and GitHub.</span>
+            <span>Cloudly is free software under the MIT license. Bring your own cloud, database, keys or plan, and GitHub.</span>
             {MARKETING ? null : (
               <span>
                 <Link href="/signin">Sign in to your instance</Link>

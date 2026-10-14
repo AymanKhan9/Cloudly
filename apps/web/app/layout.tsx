@@ -9,9 +9,9 @@ const archivo = Archivo({ subsets: ["latin"], axes: ["wdth"], variable: "--font-
 const bodoni = Bodoni_Moda({ subsets: ["latin"], style: ["italic"], variable: "--font-latin" });
 
 export const metadata: Metadata = {
-  title: "Cloudly — coding agents on a server you already own",
+  title: "Cloudly — cloud coding agents you own end to end",
   description:
-    "Run Claude Agent, Codex or Gemini against your GitHub repos on a VM in your own cloud account, with a monthly spend limit that actually stops runs. Free and MIT-licensed.",
+    "Run Claude Agent, Codex or Gemini against your GitHub repos on a VM in your own cloud account, on your API keys or your Claude or ChatGPT plan. Your server, database, keys and spend limit. Free and MIT-licensed.",
 };
 
 export const viewport: Viewport = {
