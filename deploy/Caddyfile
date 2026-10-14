@@ -2,6 +2,13 @@
 # certificates for IP addresses since January 2026, but only short-lived ones
 # (about 6 days, which Caddy renews on its own), hence ACME_PROFILE=shortlived
 # for an IP. A domain uses the default "classic" profile.
+{
+	# Browsers send no server name (SNI) when connecting to an IP address, and
+	# on a cloud VM the connection arrives at the private IP, so Caddy can't
+	# match the certificate without being told which one to use.
+	default_sni {$SITE_ADDRESS}
+}
+
 {$SITE_ADDRESS} {
 	tls {
 		issuer acme {
