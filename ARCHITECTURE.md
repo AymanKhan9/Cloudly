@@ -318,17 +318,22 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
 
 ### Planned, not yet built
 
-- **Model API keys still enter the sandbox, but can only leave through an allowlist.** Run
-  containers join an internal Docker network (`cloudly-sandbox`) with no route out and no outside
-  DNS. The only way out is the `cloudly-egress` proxy container (`apps/worker/src/egress-proxy.ts`),
-  which tunnels HTTPS to allowed hosts only: the model APIs, the main package registries and GitHub
-  (`EGRESS_DEFAULT_HOSTS`), plus extra hosts from Settings (`*` allows all). Verified live: Claude,
-  Codex and Gemini all reach their APIs through it, npm/pip/Bun/Node fetch work, arbitrary hosts,
-  direct connections, DNS lookups and plain HTTP don't. What it doesn't close: an allowed host that
-  accepts uploads (npm publish, a GitHub gist) is still a channel if a malicious repo hands the agent
-  the attacker's own token for it. The complete fix is key injection: the key never enters the
-  container and the proxy adds it to model API requests on the way out (LiteLLM-style, or TLS
-  interception in the proxy).
+- **Model credentials never enter the sandbox.** Run containers get a placeholder key or token
+  and an API base URL pointing at the credential gateway in the `cloudly-egress` container
+  (`ANTHROPIC_BASE_URL`, Codex's `baseUrl`, `GOOGLE_GEMINI_BASE_URL`). The gateway adds the real
+  API key or plan token and forwards to the vendor (`startGateway` in
+  `apps/worker/src/egress-proxy.ts`), so a prompt-injected agent has nothing to leak. The proxy
+  reads the credentials from a `0600` file the worker writes, and sits on its own outbound network
+  (`cloudly-egress-out`), not Docker's default one, so other containers on the VM can't reach the
+  gateway. Verified live: Claude and Gemini calls went through it; a sandbox's environment showed
+  only placeholders; a wrong configured key got Google's "API key not valid", the real one was
+  accepted. **Exception:** Codex on a ChatGPT sign-in still gets its `auth.json`, because Codex
+  refreshes those tokens itself.
+- **Egress is allowlisted.** Run containers join an internal Docker network (`cloudly-sandbox`)
+  with no route out and no outside DNS. Other traffic leaves only through the proxy's HTTPS
+  tunnel, to the model APIs, the main package registries and GitHub (`EGRESS_DEFAULT_HOSTS`), plus
+  extra hosts from Settings (`*` allows all). With credentials kept out of the container, an
+  upload-capable allowed host (npm, GitHub) is no longer a way to leak them.
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
   and explicit `setting_sources` prevent a malicious repo from smuggling in hooks or MCP servers
   the platform didn't choose. Not yet wired up.

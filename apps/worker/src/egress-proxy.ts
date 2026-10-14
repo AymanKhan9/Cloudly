@@ -65,7 +65,92 @@ export function startProxy(port = PORT, isAllowed = allowed): net.Server {
   return server;
 }
 
+// --- Credential gateway -------------------------------------------------------
+// Run containers never get real model credentials: they get a placeholder and an
+// API base URL pointing here. This adds the real key or plan token on the way
+// out, so a prompt-injected agent has nothing to leak.
+
+const CREDENTIALS_FILE = process.env.CREDENTIALS_FILE ?? "/keys/credentials.json";
+const GATEWAY_PORT = Number(process.env.GATEWAY_PORT ?? 3129);
+
+export const UPSTREAMS: Record<string, string> = {
+  anthropic: "https://api.anthropic.com",
+  openai: "https://api.openai.com",
+  gemini: "https://generativelanguage.googleapis.com",
+};
+
+// Never forwarded: they describe this hop, not the request.
+const HOP_BY_HOP = ["host", "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "content-length"];
+
+/** Swaps whatever credential the agent sent for the real one. Returns false if there's none to add. */
+export function injectCredentials(service: string, headers: Headers, url: URL, creds: Record<string, string | undefined>): boolean {
+  if (service === "anthropic") {
+    // API key in x-api-key; a plan token as a bearer token.
+    if (headers.has("x-api-key") && creds.ANTHROPIC_API_KEY) return headers.set("x-api-key", creds.ANTHROPIC_API_KEY), true;
+    if (headers.has("authorization") && creds.CLAUDE_CODE_OAUTH_TOKEN) {
+      return headers.set("authorization", `Bearer ${creds.CLAUDE_CODE_OAUTH_TOKEN}`), true;
+    }
+    return false;
+  }
+  if (service === "openai") {
+    if (!creds.OPENAI_API_KEY) return false;
+    headers.set("authorization", `Bearer ${creds.OPENAI_API_KEY}`);
+    return true;
+  }
+  if (service === "gemini") {
+    if (!creds.GEMINI_API_KEY) return false;
+    if (url.searchParams.has("key")) url.searchParams.set("key", creds.GEMINI_API_KEY);
+    else headers.set("x-goog-api-key", creds.GEMINI_API_KEY);
+    return true;
+  }
+  return false;
+}
+
+function readCredentials(): Record<string, string | undefined> {
+  try {
+    return JSON.parse(readFileSync(CREDENTIALS_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+export function startGateway(port = GATEWAY_PORT, credentials = readCredentials) {
+  return Bun.serve({
+    port,
+    idleTimeout: 0, // model responses stream for minutes
+    async fetch(req) {
+      const url = new URL(req.url);
+      const [, service, ...rest] = url.pathname.split("/");
+      const upstream = UPSTREAMS[service ?? ""];
+      if (!upstream) return new Response("Unknown service\n", { status: 404 });
+
+      const target = new URL(`/${rest.join("/")}${url.search}`, upstream);
+      const headers = new Headers(req.headers);
+      for (const h of HOP_BY_HOP) headers.delete(h);
+      if (!injectCredentials(service!, headers, target, credentials())) {
+        console.log(`gateway ${service}: no credential to add`);
+        return new Response(`No ${service} credential is set in Cloudly.\n`, { status: 401 });
+      }
+      console.log(`gateway ${req.method} ${service} ${target.pathname}`);
+      const res = await fetch(target, {
+        method: req.method,
+        headers,
+        body: req.body,
+        // Streams the request body instead of buffering it.
+        duplex: "half",
+        // Pass bytes through untouched, compressed or not.
+        decompress: false,
+        redirect: "manual",
+      });
+      const out = new Headers(res.headers);
+      for (const h of HOP_BY_HOP) out.delete(h);
+      return new Response(res.body, { status: res.status, headers: out });
+    },
+  });
+}
+
 if (import.meta.main) {
   startProxy();
-  console.log(`egress proxy on :${PORT}, rules from ${ALLOW_FILE}`);
+  startGateway();
+  console.log(`egress proxy on :${PORT}, rules from ${ALLOW_FILE}; credential gateway on :${GATEWAY_PORT}`);
 }

@@ -17,9 +17,9 @@ test("a Claude plan token is used instead of the API key", async () => {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-oat-plan";
   try {
     const { flags, env } = await credentialFlags("native-claude");
-    expect(flags).toContain("CLAUDE_CODE_OAUTH_TOKEN");
-    expect(flags).not.toContain("ANTHROPIC_API_KEY");
-    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("sk-ant-oat-plan");
+    expect(flags).toContain("CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-cloudly-placeholder");
+    expect(flags.some((f) => f.startsWith("ANTHROPIC_API_KEY"))).toBe(false);
+    expect(flags.join(" ") + JSON.stringify(env)).not.toContain("sk-ant-oat-plan");
   } finally {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_CODE_OAUTH_TOKEN;

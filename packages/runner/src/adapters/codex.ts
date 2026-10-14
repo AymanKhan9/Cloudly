@@ -53,7 +53,8 @@ export class CodexAdapter implements RunAdapter {
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
-        const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
+        // With an API key, calls go to Cloudly's gateway, which adds the real key.
+        const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY, baseUrl: process.env.OPENAI_BASE_URL });
 
         const threadOptions = {
             workingDirectory: "/workspace",

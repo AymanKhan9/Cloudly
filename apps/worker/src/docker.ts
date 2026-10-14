@@ -5,7 +5,23 @@ import path from "node:path";
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
 import { config, setSetting } from "@repo/db";
-import { ensureEgress, EGRESS_FLAGS } from "./egress";
+import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL } from "./egress";
+
+// What a run container gets instead of a real credential. Shaped like the real
+// thing in case a CLI checks the prefix; the gateway replaces it on the way out.
+const PLACEHOLDERS: Record<string, string> = {
+    ANTHROPIC_API_KEY: "sk-ant-api03-cloudly-placeholder",
+    CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-cloudly-placeholder",
+    OPENAI_API_KEY: "sk-cloudly-placeholder",
+    GEMINI_API_KEY: "cloudly-placeholder",
+};
+
+// Each agent's own setting for where its model API lives.
+const GATEWAY_ENV: Record<string, string[]> = {
+    "native-claude": ["-e", `ANTHROPIC_BASE_URL=${GATEWAY_URL}/anthropic`],
+    "native-codex": ["-e", `OPENAI_BASE_URL=${GATEWAY_URL}/openai/v1`],
+    "gemini-acp": ["-e", `GOOGLE_GEMINI_BASE_URL=${GATEWAY_URL}/gemini`],
+};
 
 interface ControlConfig{
     task:string,
@@ -103,21 +119,22 @@ export async function credentialFlags(harness: string): Promise<{
 
     const claudeToken = harness === "native-claude" ? await config("CLAUDE_CODE_OAUTH_TOKEN") : undefined;
     const codexAuth = harness === "native-codex" ? await config("CODEX_AUTH_JSON") : undefined;
+    // Real credentials never enter the container: it gets a placeholder and the
+    // gateway's address, and the gateway adds the real value (egress-proxy.ts).
+    // A ChatGPT sign-in is the exception: Codex refreshes it itself.
     if (claudeToken) {
-        flags.push("-e", "CLAUDE_CODE_OAUTH_TOKEN");
-        env.CLAUDE_CODE_OAUTH_TOKEN = claudeToken;
+        flags.push("-e", `CLAUDE_CODE_OAUTH_TOKEN=${PLACEHOLDERS.CLAUDE_CODE_OAUTH_TOKEN}`, ...GATEWAY_ENV[harness]!);
     } else if (codexAuth) {
         codexHome = await writeCodexHome(codexAuth);
         flags.push("-v", `${codexHome}:/codex-home`, "-e", "CODEX_HOME=/codex-home");
     } else {
         for (const name of required) {
-            const value = await config(name);
-            if (!value) {
+            if (!(await config(name))) {
                 throw new Error(`harness "${harness}" needs ${name}. Add it under Settings, or in the server's .env.`);
             }
-            flags.push("-e", name);
-            env[name] = value;
+            flags.push("-e", `${name}=${PLACEHOLDERS[name]}`);
         }
+        flags.push(...GATEWAY_ENV[harness]!);
     }
     for (const name of OPTIONAL_ENV[harness] ?? []) {
         const value = process.env[name];

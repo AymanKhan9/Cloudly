@@ -16,13 +16,14 @@ test("the sandbox never sees the install dir, only read-only runner pieces", () 
   expect(mounts).not.toContain("/opt/cloudly:/repo:ro");
 });
 
-test("model keys are passed by name, with the value only in the docker client's env", async () => {
-  process.env.GEMINI_API_KEY = "sk-test-not-on-argv";
+test("the container gets a placeholder and the gateway address, never the real key", async () => {
+  process.env.GEMINI_API_KEY = "real-key-must-not-reach-the-container";
   try {
     const { flags, env } = await credentialFlags("gemini-acp");
-    expect(flags).toContain("GEMINI_API_KEY");
-    expect(flags.join(" ")).not.toContain("sk-test-not-on-argv");
-    expect(env.GEMINI_API_KEY).toBe("sk-test-not-on-argv");
+    const all = flags.join(" ") + JSON.stringify(env);
+    expect(all).not.toContain("real-key-must-not-reach-the-container");
+    expect(flags).toContain("GEMINI_API_KEY=cloudly-placeholder");
+    expect(flags.some((f) => f.startsWith("GOOGLE_GEMINI_BASE_URL=http://cloudly-egress:3129/gemini"))).toBe(true);
   } finally {
     delete process.env.GEMINI_API_KEY;
   }
