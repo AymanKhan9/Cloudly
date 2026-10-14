@@ -167,3 +167,44 @@ export async function harnessUsesPlan(harness: string): Promise<boolean> {
   if (harness === "native-codex") return Boolean(await config("CODEX_AUTH_JSON"));
   return false;
 }
+
+/**
+ * This install's master key, which doubles as its recovery key: a later install
+ * on the same database pastes it to keep these settings (recoverSettings). It is
+ * shown at install and during setup, never in Settings, because with a copy of
+ * the database it decrypts everything.
+ */
+export async function recoveryKey(): Promise<string> {
+  return (await masterKey()).toString("base64");
+}
+
+/**
+ * Re-encrypts settings saved by an earlier install (under its master key) with
+ * this install's key, so they're readable again without editing any file.
+ * Returns how many were recovered; 0 means the key doesn't match any of them.
+ */
+export async function recoverSettings(oldRecoveryKey: string): Promise<number> {
+  const trimmed = oldRecoveryKey.trim();
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(trimmed)) {
+    throw new Error("A recovery key is 44 characters ending in '='. Copy it exactly as it was shown.");
+  }
+  const old = Buffer.from(trimmed, "base64");
+  const key = await masterKey();
+  let recovered = 0;
+  for (const row of await prisma.setting.findMany()) {
+    try {
+      decrypt(row.value, key);
+      continue; // already this install's
+    } catch {}
+    let plain: string;
+    try {
+      plain = decrypt(row.value, old);
+    } catch {
+      continue; // from some other install, or damaged
+    }
+    await prisma.setting.update({ where: { name: row.name }, data: { value: encrypt(plain, key) } });
+    unreadable.delete(row.name);
+    recovered++;
+  }
+  return recovered;
+}

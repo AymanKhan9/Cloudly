@@ -96,3 +96,24 @@ test("a key or token pasted from a wrapped terminal line loses the whitespace; o
     await deleteSetting("SANDBOX_SETUP_SCRIPT");
   }
 });
+
+test("a later install recovers an earlier install's settings with its recovery key", async () => {
+  const { recoverSettings, recoveryKey } = await import("../src");
+  const oldKey = randomBytes(32);
+  await prisma.setting.upsert({
+    where: { name: "GEMINI_API_KEY" },
+    update: { value: encrypt("g-old-install", oldKey) },
+    create: { name: "GEMINI_API_KEY", value: encrypt("g-old-install", oldKey) },
+  });
+  try {
+    expect(await getSetting("GEMINI_API_KEY")).toBeUndefined(); // unreadable under this install's key
+    await expect(recoverSettings("not-a-key")).rejects.toThrow("44 characters");
+    expect(await recoverSettings(randomBytes(32).toString("base64"))).toBe(0); // wrong key
+    expect(await recoverSettings(oldKey.toString("base64"))).toBe(1);
+    expect(await getSetting("GEMINI_API_KEY")).toBe("g-old-install");
+    expect(await recoverSettings(oldKey.toString("base64"))).toBe(0); // nothing left to recover
+    expect((await recoveryKey()).length).toBe(44);
+  } finally {
+    await deleteSetting("GEMINI_API_KEY");
+  }
+});

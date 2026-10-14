@@ -39,6 +39,14 @@ Then sign in with GitHub and add a model key (Anthropic, OpenAI or Gemini) under
 
 Setup closes itself once all three steps are done, so nobody can claim the instance afterward. Later changes go through Settings.
 
+The installer also prints a **recovery key** (setup shows it too). Save it in a password manager. Everything you save in the browser is encrypted with it, and it's the only way a later install can read those settings.
+
+### Using your own Postgres
+
+Paste a Postgres URL when the installer asks (Neon, Supabase, RDS, anything that accepts connections from the VM), or run it with `LOCAL_POSTGRES=0 DATABASE_URL=...`. Sessions, settings and keys then live in your database, not on the VM.
+
+To move to a new VM, run the installer there with the same database URL and open `/setup`. It notices the earlier install's settings and asks for its recovery key. Paste it and your keys, plan sign-ins, allowed users and GitHub App carry over. If the new VM has a different address, update the GitHub App's three URLs as setup shows them. Without the recovery key, set up from scratch: the old encrypted settings get replaced.
+
 ## 4. HTTPS
 
 Cloudly serves HTTPS whether or not you have a domain. Caddy gets a free Let's Encrypt certificate and renews it on its own. Open ports 80 and 443 in your cloud firewall either way.

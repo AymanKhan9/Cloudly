@@ -3,7 +3,7 @@ import { createMiddleware } from "hono/factory";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
-import { config, unreadableSettings, setSetting } from "@repo/db";
+import { config, unreadableSettings, setSetting, recoveryKey, recoverSettings } from "@repo/db";
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 const STATE_COOKIE = "setup_state";
@@ -57,7 +57,8 @@ export async function setupStatus() {
       gemini: Boolean(await config("GEMINI_API_KEY")),
     },
     tokenConfigured: Boolean(process.env.CLOUDLY_SETUP_TOKEN),
-    // Saved by another install with a different master key; setup will replace them.
+    // Saved by another install with a different master key: setup offers to recover
+    // them with that install's recovery key, or replaces them.
     staleSettings: unreadableSettings().length > 0,
   };
 }
@@ -88,6 +89,23 @@ const requireSetupToken = createMiddleware(async (c, next) => {
 export const setup = new Hono();
 
 setup.get("/status", async (c) => c.json(await setupStatus()));
+
+// This install's recovery key, shown during setup so the owner can save it. A
+// later install on the same database needs it to keep these settings.
+setup.post("/recovery-key", requireSetupToken, async (c) => c.json({ key: await recoveryKey() }));
+
+// Settings from an earlier install on this database, unlocked with its recovery
+// key and re-encrypted under this install's key.
+setup.post("/recover", requireSetupToken, async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { key?: unknown };
+  try {
+    const recovered = await recoverSettings(String(body.key ?? ""));
+    if (recovered === 0) return c.json({ message: "That recovery key doesn't unlock the settings in this database." }, 400);
+    return c.json({ recovered, status: await setupStatus() });
+  } catch (err) {
+    return c.json({ message: err instanceof Error ? err.message : "Couldn't recover the settings." }, 400);
+  }
+});
 
 setup.post("/access", requireSetupToken, async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { logins?: unknown };

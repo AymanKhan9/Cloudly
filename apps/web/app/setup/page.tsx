@@ -40,6 +40,9 @@ function SetupInner() {
   const [logins, setLogins] = useState("");
   const [org, setOrg] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState("");
+  const [oldKey, setOldKey] = useState("");
+  const [restored, setRestored] = useState(0);
   const [error, setError] = useState<string | null>(params.get("error") ? (ERRORS[params.get("error")!] ?? "Something went wrong.") : null);
 
   const refresh = useCallback(
@@ -80,6 +83,19 @@ function SetupInner() {
     run("access", async () => {
       await post("/setup/access", token, { logins });
       await refresh();
+    });
+
+  const showRecoveryKey = () =>
+    run("key", async () => {
+      setRecovery((await post("/setup/recovery-key", token, {})).key);
+    });
+
+  const restore = () =>
+    run("restore", async () => {
+      const { recovered, status } = await post("/setup/recover", token, { key: oldKey });
+      setOldKey("");
+      setRestored(recovered);
+      setStatus(status);
     });
 
   const createApp = () =>
@@ -129,12 +145,21 @@ function SetupInner() {
         </div>
       ) : null}
 
-      {status.staleSettings ? (
-        <p className="field-hint" role="status" style={{ margin: 16 }}>
-          This database holds settings from another Cloudly install, saved with a different master key, so this install
-          can&apos;t read them. Setup below replaces them. To keep them instead, copy CLOUDLY_SECRET_KEY from the other
-          install&apos;s .env into this one and restart.
-        </p>
+      {restored > 0 ? (
+        <div className="field field-wide" role="status">
+          <span className="field-label">Settings restored</span>
+          <p className="field-hint" style={{ margin: 0 }}>
+            {restored === 1 ? "1 setting" : `${restored} settings`} from your earlier install now work here.
+            {s.githubApp
+              ? " If this install has a new address, open your Cloudly app on GitHub (Settings > Developer settings > GitHub Apps) and set:"
+              : null}
+          </p>
+          {s.githubApp ? (
+            <pre className="mono field-hint" style={{ whiteSpace: "pre-wrap", margin: "8px 0 0" }}>
+              {`Homepage URL:  ${location.origin}\nCallback URL:  ${location.origin}/api/auth/github/callback\nSetup URL:     ${location.origin}/api/setup/github/installed`}
+            </pre>
+          ) : null}
+        </div>
       ) : null}
 
       {done ? (
@@ -162,6 +187,42 @@ function SetupInner() {
                 ? "Printed at the end of the installer. It's also CLOUDLY_SETUP_TOKEN in the server's .env."
                 : "This server has no CLOUDLY_SETUP_TOKEN yet. Add one to the server's .env, restart the API, and reload."}
             </p>
+          </div>
+
+          {status.staleSettings ? (
+            <div className="field field-wide">
+              <label className="field-label" htmlFor="old-key">
+                Restore your settings
+              </label>
+              <p className="field-hint" style={{ margin: "0 0 10px" }}>
+                This database holds keys and settings from an earlier Cloudly install. Paste that install&apos;s recovery
+                key to keep them, or skip this and set up from scratch.
+              </p>
+              <input id="old-key" type="password" value={oldKey} onChange={(e) => setOldKey(e.target.value)} autoComplete="off" className="mono" disabled={!unlocked} />
+              <button type="button" className="btn btn-signal" onClick={restore} disabled={!unlocked || !oldKey.trim() || busy !== null} style={{ marginTop: 12 }}>
+                {busy === "restore" ? "Restoring…" : "Restore"}
+              </button>
+            </div>
+          ) : null}
+
+          <div className="field field-wide">
+            <span className="field-label">Recovery key</span>
+            <p className="field-hint" style={{ margin: "0 0 10px" }}>
+              Save it in a password manager. If you reinstall Cloudly on this database, you&apos;ll paste it here to keep
+              your keys and settings. It&apos;s only shown during setup.
+            </p>
+            {recovery ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <code className="mono" style={{ wordBreak: "break-all" }}>{recovery}</code>
+                <button type="button" className="btn btn-quiet" onClick={() => navigator.clipboard.writeText(recovery)}>
+                  Copy
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-quiet" onClick={showRecoveryKey} disabled={!unlocked || busy !== null}>
+                {busy === "key" ? "Loading…" : "Show recovery key"}
+              </button>
+            )}
           </div>
 
           <div className="setup-step" data-done={s.access || undefined}>
