@@ -94,10 +94,36 @@ export async function deleteSetting(name: string): Promise<void> {
   await prisma.setting.deleteMany({ where: { name } });
 }
 
+const unreadable = new Set<string>();
+
+/**
+ * A setting saved under a different master key (another install pointed at the
+ * same database, or a lost CLOUDLY_SECRET_KEY) can't be read. Treat it as unset
+ * so setup can run again and overwrite it, instead of every request failing.
+ */
+function readable(name: string, blob: string, key: Buffer): string | undefined {
+  try {
+    const value = decrypt(blob, key);
+    unreadable.delete(name);
+    return value;
+  } catch {
+    if (!unreadable.has(name)) {
+      console.warn(`[settings] ${name} was saved with a different CLOUDLY_SECRET_KEY and can't be read; treating it as unset.`);
+    }
+    unreadable.add(name);
+    return undefined;
+  }
+}
+
+/** Settings found in the database that this install's key can't read. */
+export function unreadableSettings(): string[] {
+  return [...unreadable];
+}
+
 export async function getSetting(name: string): Promise<string | undefined> {
   const row = await prisma.setting.findUnique({ where: { name } });
   if (!row) return undefined;
-  return decrypt(row.value, await masterKey());
+  return readable(name, row.value, await masterKey());
 }
 
 /** A value saved in the browser wins; the same name in .env is the fallback. */
@@ -118,8 +144,9 @@ export async function listSettings(): Promise<SettingStatus[]> {
   const key = await masterKey();
   return SETTINGS.map((spec) => {
     const stored = rows.get(spec.name);
-    const raw = stored !== undefined ? decrypt(stored, key) : process.env[spec.name] || undefined;
-    const source = stored !== undefined ? "db" : raw ? "env" : null;
+    const fromDb = stored !== undefined ? readable(spec.name, stored, key) : undefined;
+    const raw = fromDb ?? (process.env[spec.name] || undefined);
+    const source = fromDb !== undefined ? "db" : raw ? "env" : null;
     const preview = raw ? (spec.secret ? `…${raw.slice(-4)}` : raw) : null;
     return { ...spec, set: Boolean(raw), source, preview };
   });

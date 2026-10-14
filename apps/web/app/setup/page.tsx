@@ -11,6 +11,7 @@ interface Status {
   steps: { access: boolean; githubApp: boolean; installed: boolean };
   appSlug?: string;
   tokenConfigured: boolean;
+  staleSettings?: boolean;
 }
 
 const ERRORS: Record<string, string> = {
@@ -41,7 +42,17 @@ function SetupInner() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(params.get("error") ? (ERRORS[params.get("error")!] ?? "Something went wrong.") : null);
 
-  const refresh = useCallback(() => fetch("/api/setup/status").then((r) => r.json()).then(setStatus), []);
+  const refresh = useCallback(
+    () =>
+      fetch("/api/setup/status")
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`This instance's API answered ${r.status}. Check the logs with: journalctl -u cloudly-api -n 50`);
+          return r.json();
+        })
+        .then(setStatus)
+        .catch((e: Error) => setError(e.message || "Couldn't reach this instance's API.")),
+    [],
+  );
 
   useEffect(() => {
     setToken(sessionStorage.getItem("cloudly-setup-token") ?? "");
@@ -86,7 +97,18 @@ function SetupInner() {
       form.submit();
     });
 
-  if (!status) return <p className="setup-wait" aria-busy="true">Checking this instance…</p>;
+  if (!status) {
+    return error ? (
+      <div className="error-box" role="alert">
+        {error}{" "}
+        <button type="button" className="btn btn-quiet" onClick={() => { setError(null); refresh(); }}>
+          Try again
+        </button>
+      </div>
+    ) : (
+      <p className="setup-wait" aria-busy="true">Checking this instance…</p>
+    );
+  }
 
   const s = status.steps;
   const done = !status.needsSetup;
@@ -105,6 +127,14 @@ function SetupInner() {
         <div className="error-box" role="alert" style={{ margin: 16 }}>
           {error}
         </div>
+      ) : null}
+
+      {status.staleSettings ? (
+        <p className="field-hint" role="status" style={{ margin: 16 }}>
+          This database holds settings from another Cloudly install, saved with a different master key, so this install
+          can&apos;t read them. Setup below replaces them. To keep them instead, copy CLOUDLY_SECRET_KEY from the other
+          install&apos;s .env into this one and restart.
+        </p>
       ) : null}
 
       {done ? (

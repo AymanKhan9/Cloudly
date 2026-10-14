@@ -62,6 +62,7 @@ By default Cloudly runs Postgres on the VM. To keep your data in a database you 
 - Pooled and direct URLs both work (tested with Neon's pooled URL). The installer migrates without Prisma's advisory lock, which poolers can leave stuck.
 - Allow connections from the VM's IP address.
 - Keys saved under Settings are encrypted with `CLOUDLY_SECRET_KEY`, which stays in the VM's `.env`, not in the database. Back it up. Without it the stored keys can't be read, and a copy of the database alone doesn't expose them.
+- Reusing a database from an earlier install: stop the old install first (two workers on one database would both pick up runs). Settings are encrypted with `CLOUDLY_SECRET_KEY`, so copy it from the old `.env` into the new one to keep them; otherwise setup runs again and replaces them. A new public URL needs a new GitHub App either way, since the old one sends sign-in back to the old address.
 - To switch an existing install, set `LOCAL_POSTGRES=0` and `DATABASE_URL=` in `/opt/cloudly/.env` and re-run the installer. Existing data isn't copied over; move it with `pg_dump` and `pg_restore` first.
 
 ## 5. Day-to-day

@@ -3,7 +3,7 @@ import { createMiddleware } from "hono/factory";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
-import { config, setSetting } from "@repo/db";
+import { config, unreadableSettings, setSetting } from "@repo/db";
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 const STATE_COOKIE = "setup_state";
@@ -57,6 +57,8 @@ export async function setupStatus() {
       gemini: Boolean(await config("GEMINI_API_KEY")),
     },
     tokenConfigured: Boolean(process.env.CLOUDLY_SETUP_TOKEN),
+    // Saved by another install with a different master key; setup will replace them.
+    staleSettings: unreadableSettings().length > 0,
   };
 }
 

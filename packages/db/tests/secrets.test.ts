@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { encrypt, decrypt, setSetting, getSetting, config, deleteSetting, listSettings } from "../src";
+import { encrypt, decrypt, setSetting, getSetting, config, deleteSetting, listSettings, unreadableSettings, prisma } from "../src";
 
 test("encrypts and decrypts, with a fresh IV each time", () => {
   const key = randomBytes(32);
@@ -60,5 +60,27 @@ test("an empty saved value counts as unset and falls back to .env", async () => 
     await deleteSetting(name);
     if (before === undefined) delete process.env[name];
     else process.env[name] = before;
+  }
+});
+
+test("a setting saved under another install's key reads as unset instead of failing every request", async () => {
+  const otherKey = randomBytes(32);
+  await prisma.setting.upsert({
+    where: { name: "GITHUB_APP_ID" },
+    update: { value: encrypt("12345", otherKey) },
+    create: { name: "GITHUB_APP_ID", value: encrypt("12345", otherKey) },
+  });
+  try {
+    expect(await getSetting("GITHUB_APP_ID")).toBeUndefined();
+    expect(unreadableSettings()).toContain("GITHUB_APP_ID");
+    const row = (await listSettings()).find((r) => r.name === "GITHUB_APP_ID")!;
+    expect(row.source).not.toBe("db");
+
+    // Setup saving it again with this install's key makes it readable.
+    await setSetting("GITHUB_APP_ID", "67890");
+    expect(await getSetting("GITHUB_APP_ID")).toBe("67890");
+    expect(unreadableSettings()).not.toContain("GITHUB_APP_ID");
+  } finally {
+    await deleteSetting("GITHUB_APP_ID");
   }
 });
