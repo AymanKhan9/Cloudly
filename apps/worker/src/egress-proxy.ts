@@ -3,7 +3,7 @@
 // HTTPS only: clients send CONNECT host:443 and this pipes the encrypted stream
 // through when the host is allowed. It never sees request contents.
 import net from "node:net";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const ALLOW_FILE = process.env.ALLOW_FILE ?? "/allow/hosts";
 const PORT = Number(process.env.PORT ?? 3128);
@@ -48,8 +48,13 @@ export function startProxy(port = PORT, isAllowed = allowed): net.Server {
         );
         return;
       }
-      console.log(`allow ${target.host}`);
-      const upstream = net.connect(target.port, target.host, () => {
+      // Codex on a ChatGPT sign-in holds only placeholder tokens, and some of its
+      // ChatGPT URLs are fixed, so chatgpt.com goes to the gateway's HTTPS port:
+      // its certificate covers chatgpt.com, signed by the CA only Codex's sandbox
+      // trusts, and it adds the real token. Anything else sees a bad certificate.
+      const viaGateway = target.host.toLowerCase() === "chatgpt.com";
+      console.log(viaGateway ? `allow ${target.host} (via the credential gateway)` : `allow ${target.host}`);
+      const upstream = net.connect(viaGateway ? GATEWAY_PORT + 1 : target.port, viaGateway ? "127.0.0.1" : target.host, () => {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         const rest = head.slice(end + 4);
         if (rest) upstream.write(Buffer.from(rest, "latin1"));
@@ -77,7 +82,98 @@ export const UPSTREAMS: Record<string, string> = {
   anthropic: "https://api.anthropic.com",
   openai: "https://api.openai.com",
   gemini: "https://generativelanguage.googleapis.com",
+  chatgpt: "https://chatgpt.com",
 };
+
+// --- Codex on a ChatGPT sign-in ---------------------------------------------------
+// Codex manages these tokens itself, so the sandbox gets a look-alike auth.json:
+// the same claims (account, plan), no valid signature, no real refresh token. Its
+// chatgpt_base_url and refresh URL point here; this adds the real access token and
+// does the real refresh, keeping the refreshed tokens outside the sandbox.
+
+const CODEX_STATE_FILE = process.env.CODEX_STATE_FILE ?? "/state/codex-auth.json";
+const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"; // Codex CLI's public OAuth client
+const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
+export const PLACEHOLDER_REFRESH_TOKEN = "cloudly-placeholder";
+
+const b64url = (s: string) => Buffer.from(s).toString("base64url");
+
+function jwtClaims(token: string): Record<string, any> {
+  try {
+    return JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/** Same claims, no valid signature: Codex can read it, nobody can use it. */
+export function placeholderJwt(real: string): string {
+  return `${b64url(JSON.stringify({ alg: "none", typ: "JWT" }))}.${b64url(JSON.stringify(jwtClaims(real)))}.cloudly-placeholder`;
+}
+
+/** The auth.json the sandbox gets in place of the real one. */
+export function placeholderCodexAuth(real: any): any {
+  const t = real?.tokens ?? {};
+  return {
+    ...real,
+    tokens: {
+      ...t,
+      id_token: t.id_token ? placeholderJwt(t.id_token) : t.id_token,
+      access_token: t.access_token ? placeholderJwt(t.access_token) : t.access_token,
+      refresh_token: PLACEHOLDER_REFRESH_TOKEN,
+    },
+  };
+}
+
+/** The newest real sign-in: Settings' copy, or one this gateway refreshed since. */
+function realCodexAuth(creds: Record<string, string | undefined>): any | null {
+  const candidates: any[] = [];
+  try {
+    if (creds.CODEX_AUTH_JSON) candidates.push(JSON.parse(creds.CODEX_AUTH_JSON));
+  } catch {}
+  try {
+    candidates.push(JSON.parse(readFileSync(CODEX_STATE_FILE, "utf8")));
+  } catch {}
+  return candidates.sort((a, b) => String(b?.last_refresh ?? "").localeCompare(String(a?.last_refresh ?? "")))[0] ?? null;
+}
+
+// ponytail: one refresh at a time per gateway; two workers on one database would
+// each refresh, and the refresh token is single-use. Fine with one worker per VM.
+let refreshing: Promise<any> | null = null;
+
+async function refreshCodex(auth: any): Promise<any> {
+  refreshing ??= (async () => {
+    const res = await fetch(CODEX_TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_id: CODEX_CLIENT_ID, grant_type: "refresh_token", refresh_token: auth.tokens.refresh_token, scope: "openid profile email" }),
+    });
+    if (!res.ok) throw new Error(`ChatGPT sign-in refresh failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
+    const fresh = (await res.json()) as Record<string, string>;
+    const updated = {
+      ...auth,
+      tokens: {
+        ...auth.tokens,
+        ...(fresh.id_token ? { id_token: fresh.id_token } : {}),
+        ...(fresh.access_token ? { access_token: fresh.access_token } : {}),
+        ...(fresh.refresh_token ? { refresh_token: fresh.refresh_token } : {}),
+      },
+      last_refresh: new Date().toISOString(),
+    };
+    writeFileSync(CODEX_STATE_FILE, JSON.stringify(updated), { mode: 0o600 });
+    console.log("gateway: refreshed the ChatGPT sign-in");
+    return updated;
+  })().finally(() => (refreshing = null));
+  return refreshing;
+}
+
+/** A real ChatGPT sign-in with at least a minute left, refreshed if needed. */
+async function freshCodexAuth(creds: Record<string, string | undefined>, force = false): Promise<any | null> {
+  const auth = realCodexAuth(creds);
+  if (!auth?.tokens?.access_token) return null;
+  const exp = Number(jwtClaims(auth.tokens.access_token).exp) * 1000;
+  return force || !exp || exp < Date.now() + 60_000 ? refreshCodex(auth) : auth;
+}
 
 // Never forwarded: they describe this hop, not the request.
 const HOP_BY_HOP = ["host", "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "content-length"];
@@ -114,20 +210,45 @@ function readCredentials(): Record<string, string | undefined> {
   }
 }
 
-export function startGateway(port = GATEWAY_PORT, credentials = readCredentials) {
+export function startGateway(port = GATEWAY_PORT, credentials = readCredentials, tls?: { cert: string; key: string }) {
   return Bun.serve({
     port,
+    ...(tls ? { tls } : {}),
     idleTimeout: 0, // model responses stream for minutes
     async fetch(req) {
       const url = new URL(req.url);
-      const [, service, ...rest] = url.pathname.split("/");
+
+      // Codex refreshing its (placeholder) sign-in: refresh the real one, answer with placeholders.
+      if (url.pathname === "/codex-refresh") {
+        try {
+          const auth = await freshCodexAuth(credentials(), true);
+          if (!auth) return new Response("No ChatGPT sign-in is set in Cloudly.\n", { status: 401 });
+          const p = placeholderCodexAuth(auth).tokens;
+          return Response.json({ id_token: p.id_token, access_token: p.access_token, refresh_token: p.refresh_token });
+        } catch (err) {
+          console.log(String(err));
+          return new Response(String(err), { status: 401 });
+        }
+      }
+      // Codex tries a WebSocket first and falls back to HTTPS; say no straight away.
+      if (req.headers.get("upgrade")?.toLowerCase() === "websocket") return new Response("Use HTTPS.\n", { status: 426 });
+
+      // Codex builds some ChatGPT URLs from the origin alone (/backend-api/...),
+      // so that path means ChatGPT too.
+      const parts = url.pathname.split("/");
+      const [service, ...rest] = parts[1] === "backend-api" ? ["chatgpt", ...parts.slice(1)] : parts.slice(1);
       const upstream = UPSTREAMS[service ?? ""];
       if (!upstream) return new Response("Unknown service\n", { status: 404 });
 
       const target = new URL(`/${rest.join("/")}${url.search}`, upstream);
       const headers = new Headers(req.headers);
       for (const h of HOP_BY_HOP) headers.delete(h);
-      if (!injectCredentials(service!, headers, target, credentials())) {
+      if (service === "chatgpt") {
+        const auth = await freshCodexAuth(credentials()).catch((err) => (console.log(String(err)), null));
+        if (!auth) return new Response("No working ChatGPT sign-in in Cloudly.\n", { status: 401 });
+        headers.set("authorization", `Bearer ${auth.tokens.access_token}`);
+        if (auth.tokens.account_id) headers.set("chatgpt-account-id", auth.tokens.account_id);
+      } else if (!injectCredentials(service!, headers, target, credentials())) {
         console.log(`gateway ${service}: no credential to add`);
         return new Response(`No ${service} credential is set in Cloudly.\n`, { status: 401 });
       }
@@ -152,5 +273,11 @@ export function startGateway(port = GATEWAY_PORT, credentials = readCredentials)
 if (import.meta.main) {
   startProxy();
   startGateway();
+  // HTTPS twin, for Codex's ChatGPT backend (which refuses plain HTTP).
+  try {
+    startGateway(GATEWAY_PORT + 1, readCredentials, { cert: readFileSync("/keys/gateway.pem", "utf8"), key: readFileSync("/keys/gateway.key", "utf8") });
+  } catch (err) {
+    console.log("gateway HTTPS port not started:", String(err));
+  }
   console.log(`egress proxy on :${PORT}, rules from ${ALLOW_FILE}; credential gateway on :${GATEWAY_PORT}`);
 }

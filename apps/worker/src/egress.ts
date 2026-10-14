@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { config, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
+import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 
 // Run containers join an internal network: no route out and no outside DNS.
 // The proxy container sits on it and on the normal network, and is the only
@@ -17,11 +17,46 @@ const PROXY = "cloudly-egress";
 const PROXY_URL = `http://${PROXY}:3128`;
 /** Where run containers send model API calls; the gateway adds the real credential. */
 export const GATEWAY_URL = `http://${PROXY}:3129`;
+/** The same gateway over HTTPS, for clients that insist on it (Codex's ChatGPT backend). */
+export const GATEWAY_TLS_URL = `https://${PROXY}:3130`;
 /** Credentials the gateway may add. Run containers only ever see placeholders. */
-const INJECTED = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY"] as const;
+const INJECTED = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "CODEX_AUTH_JSON"] as const;
 const PROXY_SCRIPT = fileURLToPath(new URL("./egress-proxy.ts", import.meta.url));
 const ALLOW_DIR = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "egress");
 const KEYS_DIR = path.join(ALLOW_DIR, "..", "egress-keys");
+// Writable by the gateway: a ChatGPT sign-in it refreshed (see syncRefreshedCodexAuth).
+const STATE_DIR = path.join(ALLOW_DIR, "..", "egress-state");
+// The gateway's private CA. Its key stays here, mounted nowhere; the gateway gets
+// only its own certificate, and sandboxes only the public bundle (CA_BUNDLE_DIR).
+const CA_DIR = path.join(ALLOW_DIR, "..", "egress-ca-private");
+export const CA_BUNDLE_DIR = path.join(ALLOW_DIR, "..", "egress-ca");
+
+/**
+ * A certificate for "cloudly-egress" from Cloudly's own CA, made once. Sandboxes
+ * trust the CA through a bundle that also holds the system's public roots.
+ */
+async function ensureGatewayTls(): Promise<void> {
+  // v2 adds chatgpt.com to the certificate (see egress-proxy.ts).
+  if (await Bun.file(path.join(KEYS_DIR, "gateway-v2")).exists()) return;
+  await mkdir(CA_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(CA_BUNDLE_DIR, { recursive: true });
+  const run = async (args: string[]) => {
+    const p = Bun.spawn(["openssl", ...args], { cwd: CA_DIR, stdout: "pipe", stderr: "pipe" });
+    if ((await p.exited) !== 0) throw new Error(`openssl ${args[0]} failed: ${await new Response(p.stderr).text()}`);
+  };
+  await run(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "ca.key", "-out", "ca.pem", "-days", "3650",
+    "-subj", "/CN=Cloudly sandbox gateway CA", "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"]);
+  await run(["req", "-newkey", "rsa:2048", "-nodes", "-keyout", "gateway.key", "-out", "gateway.csr", "-subj", "/CN=cloudly-egress"]);
+  await writeFile(path.join(CA_DIR, "gateway.ext"),
+    "subjectAltName=DNS:cloudly-egress,DNS:chatgpt.com\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n");
+  await run(["x509", "-req", "-in", "gateway.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial", "-out", "gateway.pem", "-days", "3650", "-extfile", "gateway.ext"]);
+  const system = await Bun.file("/etc/ssl/certs/ca-certificates.crt").text().catch(() => "");
+  await writeFile(path.join(CA_BUNDLE_DIR, "bundle.pem"), (await Bun.file(path.join(CA_DIR, "ca.pem")).text()) + "\n" + system);
+  await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
+  await writeFile(path.join(KEYS_DIR, "gateway.pem"), await Bun.file(path.join(CA_DIR, "gateway.pem")).text(), { mode: 0o600 });
+  await writeFile(path.join(KEYS_DIR, "gateway.key"), await Bun.file(path.join(CA_DIR, "gateway.key")).text(), { mode: 0o600 });
+  await writeFile(path.join(KEYS_DIR, "gateway-v2"), "");
+}
 
 async function docker(args: string[]): Promise<{ ok: boolean; out: string }> {
   const proc = Bun.spawn(["docker", ...args], { stdout: "pipe", stderr: "pipe" });
@@ -40,8 +75,27 @@ async function writeAllowlist(): Promise<void> {
   await writeFile(path.join(ALLOW_DIR, "hosts"), (await allowedHosts()).join("\n") + "\n");
 }
 
+/**
+ * The gateway refreshes a ChatGPT sign-in itself (single-use refresh tokens), so
+ * keep its newest copy in Settings before writing the credentials again.
+ */
+async function syncRefreshedCodexAuth(): Promise<void> {
+  const file = Bun.file(path.join(STATE_DIR, "codex-auth.json"));
+  if (!(await file.exists())) return;
+  try {
+    const refreshed = await file.json();
+    const saved = JSON.parse((await config("CODEX_AUTH_JSON")) ?? "{}");
+    if (String(refreshed.last_refresh ?? "") > String(saved.last_refresh ?? "")) {
+      await setSetting("CODEX_AUTH_JSON", JSON.stringify(refreshed));
+    }
+  } catch (err) {
+    console.error("[egress] couldn't keep the refreshed ChatGPT sign-in:", err);
+  }
+}
+
 /** The real credentials, readable only by the worker's user, which the proxy runs as. */
 async function writeCredentials(): Promise<void> {
+  await syncRefreshedCodexAuth();
   await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
   await chmod(KEYS_DIR, 0o700);
   const creds: Record<string, string> = {};
@@ -67,6 +121,7 @@ async function startProxy(): Promise<void> {
     "-v", `${PROXY_SCRIPT}:/proxy.ts:ro`,
     "-v", `${ALLOW_DIR}:/allow:ro`,
     "-v", `${KEYS_DIR}:/keys:ro`,
+    "-v", `${STATE_DIR}:/state`,
     "cloud-agents-base", "bun", "/proxy.ts",
   ]);
   if (!run.ok) throw new Error(`couldn't start the egress proxy: ${run.out}`);
@@ -79,10 +134,12 @@ async function startProxy(): Promise<void> {
  * recreates the proxy (on worker start) so an upgraded proxy script takes effect.
  */
 export async function ensureEgress(fresh = false): Promise<void> {
+  await mkdir(STATE_DIR, { recursive: true, mode: 0o700 });
   await ensureNetwork(SANDBOX_NETWORK, true);
   await ensureNetwork(OUT_NETWORK, false);
   await writeAllowlist();
   await writeCredentials();
+  await ensureGatewayTls();
   const running = await docker(["inspect", "-f", "{{.State.Running}}", PROXY]);
   if (fresh || running.out !== "true") await startProxy();
 }

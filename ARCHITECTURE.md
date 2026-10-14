@@ -327,8 +327,14 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   (`cloudly-egress-out`), not Docker's default one, so other containers on the VM can't reach the
   gateway. Verified live: Claude and Gemini calls went through it; a sandbox's environment showed
   only placeholders; a wrong configured key got Google's "API key not valid", the real one was
-  accepted. **Exception:** Codex on a ChatGPT sign-in still gets its `auth.json`, because Codex
-  refreshes those tokens itself.
+  accepted. Codex on a ChatGPT sign-in gets a look-alike `auth.json` (the same claims, no valid
+  signature, a placeholder refresh token). Some of its ChatGPT URLs are fixed, so the proxy sends
+  `chatgpt.com` to the gateway's HTTPS port, whose certificate (from Cloudly's own CA; the CA key
+  stays in the worker's data dir) covers `chatgpt.com` and which only Codex's sandbox trusts
+  (`CODEX_CA_CERTIFICATE`). The gateway adds the real access token, and refreshes it itself
+  (`CODEX_REFRESH_TOKEN_URL_OVERRIDE` points Codex's own refreshes there too); the worker copies
+  refreshed tokens back into Settings. Verified live on a ChatGPT plan: a turn, the model list,
+  a real refresh (Codex got placeholders back) and a turn on the refreshed tokens.
 - **Egress is allowlisted.** Run containers join an internal Docker network (`cloudly-sandbox`)
   with no route out and no outside DNS. Other traffic leaves only through the proxy's HTTPS
   tunnel, to the model APIs, the main package registries and GitHub (`EGRESS_DEFAULT_HOSTS`), plus

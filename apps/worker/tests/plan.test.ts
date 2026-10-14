@@ -6,8 +6,8 @@ import path from "node:path";
 // Keep the Codex home and master key away from the real ~/.cloudly.
 process.env.CLOUDLY_DATA_DIR = await mkdtemp(path.join(tmpdir(), "plan-test-"));
 process.env.CLOUDLY_SECRET_KEY ??= Buffer.alloc(32, 7).toString("base64");
-const { credentialFlags, saveCodexAuth } = await import("../src/docker");
-const { prisma, deleteSetting, getSetting } = await import("@repo/db");
+const { credentialFlags } = await import("../src/docker");
+const { prisma, deleteSetting } = await import("@repo/db");
 const { claimRun } = await import("../src/claim");
 const { processRun } = await import("../src/process-run");
 const { createFixtureRepo } = await import("./test-helpers");
@@ -26,19 +26,25 @@ test("a Claude plan token is used instead of the API key", async () => {
   }
 });
 
-test("a ChatGPT sign-in is mounted as CODEX_HOME, private, and a refreshed copy is kept", async () => {
+test("a ChatGPT sign-in reaches the sandbox only as a placeholder, with Codex pointed at the gateway", async () => {
   await deleteSetting("CODEX_AUTH_JSON");
-  process.env.CODEX_AUTH_JSON = '{"tokens":{"access_token":"old"}}';
+  const realAccess = "eyJhbGciOiAiUlMyNTYifQ.eyJleHAiOiA0MTAyNDQ0ODAwLCAiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS9hdXRoIjogeyJjaGF0Z3B0X2FjY291bnRfaWQiOiAiYWNjdF8xIn19.REALSIGNATURE";
+  process.env.CODEX_AUTH_JSON = JSON.stringify({ auth_mode: "chatgpt", last_refresh: "2026-10-14T00:00:00Z", tokens: { id_token: realAccess, access_token: realAccess, refresh_token: "rt_REAL_SECRET", account_id: "acct_1" } });
   try {
     const { flags, env, codexHome } = await credentialFlags("native-codex");
     expect(flags).toContain("CODEX_HOME=/codex-home");
+    expect(flags).toContain("CODEX_REFRESH_TOKEN_URL_OVERRIDE=https://cloudly-egress:3130/codex-refresh");
     expect(env.OPENAI_API_KEY).toBeUndefined();
+
     const file = path.join(codexHome!, "auth.json");
     expect((await stat(file)).mode & 0o777).toBe(0o600);
-
-    await writeFile(file, '{"tokens":{"access_token":"refreshed"}}');
-    await saveCodexAuth(codexHome!);
-    expect(await getSetting("CODEX_AUTH_JSON")).toContain("refreshed");
+    const inSandbox = await Bun.file(file).text();
+    expect(inSandbox).not.toContain("rt_REAL_SECRET");
+    expect(inSandbox).not.toContain("REALSIGNATURE");
+    const placeholder = JSON.parse(inSandbox);
+    expect(placeholder.tokens.account_id).toBe("acct_1"); // claims Codex needs survive
+    expect(placeholder.tokens.access_token.endsWith(".cloudly-placeholder")).toBe(true);
+    expect(flags).toContain("CODEX_CA_CERTIFICATE=/cloudly-ca/bundle.pem");
   } finally {
     delete process.env.CODEX_AUTH_JSON;
     await deleteSetting("CODEX_AUTH_JSON");

@@ -4,8 +4,9 @@ import path from "node:path";
 
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
-import { config, setSetting } from "@repo/db";
-import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL } from "./egress";
+import { config } from "@repo/db";
+import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR } from "./egress";
+import { placeholderCodexAuth } from "./egress-proxy";
 
 // What a run container gets instead of a real credential. Shaped like the real
 // thing in case a CLI checks the prefix; the gateway replaces it on the way out.
@@ -129,7 +130,11 @@ export async function credentialFlags(harness: string): Promise<{
         flags.push("-e", `CLAUDE_CODE_OAUTH_TOKEN=${PLACEHOLDERS.CLAUDE_CODE_OAUTH_TOKEN}`, ...GATEWAY_ENV[harness]!);
     } else if (codexAuth) {
         codexHome = await writeCodexHome(codexAuth);
-        flags.push("-v", `${codexHome}:/codex-home`, "-e", "CODEX_HOME=/codex-home");
+        flags.push(
+            "-v", `${codexHome}:/codex-home`, "-e", "CODEX_HOME=/codex-home",
+            "-e", `CODEX_REFRESH_TOKEN_URL_OVERRIDE=${GATEWAY_TLS_URL}/codex-refresh`,
+            "-v", `${CA_BUNDLE_DIR}:/cloudly-ca:ro`, "-e", "CODEX_CA_CERTIFICATE=/cloudly-ca/bundle.pem",
+        );
     } else {
         for (const name of required) {
             if (!(await config(name))) {
@@ -149,22 +154,21 @@ export async function credentialFlags(harness: string): Promise<{
     return { flags, env, codexHome };
 }
 
-// ponytail: one shared Codex home, so two Codex runs at once (WORKER_CONCURRENCY
-// > 1) can race on a token refresh. Give each run a copy and merge if that bites.
+/** Codex's home for ChatGPT sign-ins: its sessions, a placeholder auth.json, and its config. */
 export const CODEX_HOME = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "codex-home");
 
+/**
+ * The sandbox's Codex home: a look-alike auth.json (no working token) and a
+ * config that sends Codex's ChatGPT calls to the gateway, which adds the real
+ * token. Codex's own refreshes go to the gateway too (egress-proxy.ts).
+ */
 async function writeCodexHome(authJson: string): Promise<string> {
     await mkdir(CODEX_HOME, { recursive: true, mode: 0o700 });
-    await writeFile(path.join(CODEX_HOME, "auth.json"), authJson, { mode: 0o600 });
+    const placeholder = placeholderCodexAuth(JSON.parse(authJson));
+    await writeFile(path.join(CODEX_HOME, "auth.json"), JSON.stringify(placeholder), { mode: 0o600 });
+    // No config needed: its chatgpt.com calls reach the gateway through the proxy.
+    await rm(path.join(CODEX_HOME, "config.toml"), { force: true });
     return CODEX_HOME;
-}
-
-/** Codex refreshes its tokens during a run; keep the refreshed copy. */
-export async function saveCodexAuth(codexHome: string): Promise<void> {
-    const file = Bun.file(path.join(codexHome, "auth.json"));
-    if (!(await file.exists())) return;
-    const latest = await file.text();
-    if (latest.trim() && latest !== (await config("CODEX_AUTH_JSON"))) await setSetting("CODEX_AUTH_JSON", latest);
 }
 
 export async function* createRunContainer(workspace: Workspace, task:string,harness:string,runId:string, options: ContainerOptions = {}): AsyncIterable<RunEvent>{
@@ -293,7 +297,6 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         );
         }
     }finally{
-        if (credentials?.codexHome) await saveCodexAuth(credentials.codexHome).catch((err) => console.error("[codex] couldn't save refreshed sign-in:", err));
         await rm(controlDir,{
             recursive:true,
             force:true
