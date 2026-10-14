@@ -84,3 +84,15 @@ test("a setting saved under another install's key reads as unset instead of fail
     await deleteSetting("GITHUB_APP_ID");
   }
 });
+
+test("a key or token pasted from a wrapped terminal line loses the whitespace; other settings keep theirs", async () => {
+  try {
+    await setSetting("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat01-abc  def\nghi ");
+    expect(await getSetting("CLAUDE_CODE_OAUTH_TOKEN")).toBe("sk-ant-oat01-abcdefghi");
+    await setSetting("SANDBOX_SETUP_SCRIPT", "apt-get install -y jq\necho done");
+    expect(await getSetting("SANDBOX_SETUP_SCRIPT")).toBe("apt-get install -y jq\necho done");
+  } finally {
+    await deleteSetting("CLAUDE_CODE_OAUTH_TOKEN");
+    await deleteSetting("SANDBOX_SETUP_SCRIPT");
+  }
+});

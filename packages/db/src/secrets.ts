@@ -10,6 +10,8 @@ export interface SettingSpec {
   /** Secret values are never shown again after saving. */
   secret: boolean;
   group: "github" | "models" | "alerts" | "access" | "sandbox";
+  /** Keys and tokens: never contain whitespace, but a terminal-wrapped copy often does. */
+  token?: boolean;
 }
 
 export const SETTINGS: SettingSpec[] = [
@@ -18,14 +20,14 @@ export const SETTINGS: SettingSpec[] = [
   { name: "GITHUB_APP_SLUG", label: "GitHub App slug", secret: false, group: "github" },
   { name: "GITHUB_APP_INSTALLATION_ID", label: "GitHub App installation ID", secret: false, group: "github" },
   { name: "GITHUB_CLIENT_ID", label: "GitHub App client ID", secret: false, group: "github" },
-  { name: "GITHUB_CLIENT_SECRET", label: "GitHub App client secret", secret: true, group: "github" },
+  { name: "GITHUB_CLIENT_SECRET", label: "GitHub App client secret", secret: true, group: "github" , token: true },
   { name: "GITHUB_APP_PRIVATE_KEY", label: "GitHub App private key", secret: true, group: "github" },
-  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" },
-  { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" },
-  { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" },
-  { name: "CLAUDE_CODE_OAUTH_TOKEN", label: "Claude plan token (from `claude setup-token`; used instead of the API key)", secret: true, group: "models" },
+  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" , token: true },
+  { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" , token: true },
+  { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" , token: true },
+  { name: "CLAUDE_CODE_OAUTH_TOKEN", label: "Claude plan token (from `claude setup-token`; used instead of the API key)", secret: true, group: "models" , token: true },
   { name: "CODEX_AUTH_JSON", label: "ChatGPT plan sign-in for Codex (contents of ~/.codex/auth.json; used instead of the API key)", secret: true, group: "models" },
-  { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" },
+  { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" , token: true },
   { name: "SANDBOX_SETUP_SCRIPT", label: "Sandbox setup script", secret: false, group: "sandbox" },
   { name: "SANDBOX_EGRESS_HOSTS", label: "Extra hosts the sandbox may reach", secret: false, group: "sandbox" },
 ];
@@ -86,7 +88,7 @@ export function decrypt(blob: string, key: Buffer): string {
 
 export async function setSetting(name: string, value: string): Promise<void> {
   if (!settingSpec(name)) throw new Error(`unknown setting: ${name}`);
-  const encrypted = encrypt(value, await masterKey());
+  const encrypted = encrypt(cleanSetting(name, value), await masterKey());
   await prisma.setting.upsert({ where: { name }, update: { value: encrypted }, create: { name, value: encrypted } });
 }
 
@@ -120,10 +122,16 @@ export function unreadableSettings(): string[] {
   return [...unreadable];
 }
 
+/** Strips the whitespace a wrapped terminal line leaves inside a pasted key or token. */
+export function cleanSetting(name: string, value: string): string {
+  return settingSpec(name)?.token ? value.replace(/\s+/g, "") : value;
+}
+
 export async function getSetting(name: string): Promise<string | undefined> {
   const row = await prisma.setting.findUnique({ where: { name } });
   if (!row) return undefined;
-  return readable(name, row.value, await masterKey());
+  const value = readable(name, row.value, await masterKey());
+  return value === undefined ? undefined : cleanSetting(name, value);
 }
 
 /** A value saved in the browser wins; the same name in .env is the fallback. */
@@ -144,7 +152,8 @@ export async function listSettings(): Promise<SettingStatus[]> {
   const key = await masterKey();
   return SETTINGS.map((spec) => {
     const stored = rows.get(spec.name);
-    const fromDb = stored !== undefined ? readable(spec.name, stored, key) : undefined;
+    const read = stored !== undefined ? readable(spec.name, stored, key) : undefined;
+    const fromDb = read === undefined ? undefined : cleanSetting(spec.name, read);
     const raw = fromDb ?? (process.env[spec.name] || undefined);
     const source = fromDb !== undefined ? "db" : raw ? "env" : null;
     const preview = raw ? (spec.secret ? `…${raw.slice(-4)}` : raw) : null;
