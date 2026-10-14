@@ -196,6 +196,10 @@ export default function SessionPage() {
   // While typing a command name: "/" alone or "/co", but not once arguments start.
   const typing = /^\/([\w:.-]*)$/.exec(draft);
   const suggestions = typing ? commands.filter((c) => c.startsWith(typing[1]!) && c !== typing[1]).slice(0, 10) : [];
+  // A /word the agent didn't announce isn't a command in this mode (interactive-only
+  // ones like /stats or /plan): it would go to the model as text, which then improvises.
+  const typed = /^\/([\w:.-]+)(\s|$)/.exec(draft)?.[1];
+  const unknownCommand = typed && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
 
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
@@ -301,7 +305,12 @@ export default function SessionPage() {
         />
         <div className="composer-row">
           <span className="composer-hint" role={actionError ? "alert" : undefined} style={actionError ? { color: "var(--storm)" } : undefined}>
-            {actionError ?? (connected ? "Enter to send · Shift+Enter for a new line" : "Reconnecting…")}
+            {actionError ??
+              (unknownCommand
+                ? `/${unknownCommand} isn't one of this agent's commands here, so it will be sent as an ordinary message.`
+                : connected
+                  ? "Enter to send · Shift+Enter for a new line"
+                  : "Reconnecting…")}
           </span>
           {busy ? (
             <button type="button" className="btn btn-quiet" onClick={cancel} disabled={latest?.cancelRequested}>
