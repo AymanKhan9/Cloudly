@@ -3,7 +3,7 @@ import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
 import { createWorkspace, destroyWorkspace, type Workspace } from "./workspace";
-import { createRunContainer, cancelRun } from "./docker";
+import { createRunContainer, cancelRun, CODEX_HOME } from "./docker";
 import {
   exportPatch,
   publishCommit,
@@ -23,7 +23,7 @@ import { withPreamble, sandboxRules, isCommand } from "./preamble";
 import { sandboxImage, setupScript } from "./sandbox-image";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { enforceBudget } from "./budget";
@@ -36,12 +36,29 @@ const HEARTBEAT_INTERVAL_MS = 20_000;
 // prompt. Gemini CLI can't: after one session/load it rewrites the session file
 // with only its startup context, losing the conversation.
 const NATIVE_RESUME = new Set(
-  (process.env.CLOUDLY_NATIVE_RESUME ?? "native-claude").split(",").map((s) => s.trim()).filter(Boolean),
+  (process.env.CLOUDLY_NATIVE_RESUME ?? "native-claude,native-codex").split(",").map((s) => s.trim()).filter(Boolean),
 );
 
-/** Claude Code keeps a session at ~/.claude/projects/<cwd with / as ->/<id>.jsonl. */
-function claudeSessionExists(home: string, sessionId: string): boolean {
-  return existsSync(path.join(home, ".claude", "projects", "-workspace", `${sessionId}.jsonl`));
+/**
+ * Whether the agent's own session file is still on disk to resume. Claude keeps
+ * ~/.claude/projects/<cwd with / as ->/<id>.jsonl; Codex keeps
+ * <codex home>/sessions/<date>/rollout-<time>-<id>.jsonl, in the shared Codex
+ * home on a ChatGPT sign-in and in the session's own home otherwise.
+ */
+function sessionExists(harness: string, home: string, sessionId: string): boolean {
+  if (harness === "native-claude") {
+    return existsSync(path.join(home, ".claude", "projects", "-workspace", `${sessionId}.jsonl`));
+  }
+  if (harness === "native-codex") {
+    return [CODEX_HOME, path.join(home, ".codex")].some((dir) => {
+      try {
+        return readdirSync(path.join(dir, "sessions"), { recursive: true }).some((f) => String(f).endsWith(`-${sessionId}.jsonl`));
+      } catch {
+        return false;
+      }
+    });
+  }
+  return false;
 }
 
 // Without a monthly limit, an API-key run still stops here. Plan runs have no dollar cap.
@@ -121,7 +138,7 @@ export async function processRun(
       containerOptions.homeDir = home;
       const id = thread.agentSessionId;
       // A missing session file (cleaned data dir, older install) falls back to the transcript.
-      if (id && (run.harness !== "native-claude" || claudeSessionExists(home, id))) {
+      if (id && sessionExists(run.harness, home, id)) {
         containerOptions.resume = id;
         resumed = true;
       }

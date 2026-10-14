@@ -306,7 +306,9 @@ export default function SessionPage() {
         <div className="composer-row">
           <span className="composer-hint" role={actionError ? "alert" : undefined} style={actionError ? { color: "var(--storm)" } : undefined}>
             {actionError ??
-              (unknownCommand
+              (typed && thread.harness === "native-codex"
+                ? "Codex has no / commands when it runs headless, so this will be sent as an ordinary message."
+                : unknownCommand
                 ? `/${unknownCommand} isn't one of this agent's commands here, so it will be sent as an ordinary message.`
                 : connected
                   ? "Enter to send · Shift+Enter for a new line"

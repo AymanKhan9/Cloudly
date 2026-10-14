@@ -51,7 +51,7 @@ Point a DNS A record at the VM and enter the domain when the installer asks. Cad
 Claude and Codex can run on your subscription instead of a pay-as-you-go key. Sign in with the vendor's own CLI on your computer, then paste the result under **Settings → Keys and connections**:
 
 - **Claude:** run `claude setup-token` and paste the token it prints into "Claude plan token".
-- **Codex:** run `codex login`, then paste the whole contents of `~/.codex/auth.json` into "ChatGPT plan sign-in". Cloudly saves the file back whenever Codex refreshes its tokens.
+- **Codex:** run `codex login`, then paste the whole contents of `~/.codex/auth.json` into "ChatGPT plan sign-in". Cloudly saves the file back whenever Codex refreshes its tokens. Then run `codex login` again on your computer: a refresh rotates the token, so two places sharing one copy end up logging each other out, while two separate logins don't.
 
 When a plan sign-in is set, it's used instead of that agent's API key. Turns on a plan have no per-run cost: they show "on your plan", don't count toward the spend limit, and still run when the limit is reached. Your plan's own usage limits apply instead, and a long run can pause when it reaches them.
 

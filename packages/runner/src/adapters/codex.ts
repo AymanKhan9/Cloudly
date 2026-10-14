@@ -59,6 +59,9 @@ export class CodexAdapter implements RunAdapter {
             workingDirectory: "/workspace",
             skipGitRepoCheck: true,
             approvalPolicy: "never" as const,
+            // Codex's own sandbox defaults to read-only here, so it couldn't write a
+            // file. The Cloudly container (limits, egress proxy) is the sandbox.
+            sandboxMode: "danger-full-access" as const,
         };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)

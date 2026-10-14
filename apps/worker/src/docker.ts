@@ -131,7 +131,7 @@ export async function credentialFlags(harness: string): Promise<{
 
 // ponytail: one shared Codex home, so two Codex runs at once (WORKER_CONCURRENCY
 // > 1) can race on a token refresh. Give each run a copy and merge if that bites.
-const CODEX_HOME = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "codex-home");
+export const CODEX_HOME = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "codex-home");
 
 async function writeCodexHome(authJson: string): Promise<string> {
     await mkdir(CODEX_HOME, { recursive: true, mode: 0o700 });
