@@ -139,6 +139,24 @@ export default function SessionPage() {
     }
     return [...new Set(latest)].sort();
   }, [events]);
+
+  // Model and context fill from the latest turn: Claude reports both at the end
+  // of each turn, and its start-of-turn message names the model.
+  const context = useMemo(() => {
+    let model: string | undefined;
+    let usage: { tokens: number; max: number; percentage: number } | undefined;
+    for (const list of Object.values(events)) {
+      for (const e of list) {
+        const d = e.data as Record<string, unknown> | null;
+        if (!d || typeof d !== "object") continue;
+        if (typeof d.model === "string" && (d.subtype === "init" || d.type === "context")) model = d.model;
+        if (d.type === "context" && typeof d.tokens === "number" && typeof d.max === "number") {
+          usage = { tokens: d.tokens, max: d.max, percentage: Number(d.percentage) || 0 };
+        }
+      }
+    }
+    return { model, usage };
+  }, [events]);
   // To the page's real bottom: an anchor above the sticky composer would scroll
   // the page up on every event and hide the newest output behind the composer.
   useEffect(() => {
@@ -218,6 +236,18 @@ export default function SessionPage() {
             </span>
             <span aria-hidden="true">·</span>
             <span className="mono">{thread.branch}</span>
+            {context.model ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="mono">{context.model}</span>
+              </>
+            ) : null}
+            {context.usage ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <ContextRing {...context.usage} />
+              </>
+            ) : null}
             {total > 0 ? (
               <>
                 <span aria-hidden="true">·</span>
@@ -286,5 +316,24 @@ export default function SessionPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+const compact = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${+(n / 1000).toFixed(1)}k` : String(n));
+
+/** How full the agent's context window is, as in Claude Code. /compact empties it. */
+function ContextRing({ tokens, max, percentage }: { tokens: number; max: number; percentage: number }) {
+  const r = 7;
+  const circumference = 2 * Math.PI * r;
+  const filled = Math.min(1, percentage / 100);
+  const label = `Context: ${compact(tokens)} of ${compact(max)} tokens (${percentage}%). /compact frees it up.`;
+  return (
+    <span className="context-ring" title={label} aria-label={label} role="img" data-full={percentage >= 80 ? true : undefined}>
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r={r} className="track" />
+        <circle cx="9" cy="9" r={r} className="fill" strokeDasharray={`${filled * circumference} ${circumference}`} transform="rotate(-90 9 9)" />
+      </svg>
+      <span className="num">{percentage}%</span>
+    </span>
   );
 }

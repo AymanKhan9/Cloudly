@@ -1,6 +1,6 @@
 import type { RunAdapter } from "../adapter";
 import type { RunEvent } from "@repo/shared/run-event";
-import { query, type SDKMessage, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+import { query, type SDKMessage, type SDKUserMessage, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 
 const canUseTool: CanUseTool = async (_toolName, _input, options) => {
     return { behavior: "allow", toolUseID: options.toolUseID };
@@ -83,8 +83,18 @@ export class ClaudeAdapter implements RunAdapter {
 
         let seq = 0;
 
-        for await (const message of query({
-            prompt: task,
+        // Streaming input: with a plain string prompt Claude Code closes as soon as
+        // the turn ends, too early to ask how full the context is. The input stays
+        // open until that answer is in.
+        let finish!: () => void;
+        const finished = new Promise<void>((resolve) => (finish = resolve));
+        async function* input(): AsyncIterable<SDKUserMessage> {
+            yield { type: "user", message: { role: "user", content: task }, parent_tool_use_id: null };
+            await finished;
+        }
+
+        const q = query({
+            prompt: input(),
             options: {
                 cwd: "/workspace",
                 permissionMode: "default",
@@ -96,10 +106,27 @@ export class ClaudeAdapter implements RunAdapter {
                 resume,
                 abortController: this.controller,
             },
-        })) {
-            for (const event of mapClaudeMessage(message)) {
-                yield { seq: seq++, ts: Date.now(), ...event };
+        });
+        try {
+            for await (const message of q) {
+                // How full the context window is, like Claude Code's context indicator.
+                // "summary" answers from the last response's usage: no extra API calls.
+                if (message.type === "result") {
+                    const usage = await q.getContextUsage({ detail: "summary" }).catch(() => null);
+                    finish();
+                    if (usage) {
+                        yield {
+                            seq: seq++, ts: Date.now(), kind: "status",
+                            data: { type: "context", model: usage.model, tokens: usage.totalTokens, max: usage.maxTokens, percentage: usage.percentage },
+                        };
+                    }
+                }
+                for (const event of mapClaudeMessage(message)) {
+                    yield { seq: seq++, ts: Date.now(), ...event };
+                }
             }
+        } finally {
+            finish();
         }
     }
 

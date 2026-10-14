@@ -2188,3 +2188,25 @@ textarea {
   border-color: var(--atlas);
   outline: none;
 }
+
+/* Context window fill in the session header */
+.context-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+}
+.context-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+.context-ring .track {
+  stroke: var(--hair-ink);
+}
+.context-ring .fill {
+  stroke: var(--atlas);
+  stroke-linecap: round;
+}
+.context-ring[data-full] .fill {
+  stroke: var(--storm);
+}
