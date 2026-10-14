@@ -20,6 +20,7 @@ import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
 import { withPreamble, sandboxRules, isCommand } from "./preamble";
+import { modelCommand } from "@repo/shared/model-command";
 import { sandboxImage, setupScript } from "./sandbox-image";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
@@ -123,6 +124,19 @@ export async function processRun(
   try {
     const thread = run.threadId ? await prisma.thread.findUnique({ where: { id: run.threadId } }) : null;
 
+    // Codex and Gemini have no /model when headless. The API already saved the
+    // choice on the session, so just confirm it instead of sending it as text.
+    const chosen = modelCommand(run.prompt);
+    if (chosen !== undefined && run.harness !== "native-claude") {
+      const reply = chosen ? `Model set to ${chosen} for the rest of this session.` : "Back to the default model for this session.";
+      await insertEvents(run.id, [
+        { seq: 0, ts: Date.now(), kind: "text", data: reply },
+        { seq: 1, ts: Date.now(), kind: "done", data: { result: reply } },
+      ]);
+      await prisma.run.updateMany({ where: { id: run.id, workerId, leaseGen: run.leaseGen }, data: { status: "succeeded" } });
+      return;
+    }
+
     ws = await createWorkspace(await resolveCloneSource(run.repo), {
       branch: thread?.branch,
       baseBranch: run.baseBranch,
@@ -161,6 +175,7 @@ export async function processRun(
       containerOptions.maxBudgetUsd = BACKSTOP_USD;
     }
     containerOptions.image = await sandboxImage();
+    if (thread?.model) containerOptions.model = thread.model;
     const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
     // A command goes to the agent as typed; history in front of it would turn it into text.
     const prompt = thread && !resumed && !isCommand(run.prompt)

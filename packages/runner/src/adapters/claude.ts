@@ -73,7 +73,7 @@ export class ClaudeAdapter implements RunAdapter {
      * (none on a subscription). systemAppend: added to Claude Code's own system
      * prompt, so the user's message (and any /command) reaches it untouched.
      */
-    constructor(private maxBudgetUsd?: number, private systemAppend?: string) {}
+    constructor(private maxBudgetUsd?: number, private systemAppend?: string, private model?: string) {}
 
     async *start(
         task: string,
@@ -101,6 +101,8 @@ export class ClaudeAdapter implements RunAdapter {
                 canUseTool,
                 disallowedTools: ["Bash(git push *)"],
                 maxBudgetUsd: this.maxBudgetUsd,
+                // Like `claude --model`: beats a model pinned in the repo's .claude/settings.json.
+                model: this.model,
                 // Claude Code's own system prompt, as in the CLI, plus Cloudly's rules.
                 systemPrompt: { type: "preset", preset: "claude_code", append: this.systemAppend },
                 resume,

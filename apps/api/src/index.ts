@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { modelCommand } from '@repo/shared/model-command'
 import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
@@ -205,6 +206,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
     data: {
       id, userId: user.id, repo, baseBranch, harness,
       title: threadTitle(prompt),
+      model: modelCommand(prompt) ?? undefined,
       branch: `agent/thread-${id.slice(0, 8)}`,
       runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id } },
     },
@@ -238,7 +240,9 @@ app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) =
       status: 'queued', userId: user.id, threadId: thread.id,
     },
   });
-  await prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date() } });
+  // "/model <name>" sticks for the rest of the session (see modelCommand).
+  const chosen = modelCommand(prompt);
+  await prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date(), ...(chosen !== undefined ? { model: chosen } : {}) } });
   return c.json({ id: run.id }, 201);
 })
 

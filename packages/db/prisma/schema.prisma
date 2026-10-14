@@ -36,6 +36,9 @@ model Thread {
   title          String
   branch         String
   agentSessionId String?
+  /// Chosen with "/model <name>" in the chat; passed to every later turn, so it
+  /// beats a model pinned in the repo's own agent settings.
+  model          String?
   prUrl          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

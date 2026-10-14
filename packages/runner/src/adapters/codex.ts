@@ -51,6 +51,8 @@ export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
 export class CodexAdapter implements RunAdapter {
     private controller?: AbortController;
 
+    constructor(private model?: string) {}
+
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
         // With an API key, calls go to Cloudly's gateway, which adds the real key.
@@ -63,6 +65,7 @@ export class CodexAdapter implements RunAdapter {
             // Codex's own sandbox defaults to read-only here, so it couldn't write a
             // file. The Cloudly container (limits, egress proxy) is the sandbox.
             sandboxMode: "danger-full-access" as const,
+            model: this.model,
         };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)

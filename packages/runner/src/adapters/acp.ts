@@ -107,6 +107,9 @@ async function startResumedSession(
 }
 
 export class AcpAdapter implements RunAdapter {
+    /** The session's "/model" choice; otherwise GEMINI_MODEL or the pinned flash model. */
+    constructor(private model?: string) {}
+
     private process?: ChildProcessByStdio<Writable, Readable, null>;
     private ctx?: acp.ClientContext;
     private sessionId?: SessionId;
@@ -162,7 +165,7 @@ export class AcpAdapter implements RunAdapter {
                     // Gemini's "auto" router sends free-tier keys to models they have no
                     // quota for (the pro models have a free limit of 0) and then retries
                     // for minutes, so pin a fast flash model. GEMINI_MODEL=auto opts out.
-                    const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+                    const model = this.model ?? process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
                     if (model !== "auto") {
                         await clientCtx
                             .request("session/set_model", { sessionId: session.sessionId, modelId: model })

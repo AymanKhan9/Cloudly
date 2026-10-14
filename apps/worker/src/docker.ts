@@ -28,7 +28,8 @@ interface ControlConfig{
     harness:string,
     resume?:string,
     maxBudgetUsd?:number,
-    systemAppend?:string
+    systemAppend?:string,
+    model?:string
 }
 
 export interface ContainerOptions {
@@ -40,6 +41,8 @@ export interface ContainerOptions {
     maxBudgetUsd?: number;
     /** Added to the agent's own system prompt (Claude); other agents get it in the task. */
     systemAppend?: string;
+    /** The session's "/model" choice; beats a model pinned in the repo's settings. */
+    model?: string;
     /** Built from the setup script in Settings; the base image when there is none. */
     image?: string;
 }
@@ -177,6 +180,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             resume: options.resume,
             maxBudgetUsd: options.maxBudgetUsd,
             systemAppend: options.systemAppend,
+            model: options.model,
         };
 
         await writeFile(

@@ -89,3 +89,41 @@ test("a Codex session resumes its own thread when its session file is on disk", 
     await fixture.cleanup();
   }
 }, 60000);
+
+test("a session's chosen model reaches every turn; Codex's /model is answered without a container", async () => {
+  const fixture = await createFixtureRepo();
+  const user = await prisma.user.create({ data: { githubId: Math.floor(Math.random() * 1e9), login: `model-${Date.now()}` } });
+  try {
+    const claude = await prisma.thread.create({
+      data: { userId: user.id, repo: fixture.repoPath, baseBranch: "main", harness: "native-claude", title: "t", branch: "agent/thread-m1", model: "sonnet" },
+    });
+    let seenModel: string | undefined;
+    async function* stub(_ws: unknown, _t: string, _h: string, _id: string, o?: { model?: string }) {
+      seenModel = o?.model;
+      yield { seq: 0, ts: Date.now(), kind: "done" as const, data: { result: "ok" } };
+    }
+    await prisma.run.create({ data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "hi", harness: "native-claude", userId: user.id, threadId: claude.id } });
+    await processRun((await claimRun("worker-1"))!, "worker-1", stub as any);
+    expect(seenModel).toBe("sonnet");
+
+    const codex = await prisma.thread.create({
+      data: { userId: user.id, repo: fixture.repoPath, baseBranch: "main", harness: "native-codex", title: "t", branch: "agent/thread-m2" },
+    });
+    let containerRan = false;
+    async function* never() {
+      containerRan = true;
+      yield { seq: 0, ts: Date.now(), kind: "done" as const, data: {} };
+    }
+    const r = await prisma.run.create({ data: { status: "queued", repo: fixture.repoPath, baseBranch: "main", prompt: "/model gpt-5.1", harness: "native-codex", userId: user.id, threadId: codex.id } });
+    await processRun((await claimRun("worker-1"))!, "worker-1", never as any);
+    expect(containerRan).toBe(false);
+    const final = await prisma.run.findUniqueOrThrow({ where: { id: r.id }, include: { events: true } });
+    expect(final.status).toBe("succeeded");
+    expect(final.events.some((e) => String(e.data).includes("gpt-5.1"))).toBe(true);
+  } finally {
+    await prisma.run.deleteMany({ where: { userId: user.id } });
+    await prisma.thread.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+    await fixture.cleanup();
+  }
+}, 60000);
