@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { modelCommand } from '@repo/shared/model-command'
-import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, recoverSettings, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
@@ -336,6 +336,18 @@ app.put('/settings/secrets/:name', zValidator('json', z.object({ value: z.string
   }
   await setSetting(name, value);
   return c.json({ ok: true });
+})
+
+// Settings an earlier install on this database saved under its own key, unlocked
+// with its recovery key. Settings saved here since then are left alone.
+app.post('/settings/recover', zValidator('json', z.object({ key: z.string().max(200) })), async (c) => {
+  try {
+    const recovered = await recoverSettings(c.req.valid('json').key)
+    if (recovered === 0) return c.json({ message: "That recovery key doesn't unlock any of the locked settings." }, 400)
+    return c.json({ recovered })
+  } catch (err) {
+    return c.json({ message: err instanceof Error ? err.message : "Couldn't restore the settings." }, 400)
+  }
 })
 
 app.delete('/settings/secrets/:name', async (c) => {

@@ -117,3 +117,24 @@ test("a later install recovers an earlier install's settings with its recovery k
     await deleteSetting("GEMINI_API_KEY");
   }
 });
+
+test("restoring later never overwrites a setting saved since, and listings mark the locked ones", async () => {
+  const { recoverSettings } = await import("../src");
+  const oldKey = randomBytes(32);
+  for (const [name, value] of [["GEMINI_API_KEY", "g-old"], ["OPENAI_API_KEY", "sk-old"]]) {
+    const blob = encrypt(value!, oldKey);
+    await prisma.setting.upsert({ where: { name: name! }, update: { value: blob }, create: { name: name!, value: blob } });
+  }
+  try {
+    await setSetting("OPENAI_API_KEY", "sk-new"); // re-entered after skipping the restore
+    const locked = (await listSettings()).filter((s) => s.locked).map((s) => s.name);
+    expect(locked).toEqual(["GEMINI_API_KEY"]);
+    expect(await recoverSettings(oldKey.toString("base64"))).toBe(1);
+    expect(await getSetting("OPENAI_API_KEY")).toBe("sk-new");
+    expect(await getSetting("GEMINI_API_KEY")).toBe("g-old");
+    expect((await listSettings()).some((s) => s.locked)).toBe(false);
+  } finally {
+    await deleteSetting("GEMINI_API_KEY");
+    await deleteSetting("OPENAI_API_KEY");
+  }
+});

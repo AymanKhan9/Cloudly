@@ -45,7 +45,7 @@ The installer also prints a **recovery key** (setup shows it too). Save it in a 
 
 Paste a Postgres URL when the installer asks (Neon, Supabase, RDS, anything that accepts connections from the VM), or run it with `LOCAL_POSTGRES=0 DATABASE_URL=...`. Sessions, settings and keys then live in your database, not on the VM.
 
-To move to a new VM, run the installer there with the same database URL and open `/setup`. It notices the earlier install's settings and asks for its recovery key. Paste it and your keys, plan sign-ins, allowed users and GitHub App carry over. If the new VM has a different address, update the GitHub App's three URLs as setup shows them. Without the recovery key, set up from scratch: the old encrypted settings get replaced.
+To move to a new VM, run the installer there with the same database URL and open `/setup`. It notices the earlier install's settings and asks for its recovery key. Paste it and your keys, plan sign-ins, allowed users and GitHub App carry over. If the new VM has a different address, update the GitHub App's three URLs as setup shows them. Without the recovery key, set up from scratch. Settings you haven't re-entered stay locked, and **Settings → Keys and connections** offers to restore them if you find the key later. Anything you've saved since is kept. The GitHub App is the exception: setup creates a new one in its place, so delete the old app on GitHub.
 
 ## 4. HTTPS
 

@@ -11,6 +11,7 @@ interface SettingRow {
   set: boolean;
   source: "db" | "env" | null;
   preview: string | null;
+  locked: boolean;
 }
 
 const SHOWN: SettingRow["group"][] = ["models", "alerts", "access"];
@@ -43,7 +44,9 @@ function Row({ row, onChange }: { row: SettingRow; onChange: () => void }) {
   }
 
   const state = !row.set
-    ? "Not set"
+    ? row.locked
+      ? "Locked: saved by an earlier install"
+      : "Not set"
     : row.source === "env"
       ? `Set in the server's .env${row.secret ? ` (${row.preview})` : ""}`
       : `Saved${row.preview ? ` (${row.preview})` : ""}`;
@@ -80,6 +83,47 @@ function Row({ row, onChange }: { row: SettingRow; onChange: () => void }) {
   );
 }
 
+// Shown while settings from an earlier install on this database are still locked.
+function RestorePanel({ locked, onChange }: { locked: SettingRow[]; onChange: () => void }) {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function restore(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/settings/recover", { method: "POST", body: JSON.stringify({ key }) });
+      setKey("");
+      onChange();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't restore.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="secret-row">
+      <div>
+        <div className="secret-name">Restore from an earlier install</div>
+        <div className="secret-state">
+          Locked: {locked.map((r) => r.label).join(", ")}. Paste the recovery key the earlier install printed to unlock
+          them. Anything you&apos;ve saved here since stays as it is.
+        </div>
+      </div>
+      <form onSubmit={restore}>
+        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Recovery key" autoComplete="off" aria-label="Recovery key" className="mono" />
+        <button type="submit" className="btn btn-signal" disabled={busy || !key.trim()}>
+          {busy ? "Restoring…" : "Restore"}
+        </button>
+      </form>
+      {error ? <div className="error-box" style={{ gridColumn: "1 / -1" }}>{error}</div> : null}
+    </div>
+  );
+}
+
 export function SecretsPanel() {
   const [rows, setRows] = useState<SettingRow[] | null>(null);
   const load = useCallback(() => api<{ settings: SettingRow[] }>("/settings/secrets").then((r) => setRows(r.settings)).catch(() => setRows([])), []);
@@ -97,6 +141,7 @@ export function SecretsPanel() {
         </span>
       </div>
       {rows === null ? <div className="skeleton" style={{ margin: 20, width: "50%" }} aria-busy="true" /> : null}
+      {rows?.some((r) => r.locked) ? <RestorePanel locked={rows.filter((r) => r.locked)} onChange={load} /> : null}
       {rows?.filter((r) => SHOWN.includes(r.group)).map((r) => <Row key={r.name} row={r} onChange={load} />)}
       <p className="field-hint" style={{ padding: "12px 20px 16px", margin: 0 }}>
         Keys are stored encrypted on this server and never shown again after saving. The agents use them when a run starts.

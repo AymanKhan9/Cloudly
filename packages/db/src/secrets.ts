@@ -143,6 +143,8 @@ export interface SettingStatus extends SettingSpec {
   set: boolean;
   /** "db" when saved in the browser, "env" when only in .env. */
   source: "db" | "env" | null;
+  /** Saved by an earlier install under its key; recoverSettings can unlock it. */
+  locked: boolean;
   /** Non-secrets show their value; secrets only their last four characters. */
   preview: string | null;
 }
@@ -157,7 +159,7 @@ export async function listSettings(): Promise<SettingStatus[]> {
     const raw = fromDb ?? (process.env[spec.name] || undefined);
     const source = fromDb !== undefined ? "db" : raw ? "env" : null;
     const preview = raw ? (spec.secret ? `…${raw.slice(-4)}` : raw) : null;
-    return { ...spec, set: Boolean(raw), source, preview };
+    return { ...spec, set: Boolean(raw), source, preview, locked: stored !== undefined && read === undefined };
   });
 }
 
