@@ -1,0 +1,27 @@
+name: Support a new agent
+description: Ask for (or offer to build) support for another coding agent
+labels: [agent]
+body:
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      description: Name and link.
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: How it can be driven
+      options: [Agent Client Protocol (ACP), An official SDK, A CLI with JSON output, Not sure]
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Auth method, where its API lives, anything special. See "Adding an agent" in CONTRIBUTING.md.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I'd like to build the adapter

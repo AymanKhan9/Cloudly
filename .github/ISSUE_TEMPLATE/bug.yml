@@ -1,0 +1,32 @@
+name: Bug report
+description: Something doesn't work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options: [Claude Agent, Codex, Gemini CLI, Not agent-specific]
+  - type: input
+    id: version
+    attributes:
+      label: Cloudly version
+      description: The release you installed, e.g. v0.3.9.
+  - type: input
+    id: vm
+    attributes:
+      label: Where it runs
+      description: Provider, VM size and OS, e.g. AWS t3.micro, Ubuntu 24.04.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "From `journalctl -u cloudly-worker -n 100` (or -api, -web). Remove anything private first."
+      render: text
