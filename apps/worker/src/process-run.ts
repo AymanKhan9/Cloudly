@@ -21,10 +21,11 @@ import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
 import { withPreamble, sandboxRules, isCommand } from "./preamble";
 import { modelCommand } from "@repo/shared/model-command";
+import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
 import { type ContainerOptions } from "./docker";
 import { mkdir } from "node:fs/promises";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { enforceBudget } from "./budget";
@@ -50,15 +51,7 @@ function sessionExists(harness: string, home: string, sessionId: string): boolea
   if (harness === "native-claude") {
     return existsSync(path.join(home, ".claude", "projects", "-workspace", `${sessionId}.jsonl`));
   }
-  if (harness === "native-codex") {
-    return [CODEX_HOME, path.join(home, ".codex")].some((dir) => {
-      try {
-        return readdirSync(path.join(dir, "sessions"), { recursive: true }).some((f) => String(f).endsWith(`-${sessionId}.jsonl`));
-      } catch {
-        return false;
-      }
-    });
-  }
+  if (harness === "native-codex") return findCodexRollout([CODEX_HOME, path.join(home, ".codex")], sessionId) !== null;
   return false;
 }
 
@@ -147,9 +140,11 @@ export async function processRun(
     // Whether this turn continues the agent's own session, or starts clean and
     // gets the earlier conversation written into its prompt.
     let resumed = false;
+    // Every agent in a session keeps its home (sessions, chat logs) across turns.
+    // Gemini still starts each turn clean: its own resume loses the history.
+    if (thread) containerOptions.homeDir = await threadHome(thread.id);
     if (thread && nativeResume) {
-      const home = await threadHome(thread.id);
-      containerOptions.homeDir = home;
+      const home = containerOptions.homeDir!;
       const id = thread.agentSessionId;
       // A missing session file (cleaned data dir, older install) falls back to the transcript.
       if (id && sessionExists(run.harness, home, id)) {
@@ -190,9 +185,12 @@ export async function processRun(
       task = withPreamble(prompt, tools);
     }
 
+    let lastSeq = -1;
+    let sessionId = containerOptions.resume;
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {
         await insertEvents(run.id, [event]);
+        lastSeq = Math.max(lastSeq, event.seq);
         if (event.kind === "error") {
           const d = event.data as { message?: unknown; subtype?: unknown } | string | null;
           agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
@@ -203,8 +201,9 @@ export async function processRun(
           }
         }
 
-        const agentSession = thread && nativeResume ? agentSessionIdFromEvent(run.harness, event) : null;
-        if (thread && agentSession) {
+        const agentSession = agentSessionIdFromEvent(run.harness, event);
+        if (agentSession) sessionId = agentSession;
+        if (thread && nativeResume && agentSession) {
           await prisma.thread.update({ where: { id: thread.id }, data: { agentSessionId: agentSession } });
         }
 
@@ -226,6 +225,20 @@ export async function processRun(
       // that's the signal we trust, not the error's text or the exit code.
       if (!cancelled) throw err;
       console.error(`run ${run.id}: container exited via cancellation:`, err);
+    }
+
+    // Codex and Gemini keep their context fill in their own session logs, not
+    // the event stream; Claude reports it itself (the runner's context event).
+    if (sessionId && containerOptions.homeDir) {
+      let usage = null;
+      if (run.harness === "native-codex") {
+        const rollout = findCodexRollout([CODEX_HOME, path.join(containerOptions.homeDir, ".codex")], sessionId);
+        usage = rollout ? codexContext(rollout) : null;
+      } else if (run.harness === "gemini-acp") {
+        const chat = findGeminiChat(containerOptions.homeDir, sessionId);
+        usage = chat ? geminiContext(chat) : null;
+      }
+      if (usage) await insertEvents(run.id, [{ seq: lastSeq + 1, ts: Date.now(), kind: "status", data: { type: "context", ...usage } }]);
     }
 
     if (leaseLost) return;
