@@ -122,7 +122,18 @@ if [ ! -f "$ENV_FILE" ]; then
   say "Configuring this station (press Enter to accept a default)"
   IP=$(curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
   ask DOMAIN "Domain pointing at this VM, for HTTPS (leave empty to use the IP)" ""
-  if [ -n "$DOMAIN" ]; then DEFAULT_URL="https://$DOMAIN"; else DEFAULT_URL="http://$IP:3000"; fi
+  # Without a domain, HTTPS still works on the bare IP: Let's Encrypt issues
+  # short-lived IP certificates, which Caddy renews on its own.
+  SITE_ADDRESS=""; ACME_PROFILE="classic"
+  if [ -n "$DOMAIN" ]; then
+    SITE_ADDRESS="$DOMAIN"; DEFAULT_URL="https://$DOMAIN"
+  else
+    ask IP_HTTPS "HTTPS on the IP address, with a free certificate that renews itself? Needs ports 80 and 443 open (Y/n)" "y"
+    case "$IP_HTTPS" in
+      [nN]*) DEFAULT_URL="http://$IP:3000" ;;
+      *) SITE_ADDRESS="$IP"; ACME_PROFILE="shortlived"; DEFAULT_URL="https://$IP" ;;
+    esac
+  fi
   ask PUBLIC_URL "Public URL" "$DEFAULT_URL"
   ask DB_URL "Your own Postgres URL (leave empty to run Postgres on this VM)" ""
   case "$DB_URL" in
@@ -141,6 +152,8 @@ PUBLIC_URL=$PUBLIC_URL
 WEB_ORIGIN=$PUBLIC_URL
 API_ORIGIN=$PUBLIC_URL/api
 DOMAIN=$DOMAIN
+SITE_ADDRESS=$SITE_ADDRESS
+ACME_PROFILE=$ACME_PROFILE
 POSTGRES_PASSWORD=$PG_PASS
 LOCAL_POSTGRES=$LOCAL_PG
 DATABASE_URL=$DB_URL
@@ -151,6 +164,20 @@ WORKER_CONCURRENCY=1
 EOF
 else
   say "Keeping existing ${ENV_FILE}"
+  # Older installs with a domain have no SITE_ADDRESS line.
+  if ! grep -q '^SITE_ADDRESS=' "$ENV_FILE"; then
+    OLD_DOMAIN=$(grep '^DOMAIN=' "$ENV_FILE" | cut -d= -f2- || true)
+    printf 'SITE_ADDRESS=%s\nACME_PROFILE=classic\n' "$OLD_DOMAIN" | $SUDO tee -a "$ENV_FILE" >/dev/null
+  fi
+  # Switch a plain-HTTP IP install to HTTPS on its IP: CLOUDLY_ENABLE_HTTPS=1.
+  if [ -n "${CLOUDLY_ENABLE_HTTPS:-}" ] && grep -q '^PUBLIC_URL=http://' "$ENV_FILE"; then
+    IP=$(curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
+    say "Switching to HTTPS on https://$IP"
+    $SUDO sed -i -e "s#^PUBLIC_URL=.*#PUBLIC_URL=https://$IP#" -e "s#^WEB_ORIGIN=.*#WEB_ORIGIN=https://$IP#" \
+      -e "s#^API_ORIGIN=.*#API_ORIGIN=https://$IP/api#" -e "s#^SITE_ADDRESS=.*#SITE_ADDRESS=$IP#" \
+      -e "s#^ACME_PROFILE=.*#ACME_PROFILE=shortlived#" "$ENV_FILE"
+    SWITCHED_TO_HTTPS=1
+  fi
 fi
 
 # Installs from before browser setup have no master key in .env. Reuse the one the
@@ -183,9 +210,11 @@ else
   say "Starting Postgres"
   $SUDO $COMPOSE up -d --wait postgres >/dev/null
 fi
-if grep -q '^DOMAIN=.\+' "$ENV_FILE"; then
-  say "Starting Caddy for HTTPS"
-  $SUDO $COMPOSE --profile https up -d caddy >/dev/null
+SITE_ADDRESS=$(grep '^SITE_ADDRESS=' "$ENV_FILE" | cut -d= -f2- || true)
+if [ -n "$SITE_ADDRESS" ]; then
+  say "Starting Caddy for HTTPS on ${SITE_ADDRESS}"
+  # Recreated so a changed address or profile takes effect.
+  $SUDO $COMPOSE --profile https up -d --force-recreate caddy >/dev/null
 fi
 
 # --- 7. Build -------------------------------------------------------------------------
@@ -233,7 +262,9 @@ WEB_DIR="$DIR/apps/web/.next/standalone/apps/web"
 $SUDO install -d -o "$APP_USER" "$WEB_DIR/.next/cache"
 unit api "$APP_USER" "$DIR" "$BUN apps/api/src/index.ts" "NODE_ENV=production"
 unit worker "$RUN_USER" "$DIR" "$BUN apps/worker/src/main.ts" "NODE_ENV=production"
-unit web "$APP_USER" "$WEB_DIR" "$BUN server.js" "NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0"
+# Behind Caddy, the web app answers only locally, so http://IP:3000 can't skip HTTPS.
+if [ -n "$SITE_ADDRESS" ]; then WEB_HOST=127.0.0.1; else WEB_HOST=0.0.0.0; fi
+unit web "$APP_USER" "$WEB_DIR" "$BUN server.js" "NODE_ENV=production PORT=3000 HOSTNAME=$WEB_HOST"
 
 $SUDO systemctl daemon-reload
 for s in api worker web; do
@@ -264,4 +295,16 @@ case "$STATUS" in
     printf '  4. Sign in, then add a model key under Settings.\n\n' ;;
 esac
 printf '  Config: %s   Logs: journalctl -u cloudly-worker -f\n' "$ENV_FILE"
-case "${PUBLIC_URL:-}" in http://*) warn "Open port 3000 in your cloud firewall, or set a domain for HTTPS on 443." ;; esac
+case "${PUBLIC_URL:-}" in
+  http://*) warn "Open port 3000 in your cloud firewall. For HTTPS, re-run with CLOUDLY_ENABLE_HTTPS=1 (needs ports 80 and 443 open)." ;;
+  https://*)
+    # The certificate arrives within a minute or so if ports 80/443 are reachable.
+    CERT_OK=""
+    for _ in $(seq 30); do curl -fsS --max-time 5 -o /dev/null "$PUBLIC_URL" 2>/dev/null && { CERT_OK=1; break; }; sleep 3; done
+    if [ -n "$CERT_OK" ]; then say "HTTPS is working at $PUBLIC_URL"
+    else warn "No certificate yet. Open ports 80 and 443 in your cloud firewall; Caddy keeps retrying. Logs: sudo $COMPOSE logs caddy"; fi ;;
+esac
+if [ -n "${SWITCHED_TO_HTTPS:-}" ]; then
+  warn "Your address changed to $PUBLIC_URL. On GitHub, open your Cloudly app's settings (Settings > Developer settings > GitHub Apps) and set:"
+  printf '    Homepage URL:  %s\n    Callback URL:  %s/api/auth/github/callback\n    Setup URL:     %s/api/setup/github/installed\n' "$PUBLIC_URL" "$PUBLIC_URL" "$PUBLIC_URL"
+fi

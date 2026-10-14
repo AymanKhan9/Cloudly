@@ -1,4 +1,13 @@
-{$DOMAIN} {
+# SITE_ADDRESS is the domain, or the VM's IP address. Let's Encrypt has issued
+# certificates for IP addresses since January 2026, but only short-lived ones
+# (about 6 days, which Caddy renews on its own), hence ACME_PROFILE=shortlived
+# for an IP. A domain uses the default "classic" profile.
+{$SITE_ADDRESS} {
+	tls {
+		issuer acme {
+			profile {$ACME_PROFILE:classic}
+		}
+	}
 	# No `encode` here: compressing would buffer the live run stream (SSE).
 	reverse_proxy 127.0.0.1:3000
 }

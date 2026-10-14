@@ -15,7 +15,7 @@ Free tiers change often, so check each provider's current terms. As of October 2
 
 Open inbound ports in your provider's firewall or security group:
 - 22 for SSH.
-- Either 3000 (HTTP by IP) or 80 and 443 (HTTPS with a domain).
+- 80 and 443 for HTTPS (with or without a domain), or 3000 if you choose plain HTTP.
 
 ## 2. Run the installer
 
@@ -41,29 +41,22 @@ Setup closes itself once all three steps are done, so nobody can claim the insta
 
 ## 4. HTTPS
 
-Point a DNS A record at the VM and enter the domain when the installer asks. Caddy then gets and renews a certificate automatically on ports 80 and 443. To add a domain later:
-1. Set `DOMAIN=` and `PUBLIC_URL=https://...` in `/opt/cloudly/.env`, and update `WEB_ORIGIN` and `API_ORIGIN` to match.
-2. Re-run the installer.
-3. Add the new callback URL (`https://<domain>/api/auth/github/callback`) to the GitHub App's settings on GitHub.
+Cloudly serves HTTPS whether or not you have a domain. Caddy gets a free Let's Encrypt certificate and renews it on its own. Open ports 80 and 443 in your cloud firewall either way.
 
-## Using your Claude or ChatGPT plan instead of an API key
+- **No domain:** the installer offers HTTPS on the VM's IP address and uses it by default. Let's Encrypt has issued certificates for IP addresses [since January 2026](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability.html). They're valid about six days, and Caddy renews them well before they expire.
+- **A domain:** point a DNS A record at the VM and enter the domain when the installer asks.
 
-Claude and Codex can run on your subscription instead of a pay-as-you-go key. Sign in with the vendor's own CLI on your computer, then paste the result under **Settings → Keys and connections**:
+Behind Caddy, the web app only listens on the VM itself, so `http://<ip>:3000` stops working and nothing can bypass HTTPS. Port 3000 can be closed.
 
-- **Claude:** run `claude setup-token` and paste the token it prints into "Claude plan token".
-- **Codex:** run `codex login`, then paste the whole contents of `~/.codex/auth.json` into "ChatGPT plan sign-in". Cloudly saves the file back whenever Codex refreshes its tokens. Then run `codex login` again on your computer: a refresh rotates the token, so two places sharing one copy end up logging each other out, while two separate logins don't.
+To switch an existing plain-HTTP install to HTTPS on its IP, re-run the installer with `CLOUDLY_ENABLE_HTTPS=1`:
 
-When a plan sign-in is set, it's used instead of that agent's API key. Turns on a plan have no per-run cost: they show "on your plan", don't count toward the spend limit, and still run when the limit is reached. Your plan's own usage limits apply instead, and a long run can pause when it reaches them.
+```sh
+curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | CLOUDLY_ENABLE_HTTPS=1 sh
+```
 
-## Using your own Postgres
+Your address then changes to `https://<ip>`, and GitHub needs to know: the installer prints the new homepage, callback and setup URLs to enter in your GitHub App's settings. GitHub doesn't let other apps change those for you.
 
-By default Cloudly runs Postgres on the VM. To keep your data in a database you already manage (Neon, Supabase, RDS, your own server), paste its connection URL when the installer asks. The installer then skips the bundled Postgres and migrates yours.
-
-- Pooled and direct URLs both work (tested with Neon's pooled URL). The installer migrates without Prisma's advisory lock, which poolers can leave stuck.
-- Allow connections from the VM's IP address.
-- Keys saved under Settings are encrypted with `CLOUDLY_SECRET_KEY`, which stays in the VM's `.env`, not in the database. Back it up. Without it the stored keys can't be read, and a copy of the database alone doesn't expose them.
-- Reusing a database from an earlier install: stop the old install first (two workers on one database would both pick up runs). Settings are encrypted with `CLOUDLY_SECRET_KEY`, so copy it from the old `.env` into the new one to keep them; otherwise setup runs again and replaces them. A new public URL needs a new GitHub App either way, since the old one sends sign-in back to the old address.
-- To switch an existing install, set `LOCAL_POSTGRES=0` and `DATABASE_URL=` in `/opt/cloudly/.env` and re-run the installer. Existing data isn't copied over; move it with `pg_dump` and `pg_restore` first.
+To add a domain later, set `DOMAIN=` and `SITE_ADDRESS=` to it, `ACME_PROFILE=classic`, and `PUBLIC_URL`, `WEB_ORIGIN` and `API_ORIGIN` to `https://<domain>` in `/opt/cloudly/.env`. Then re-run the installer and update the GitHub App's URLs the same way.
 
 ## 5. Day-to-day
 

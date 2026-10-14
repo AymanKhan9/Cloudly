@@ -21,14 +21,15 @@ services:
       timeout: 3s
       retries: 20
 
-  # Only started when DOMAIN is set: `docker compose --profile https up -d`.
+  # Only started for HTTPS (SITE_ADDRESS set): `docker compose --profile https up -d`.
   caddy:
     image: caddy:2-alpine
     profiles: ["https"]
     restart: unless-stopped
     network_mode: host
     environment:
-      DOMAIN: ${DOMAIN:-}
+      SITE_ADDRESS: ${SITE_ADDRESS:-}
+      ACME_PROFILE: ${ACME_PROFILE:-classic}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
