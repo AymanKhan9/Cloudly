@@ -1,46 +1,17 @@
 import Link from "next/link";
-import { ArrowRight, GithubLogo } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, BookOpenText, GithubLogo } from "@phosphor-icons/react/dist/ssr";
 import { InstallCard } from "@/components/install-card";
 import { RunStory } from "@/components/run-story";
 import { SpendDemo } from "@/components/spend-demo";
 import { AgentsDemo } from "@/components/agents-demo";
-import { Mark } from "@/components/icons";
-
-const REPO_URL = "https://github.com/AymanKhan9/Cloudly";
-const MARKETING = process.env.NEXT_PUBLIC_SITE_MODE === "marketing";
+import { MARKETING, REPO_URL, SiteHeader } from "@/components/site-header";
 
 const HOSTS = ["Oracle Cloud Always Free (Arm, 12 GB)", "Google Cloud e2-micro (1 GB, one run at a time)", "AWS (new-account credits)", "DigitalOcean"];
 
 export default function Landing() {
   return (
     <div className="landing">
-      <header className="topbar">
-        <div className="wrap">
-          <Link href="/" className="wordmark" aria-label="Cloudly home">
-            <Mark />
-            Cloudly
-          </Link>
-          <nav aria-label="Main">
-            <a href="#how" className="hide-sm">
-              How it works
-            </a>
-            <a href="#spend" className="hide-sm">
-              Spend limit
-            </a>
-            <a href="#agents" className="hide-sm">
-              Agents
-            </a>
-            <a href={REPO_URL} aria-label="Cloudly on GitHub">
-              <GithubLogo size={18} />
-            </a>
-            {MARKETING ? null : (
-              <Link href="/signin" className="btn btn-secondary btn-sm">
-                Sign in
-              </Link>
-            )}
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         <RunStory
@@ -104,6 +75,11 @@ export default function Landing() {
                 Run it on a fresh Linux VM. It installs Docker, gets an HTTPS certificate even without a domain, and
                 finishes setup in the browser.
               </p>
+              <Link href="/docs/installation" className="text-link" style={{ marginTop: 16 }}>
+                <BookOpenText size={16} />
+                Read the installation guide
+                <ArrowRight size={14} />
+              </Link>
             </div>
             <div className="hosts">
               <h3>Good fits today</h3>
@@ -122,6 +98,7 @@ export default function Landing() {
         <div className="wrap">
           <span>Cloudly is free software under the MIT license.</span>
           <nav>
+            <Link href="/docs">Docs</Link>
             <a href={REPO_URL}>GitHub</a>
             {MARKETING ? null : <Link href="/signin">Sign in to your instance</Link>}
           </nav>

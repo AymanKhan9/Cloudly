@@ -68,6 +68,7 @@ Geist for everything readable; Geist Mono for commands, code, repo and branch na
 - Landing: max 1200px, sticky blurred top bar, story grid (copy 0.9fr, model 1.1fr), then spend, agents, close. Sections are separated by a hairline, not by background bands.
 - App: a 272px sidebar (sessions grouped Today / Yesterday / Previous 7 days / Older, spend meter, settings, account) and a main column. Below 900px the sidebar becomes a drawer behind a 56px bar. Ctrl/Cmd+K starts a new session.
 - Session: a sticky header (title, repo, branch, agent, model; context ring, total cost and PR on the right), an 800px thread, and a docked composer.
+- Docs: `/docs`, Markdown in `apps/web/content/docs` rendered at build time (`lib/docs.ts` sets the sidebar order). Sidebar, article (max 720px) and an "On this page" list; below 800px the sidebar becomes a page menu. Code blocks wrap and have a copy button.
 - Settings: label column (220px) beside content panels; collapses to one column at 800px.
 
 ## Components
