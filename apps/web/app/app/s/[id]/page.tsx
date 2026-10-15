@@ -14,6 +14,7 @@ import {
   GitPullRequest,
   GithubLogo,
   Globe,
+  Cpu,
   Lightbulb,
   MagnifyingGlass,
   PencilSimpleLine,
@@ -24,9 +25,10 @@ import {
   Wrench,
 } from "@phosphor-icons/react";
 import { api, ApiError, type ThreadView, type Turn } from "@/lib/api";
-import { harnessById, STATUS_LABEL, usd, type RunStatus } from "@/lib/harness";
+import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus } from "@/lib/harness";
 import { buildBlocks, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
+import { Picker } from "@/components/picker";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -225,6 +227,7 @@ export default function SessionPage() {
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const modelMenu = useRef<{ show: () => void }>(null);
 
   useEffect(() => {
     setView(null);
@@ -345,16 +348,22 @@ export default function SessionPage() {
   // ones like /stats or /plan): it would go to the model as text, which then improvises.
   const typed = /^\/([\w:.-]+)(\s|$)/.exec(draft)?.[1];
   const unknownCommand =
-    typed && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
+    typed && typed.toLowerCase() !== "model" && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
 
-  async function send(e?: React.FormEvent) {
+  async function send(e?: React.FormEvent, text = draft) {
     e?.preventDefault();
-    if (!draft.trim() || busy || sending) return;
+    // A bare "/model" opens the model menu instead of asking the agent.
+    if (text === draft && /^\/model\s*$/i.test(text.trim())) {
+      setDraft("");
+      modelMenu.current?.show();
+      return;
+    }
+    if (!text.trim() || busy || sending) return;
     setSending(true);
     setActionError(null);
     try {
-      await api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ prompt: draft }) });
-      setDraft("");
+      await api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ prompt: text }) });
+      if (text === draft) setDraft("");
       stickRef.current = true;
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Couldn't send.");
@@ -380,7 +389,7 @@ export default function SessionPage() {
 
   const hint = actionError
     ? { tone: "danger", text: actionError }
-    : typed && thread.harness === "native-codex"
+    : typed && typed.toLowerCase() !== "model" && thread.harness === "native-codex"
       ? { tone: "warn", text: "Codex has no / commands when it runs headless, so this will be sent as an ordinary message." }
       : unknownCommand
         ? { tone: "warn", text: `/${unknownCommand} isn't one of this agent's commands here, so it will be sent as an ordinary message.` }
@@ -404,20 +413,9 @@ export default function SessionPage() {
               <GitBranch size={13} />
               <span className="mono">{thread.branch}</span>
             </span>
-            <span className="hide-sm">
-              <Robot size={13} />
-              {h.name}
-              {context.model ? <span className="mono">{context.model}</span> : null}
-            </span>
           </div>
         </div>
         <div className="tools">
-          {context.usage ? <ContextRing {...context.usage} /> : null}
-          {total > 0 ? (
-            <span className="num hide-sm" title={h.cost === "estimated" ? "Session total, estimated" : "Session total"}>
-              {usd(total, h.cost === "estimated")}
-            </span>
-          ) : null}
           {thread.prUrl ? (
             <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
               <GitPullRequest size={15} weight="bold" style={{ color: "var(--ok)" }} />
@@ -487,9 +485,35 @@ export default function SessionPage() {
             aria-activedescendant={suggestions.length ? `cmd-${pick}` : undefined}
           />
           <div className="composer-bar">
-            <span className="hint" style={{ fontSize: 12.5, color: "var(--text-3)" }}>
+            <Picker
+              ref={modelMenu}
+              label="Model"
+              icon={<Cpu size={15} />}
+              up
+              searchable
+              value={thread.model ?? "default"}
+              placeholder={context.model ?? "Default"}
+              options={[
+                { value: "default", label: context.model && !thread.model ? `Default (${context.model})` : "Default", hint: h.name },
+                ...(MODELS[thread.harness as HarnessId] ?? []),
+              ]}
+              custom={(q) => `Use ${q}`}
+              note={busy ? "You can switch models once this turn finishes." : undefined}
+              onChange={(v) => {
+                send(undefined, `/model ${v}`);
+                inputRef.current?.focus();
+              }}
+            />
+            <span className="composer-meta">
+              <Robot size={14} />
               {h.name}
             </span>
+            {context.usage ? <ContextRing {...context.usage} /> : null}
+            {total > 0 ? (
+              <span className="composer-meta num" title={h.cost === "estimated" ? "Session total, estimated" : "Session total"}>
+                {usd(total, h.cost === "estimated")}
+              </span>
+            ) : null}
             <span className="spacer" />
             {busy ? (
               <button type="button" className="send stop" onClick={cancel} disabled={latest?.cancelRequested} aria-label="Cancel turn" title="Cancel turn">

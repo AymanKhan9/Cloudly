@@ -89,6 +89,7 @@ export interface Turn {
 }
 
 export interface ThreadView {
-  thread: Omit<ThreadSummary, "lastStatus">;
+  /** model: chosen with /model for the rest of the session; null is the agent's default. */
+  thread: Omit<ThreadSummary, "lastStatus"> & { model?: string | null };
   turns: Turn[];
 }

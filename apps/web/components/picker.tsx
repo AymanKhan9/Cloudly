@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 import { CaretDown, Check, MagnifyingGlass } from "@phosphor-icons/react";
 
 interface Option {
@@ -22,6 +22,10 @@ export function Picker({
   searchable = false,
   disabled = false,
   placeholder = "Choose",
+  up = false,
+  custom,
+  note,
+  ref,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -31,6 +35,13 @@ export function Picker({
   searchable?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** Open above the trigger (in a composer docked at the bottom). */
+  up?: boolean;
+  /** Offer the typed search text as a value of its own, labelled by this. */
+  custom?: (query: string) => string;
+  /** A line under the list, for when choosing isn't possible right now. */
+  note?: string;
+  ref?: React.Ref<{ show: () => void }>;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -42,8 +53,14 @@ export function Picker({
   const list = useRef<HTMLDivElement>(null);
 
   const q = query.trim().toLowerCase();
-  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  const matches = q ? options.filter((o) => (o.label + " " + o.value).toLowerCase().includes(q)) : options;
+  const typed = query.trim();
+  const shown: Option[] =
+    custom && typed && !options.some((o) => o.value.toLowerCase() === typed.toLowerCase())
+      ? [...matches, { value: typed, label: custom(typed) }]
+      : matches;
   const current = options.find((o) => o.value === value);
+  const currentLabel = current?.label ?? (value || placeholder);
 
   const show = () => {
     setQuery("");
@@ -55,9 +72,13 @@ export function Picker({
     if (refocus) trigger.current?.focus();
   };
   const pick = (o: Option) => {
-    onChange(o.value);
+    if (note) return;
     close();
+    // After closing, so the caller can move focus (e.g. back to a message box).
+    onChange(o.value);
   };
+
+  useImperativeHandle(ref, () => ({ show }));
 
   useEffect(() => {
     if (!open) return;
@@ -101,8 +122,8 @@ export function Picker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? `${id}-list` : undefined}
-        aria-label={`${label}: ${current?.label ?? placeholder}`}
-        title={current?.label}
+        aria-label={`${label}: ${currentLabel}`}
+        title={currentLabel}
         onClick={() => (open ? close() : show())}
         onKeyDown={(e) => {
           if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
@@ -112,12 +133,12 @@ export function Picker({
         }}
       >
         {icon}
-        <span className="pill-text">{current?.label ?? placeholder}</span>
+        <span className="pill-text">{currentLabel}</span>
         <CaretDown size={11} className="pill-caret" />
       </button>
 
       {open ? (
-        <div className="menu" onKeyDown={onKey}>
+        <div className="menu" data-up={up || undefined} onKeyDown={onKey}>
           {searchable ? (
             <div className="menu-search">
               <MagnifyingGlass size={14} />
@@ -154,6 +175,7 @@ export function Picker({
                 aria-selected={o.value === value}
                 data-active={i === active || undefined}
                 className="menu-item"
+                aria-disabled={note ? true : undefined}
                 onPointerEnter={() => setActive(i)}
                 onClick={() => pick(o)}
               >
@@ -165,6 +187,7 @@ export function Picker({
               </div>
             ))}
           </div>
+          {note ? <p className="menu-note">{note}</p> : null}
         </div>
       ) : null}
     </div>

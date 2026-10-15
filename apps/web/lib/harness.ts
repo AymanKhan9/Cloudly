@@ -12,6 +12,27 @@ export const HARNESSES: Harness[] = [
   { id: "gemini-acp", name: "Gemini CLI", cost: "estimated" },
 ];
 
+/**
+ * Models offered by the /model menu. The agents accept any model ID their
+ * vendor serves, so the menu also lets you type one; these are the common picks.
+ * Codex: developers.openai.com/codex/models. Gemini: geminicli.com/docs/cli/model.
+ */
+export const MODELS: Record<HarnessId, { value: string; label: string; hint?: string }[]> = {
+  "native-claude": [
+    { value: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "Most capable" },
+    { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { value: "claude-fable-5-1", label: "Claude Fable 5.1" },
+    { value: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "Fastest" },
+  ],
+  "native-codex": [{ value: "gpt-5.5", label: "GPT-5.5" }],
+  "gemini-acp": [
+    { value: "gemini-3-pro-preview", label: "Gemini 3 Pro", hint: "Preview" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", hint: "Preview" },
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  ],
+};
+
 export function harnessById(id: string): Harness {
   return (
     HARNESSES.find((h) => h.id === id) ?? {

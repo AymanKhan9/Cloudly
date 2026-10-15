@@ -3219,3 +3219,53 @@ button.pill:disabled {
     width: 8ch;
   }
 }
+
+.menu[data-up] {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.menu-label small.below {
+  display: block;
+  margin: 1px 0 0;
+}
+
+.menu-item[aria-disabled] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.menu-note {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+@media (max-width: 600px) {
+  .menu[data-up] {
+    top: auto;
+    bottom: calc(100% + 8px);
+    margin-top: 0;
+  }
+}
+
+.composer-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.composer-bar .ring {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+@media (max-width: 600px) {
+  .composer-bar .composer-meta:not(.num) {
+    display: none;
+  }
+}
