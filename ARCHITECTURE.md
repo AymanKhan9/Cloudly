@@ -306,17 +306,16 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   minus 768 MB, at least 512 MB, or `SANDBOX_MEMORY`), `--pids-limit 2048`, `--cap-drop ALL`,
   `no-new-privileges`. Memory is the one that matters most: without it a runaway build could
   take Postgres and the worker down with it on a 1 GB VM.
-- **Model keys stay off command lines.** They're passed as `-e NAME` with the value in the docker
-  client's environment, so they don't appear in the host's process list (`/proc/*/cmdline` is
-  world-readable). They're still in the container's environment, and `docker inspect` shows them
-  to anyone with Docker access, who is root anyway.
+- **Model keys stay off command lines and out of containers.** Containers get fixed placeholder
+  values (`apps/worker/src/docker.ts`), passed as `-e NAME` with the value in the docker client's
+  environment, so nothing key-shaped appears in the host's process list (`/proc/*/cmdline` is
+  world-readable). The real keys and plan tokens only reach the credential gateway (next items),
+  so `docker inspect` on a run container shows placeholders.
 - **Only the worker can reach Docker.** The docker group is root-equivalent, so only the worker's
   user (uid 1000) is in it. The API and web app, the internet-facing processes, run as a separate
   `cloudly-app` system user with no Docker access; `.env` is `0640`, readable by the API through
   its group and by no one else. The web app gets no `.env` at all (it needs nothing at runtime,
   and `next build` would copy one into its standalone output). Every unit sets `NoNewPrivileges`.
-
-### Planned, not yet built
 
 - **Model credentials never enter the sandbox.** Run containers get a placeholder key or token
   and an API base URL pointing at the credential gateway in the `cloudly-egress` container
@@ -340,6 +339,9 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   tunnel, to the model APIs, the main package registries and GitHub (`EGRESS_DEFAULT_HOSTS`), plus
   extra hosts from Settings (`*` allows all). With credentials kept out of the container, an
   upload-capable allowed host (npm, GitHub) is no longer a way to leak them.
+
+### Planned, not yet built
+
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
   and explicit `setting_sources` prevent a malicious repo from smuggling in hooks or MCP servers
   the platform didn't choose. Not yet wired up.
@@ -523,9 +525,9 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   a second resume reports "No previous sessions found" and the conversation is lost. Follow-ups
   therefore start a clean session with the earlier conversation written into the prompt
   (`transcript.ts`, last 8 turns, bounded), which is independent of any agent's storage. Native
-  resume plumbing remains, off by default and never for Gemini
-  (`CLOUDLY_NATIVE_RESUME=native-claude,native-codex`), and is **untested** (no Anthropic or OpenAI
-  key on the dev machine). Also found: Gemini's default `auto` model router sends free-tier keys to
+  resume plumbing remained, never for Gemini. It was later turned on by default for Claude and Codex
+  (`CLOUDLY_NATIVE_RESUME` defaults to `native-claude,native-codex`) and tested live on both (§12);
+  Gemini still gets the transcript. Also found: Gemini's default `auto` model router sends free-tier keys to
   models with a free limit of 0 or an exhausted daily quota, then retries for minutes (turns took 3–6
   minutes); pinning `gemini-3-flash-preview` through `session/set_model` brought a turn to ~30s. Failed
   runs now report the agent's own error event instead of the container's usually-empty stderr.
