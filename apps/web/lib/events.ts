@@ -29,7 +29,7 @@ export function describeEvent(e: StreamEvent): string {
   switch (e.kind) {
     case "tool_call": {
       if (d.title && !d.input) return clip(String(d.title));
-      if (d.name && d.input) return clip(`${d.name}  ${str(d.input.command ?? d.input.file_path ?? d.input.pattern ?? d.input)}`);
+      if (d.name && d.input) return clip(`${d.name}  ${str(d.input.command ?? d.input.file_path ?? d.input.dir_path ?? d.input.path ?? d.input.pattern ?? d.input)}`);
       if (d.type === "command_execution") return clip(`command  ${d.command ?? ""}`);
       if (d.title || d.name) return clip(`${d.name ?? "tool"}  ${d.title ?? ""}`);
       return clip(str(d));
@@ -180,7 +180,9 @@ export function buildBlocks(events: StreamEvent[], harness: string): Block[] {
       const sub = id ? subagents.get(id) : undefined;
       if (sub) {
         sub.done = true;
-        sub.report = subagentReport(obj?.content);
+        // Gemini's own invoke_agent result is empty; don't let it wipe the report.
+        const report = subagentReport(obj?.content);
+        if (report) sub.report = report;
         continue;
       }
       const result = describeEvent(e).slice(0, 140);

@@ -4,6 +4,7 @@ import * as acp from "@agentclientprotocol/sdk";
 import type { SessionUpdate, PermissionOption, PermissionOptionKind, SessionId } from "@agentclientprotocol/sdk";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { Writable, Readable } from "node:stream";
+import { GeminiSubagents } from "./gemini-subagents";
 
 export type NormalizedEvent = Pick<RunEvent, "kind" | "data">;
 
@@ -23,7 +24,14 @@ export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
             return [{ kind: "raw", data: block.type === "text" ? { thought: block.text } : block }];
         }
 
-        case "tool_call":
+        case "tool_call": {
+            // Gemini delegates with invoke_agent ("Delegating to agent 'name'"). Shown as
+            // an Agent call, the same as Claude's, so the chat nests the subagent's work.
+            const agent = /^Delegating to agent '([^']+)'/.exec(update.title ?? "")?.[1];
+            if (agent || update.toolCallId.startsWith("invoke_agent")) {
+                const name = agent ?? "subagent";
+                return [{ kind: "tool_call", data: { id: update.toolCallId, name: "Agent", input: { subagent_type: name, description: "" } } }];
+            }
             return [{
                 kind: "tool_call",
                 data: {
@@ -34,6 +42,7 @@ export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
                     input: update.rawInput,
                 },
             }];
+        }
 
         case "tool_call_update":
             return [{
@@ -158,6 +167,18 @@ export class AcpAdapter implements RunAdapter {
                     ? await startResumedSession(clientCtx, resume as SessionId, "/workspace")
                     : await clientCtx.buildSession("/workspace").start();
 
+                // Subagents' own work, from their chat logs, every half second.
+                const subagents = new GeminiSubagents();
+                subagents.sessionId = session.sessionId;
+                let polling = false;
+                const pollSubagents = async () => {
+                    if (polling) return;
+                    polling = true;
+                    push(await subagents.poll().catch(() => []));
+                    polling = false;
+                };
+                const timer = setInterval(pollSubagents, 500);
+
                 try {
                     this.sessionId = session.sessionId;
                     push([{ kind: "status", data: { type: "acp.session", sessionId: session.sessionId } }]);
@@ -191,12 +212,24 @@ export class AcpAdapter implements RunAdapter {
                         const message = await (first ?? session.nextUpdate());
                         first = undefined;
                         if (message.kind === "stop") {
+                            clearInterval(timer);
+                            while (polling) await Bun.sleep(20);
+                            await pollSubagents();
                             push([{ kind: "done", data: message.response }]);
                             return message.response;
                         }
-                        push(mapAcpUpdate(message.notification.update));
+                        const events = mapAcpUpdate(message.notification.update);
+                        for (const e of events) {
+                            const d = e.data as { name?: string; id?: string };
+                            if (e.kind === "tool_call" && d.name === "Agent" && d.id) subagents.delegated(d.id);
+                        }
+                        push(events);
                     }
                 } finally {
+                    // Also when the turn ends in an error: keep what the subagents logged.
+                    clearInterval(timer);
+                    while (polling) await Bun.sleep(20);
+                    await pollSubagents();
                     session.dispose();
                 }
             })
