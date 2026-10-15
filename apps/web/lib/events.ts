@@ -154,6 +154,7 @@ export function buildBlocks(events: StreamEvent[], harness: string): Block[] {
       else blocks.push({ t: "thought", text: obj.thought });
     } else if (e.kind === "tool_call") {
       if (obj && SPAWN.has(obj.name) && id) {
+        if (subagents.has(id)) continue; // the same spawn seen again (a replayed event)
         const input = (obj.input ?? {}) as Record<string, unknown>;
         const sub: SubagentBlock = {
           t: "subagent",

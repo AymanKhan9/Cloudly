@@ -8,6 +8,7 @@ import { api, type ThreadSummary } from "@/lib/api";
 import { harnessById, relativeTime, usd } from "@/lib/harness";
 import { useApp } from "./app-context";
 import { Mark } from "./icons";
+import { ThemeToggle } from "./theme-toggle";
 import { SpendBar, StatusIcon } from "./status";
 
 const DAY = 86_400_000;
@@ -151,6 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </span>
             )}
             <span className="name">{user?.login ?? ""}</span>
+            <ThemeToggle />
             <button type="button" className="icon-btn" onClick={signOut} aria-label="Sign out" title="Sign out">
               <SignOut size={17} />
             </button>

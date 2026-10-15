@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import Script from "next/script";
+import { themeScript } from "@/lib/theme";
 
 const geistSans = localFont({ src: "./fonts/GeistVF.woff", variable: "--font-sans-face" });
 const geistMono = localFont({ src: "./fonts/GeistMonoVF.woff", variable: "--font-mono" });
@@ -20,8 +22,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+    // The theme script sets data-theme before React hydrates, so the attribute differs on purpose.
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <body>
+        {children}
+        <Script id="theme" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
+      </body>
     </html>
   );
 }

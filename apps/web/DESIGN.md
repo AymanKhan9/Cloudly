@@ -45,7 +45,7 @@ icons: "@phosphor-icons/react, regular weight, bold for status glyphs"
 
 ## Overview
 
-A calm developer tool. Neutral cool greys, one accent, Geist throughout, and generous space. Light and dark follow `prefers-color-scheme`; every color is a token in `app/globals.css` (`:root` and its dark override), so nothing hardcodes a hex outside that block except the white text on solid status fills.
+A calm developer tool. Neutral cool greys, one accent, Geist throughout, and generous space. Light and dark follow `prefers-color-scheme` until someone picks one with the sun/moon toggle (top bar and app sidebar), which sets `data-theme` on `<html>` and is remembered in `localStorage`; every color is a token in `app/globals.css` (`:root` and its dark override), so nothing hardcodes a hex outside that block except the white text on solid status fills.
 
 The one expressive element is the **cloud model** (`components/cloud-scene.tsx`): a CSS 3D model of the user's own cloud account. One VM holds Web + API, Postgres, the key gateway, the worker and a throwaway sandbox; outside it sit the browser, the model API, GitHub and "anywhere else". It exists because it explains the product: steps light the parts doing the work and beams show what crosses the boundary (the placeholder key swapped at the gateway, blocked egress hitting the wall, the PR leaving through the worker). It is built from DOM, not WebGL, so labels stay crisp, selectable and themeable. Drag or arrow keys turn it; double-click resets.
 

@@ -48,8 +48,43 @@
   color-scheme: light;
 }
 
+/* Dark: chosen with the theme toggle, or the system's when nothing is chosen. */
+:root[data-theme="dark"] {
+  --bg: #0c0e11;
+  --surface: #13161a;
+  --surface-2: #1a1e23;
+  --surface-3: #22272d;
+  --border: #252a31;
+  --border-strong: #353c45;
+  --text: #eceef1;
+  --text-2: #a3aab5;
+  --text-3: #707884;
+  --accent: #f26a35;
+  --accent-ink: #ff8f61;
+  --accent-soft: rgba(242, 106, 53, 0.14);
+  --ok: #47bf7a;
+  --ok-soft: rgba(71, 191, 122, 0.13);
+  --warn: #e2a845;
+  --warn-soft: rgba(226, 168, 69, 0.14);
+  --danger: #f0605a;
+  --danger-soft: rgba(240, 96, 90, 0.13);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.3), 0 28px 56px -24px rgba(0, 0, 0, 0.8);
+
+  --face-top: #222830;
+  --face-front: #181c22;
+  --face-side: #121519;
+  --face-edge: rgba(236, 238, 241, 0.13);
+  --slab-top: #171b20;
+  --lit-top: 9%;
+  --lit-side: 6%;
+
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0c0e11;
     --surface: #13161a;
     --surface-2: #1a1e23;
@@ -3737,4 +3772,26 @@ button.pill:disabled {
 .subagent-report {
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+/* Theme toggle: offer the theme you're not in. */
+.theme-toggle .to-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .to-light {
+  display: block;
+}
+
+:root[data-theme="dark"] .theme-toggle .to-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .to-light {
+    display: block;
+  }
+  :root:not([data-theme="light"]) .theme-toggle .to-dark {
+    display: none;
+  }
 }

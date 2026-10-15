@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GithubLogo } from "@phosphor-icons/react/dist/ssr";
 import { Mark } from "./icons";
+import { ThemeToggle } from "./theme-toggle";
 
 export const REPO_URL = "https://github.com/AymanKhan9/Cloudly";
 export const MARKETING = process.env.NEXT_PUBLIC_SITE_MODE === "marketing";
@@ -27,6 +28,7 @@ export function SiteHeader({ current }: { current?: "docs" }) {
           <a href={REPO_URL} aria-label="Cloudly on GitHub">
             <GithubLogo size={18} />
           </a>
+          <ThemeToggle />
           {MARKETING ? null : (
             <Link href="/signin" className="btn btn-secondary btn-sm">
               Sign in
