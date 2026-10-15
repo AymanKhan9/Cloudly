@@ -14,7 +14,6 @@ import {
   GitPullRequest,
   GithubLogo,
   Globe,
-  Cpu,
   Lightbulb,
   MagnifyingGlass,
   PencilSimpleLine,
@@ -29,6 +28,7 @@ import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus 
 import { buildBlocks, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
+import { AgentLogo, providerOf } from "@/components/agent-logo";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -382,6 +382,15 @@ export default function SessionPage() {
     }
   }
 
+  // The second line of a model in the menu: vendor logo, vendor, and a note.
+  const by = (note?: string) => (
+    <>
+      <AgentLogo harness={thread.harness} size={13} />
+      {providerOf(thread.harness)}
+      {note ? <span className="dim">{note}</span> : null}
+    </>
+  );
+
   const choose = (name: string) => {
     setDraft(`/${name} `);
     inputRef.current?.focus();
@@ -488,14 +497,14 @@ export default function SessionPage() {
             <Picker
               ref={modelMenu}
               label="Model"
-              icon={<Cpu size={15} />}
+              icon={<AgentLogo harness={thread.harness} size={15} />}
               up
               searchable
               value={thread.model ?? "default"}
               placeholder={context.model ?? "Default"}
               options={[
-                { value: "default", label: context.model && !thread.model ? `Default (${context.model})` : "Default", hint: h.name },
-                ...(MODELS[thread.harness as HarnessId] ?? []),
+                { value: "default", label: "Default", hint: !thread.model ? context.model : undefined, sub: by("Chosen by the agent") },
+                ...(MODELS[thread.harness as HarnessId] ?? []).map((m) => ({ value: m.value, label: m.label, sub: by(m.hint) })),
               ]}
               custom={(q) => `Use ${q}`}
               note={busy ? "You can switch models once this turn finishes." : undefined}

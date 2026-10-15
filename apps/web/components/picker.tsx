@@ -7,6 +7,8 @@ interface Option {
   value: string;
   label: string;
   hint?: string;
+  /** A second line under the label, e.g. a provider logo and name. */
+  sub?: React.ReactNode;
 }
 
 /**
@@ -182,6 +184,7 @@ export function Picker({
                 <span className="menu-label">
                   {o.label}
                   {o.hint ? <small>{o.hint}</small> : null}
+                  {o.sub ? <span className="menu-sub">{o.sub}</span> : null}
                 </span>
                 {o.value === value ? <Check size={14} weight="bold" /> : null}
               </div>

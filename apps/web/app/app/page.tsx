@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, GitBranch, GithubLogo, Lightning, Robot } from "@phosphor-icons/react";
+import { ArrowUp, GitBranch, GithubLogo, Lightning } from "@phosphor-icons/react";
 import { api, ApiError, type Repo } from "@/lib/api";
 import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
+import { AgentLogo, providerOf } from "@/components/agent-logo";
 
 const STARTERS = [
   "Explain how this repo is structured and where to start reading",
@@ -119,9 +120,19 @@ export default function NewSessionPage() {
             </label>
             <Picker
               label="Agent"
-              icon={<Robot size={15} />}
+              icon={<AgentLogo harness={harness} size={15} />}
               value={harness}
-              options={HARNESSES.map((x) => ({ value: x.id, label: x.name, hint: x.cost === "exact" ? "Exact cost" : "Estimated cost" }))}
+              options={HARNESSES.map((x) => ({
+                value: x.id,
+                label: x.name,
+                sub: (
+                  <>
+                    <AgentLogo harness={x.id} size={13} />
+                    {providerOf(x.id)}
+                    <span className="dim">{x.cost === "exact" ? "Exact cost" : "Estimated cost"}</span>
+                  </>
+                ),
+              }))}
               onChange={(v) => setHarness(v as HarnessId)}
             />
             <span className="spacer" />

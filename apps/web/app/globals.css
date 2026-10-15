@@ -2068,7 +2068,7 @@ button.pill:disabled {
   background: var(--surface-2);
 }
 
-.menu-item svg {
+.menu-item > svg {
   flex: none;
   margin-left: auto;
   color: var(--text-2);
@@ -3268,4 +3268,32 @@ button.pill:disabled {
   .composer-bar .composer-meta:not(.num) {
     display: none;
   }
+}
+
+.menu-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.menu-sub .dim {
+  color: var(--text-3);
+}
+
+.menu-sub .dim::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 6px 2px 0;
+  border-radius: 99px;
+  background: currentColor;
+  vertical-align: middle;
+}
+
+.menu-item:has(.menu-sub) {
+  padding: 9px 10px;
 }
