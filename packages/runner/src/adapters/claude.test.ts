@@ -54,6 +54,38 @@ test("user tool_result block maps to tool_result", () => {
     ]);
 });
 
+test("a subagent's text, tool calls and results carry the Agent call's id", () => {
+    const said = {
+        type: "assistant",
+        parent_tool_use_id: "agent-1",
+        message: { content: [
+            { type: "text", text: "Looking at the tests" },
+            { type: "tool_use", id: "t9", name: "Grep", input: { pattern: "it(" } },
+        ] },
+    } as unknown as SDKMessage;
+    expect(mapClaudeMessage(said)).toEqual([
+        { kind: "text", data: { text: "Looking at the tests", parent: "agent-1" } },
+        { kind: "tool_call", data: { id: "t9", name: "Grep", input: { pattern: "it(" }, parent: "agent-1" } },
+    ]);
+    const got = {
+        type: "user",
+        parent_tool_use_id: "agent-1",
+        message: { content: [{ type: "tool_result", tool_use_id: "t9", content: "3 matches" }] },
+    } as unknown as SDKMessage;
+    expect(mapClaudeMessage(got)).toEqual([
+        { kind: "tool_result", data: { toolUseId: "t9", content: "3 matches", parent: "agent-1" } },
+    ]);
+});
+
+test("the main agent's messages stay untagged, with text as a plain string", () => {
+    const msg = {
+        type: "assistant",
+        parent_tool_use_id: null,
+        message: { content: [{ type: "text", text: "Done" }] },
+    } as unknown as SDKMessage;
+    expect(mapClaudeMessage(msg)).toEqual([{ kind: "text", data: "Done" }]);
+});
+
 test("result success maps to done", () => {
     const msg = {
         type: "result",

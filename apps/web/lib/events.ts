@@ -62,54 +62,140 @@ export function describeEvent(e: StreamEvent): string {
   }
 }
 
+export interface ToolItem {
+  call: string;
+  result?: string;
+}
+
+export interface SubagentBlock {
+  t: "subagent";
+  id: string;
+  /** The subagent's type, e.g. "general-purpose" or one defined in the repo's .claude/agents. */
+  kind: string;
+  description: string;
+  blocks: Block[];
+  done: boolean;
+  /** What the subagent handed back to the main agent. */
+  report?: string;
+}
+
 export type Block =
   | { t: "text"; text: string }
   | { t: "thought"; text: string }
-  | { t: "tools"; items: { call: string; result?: string }[] }
-  | { t: "error"; text: string };
+  | { t: "tools"; items: ToolItem[] }
+  | { t: "error"; text: string }
+  | SubagentBlock;
+
+// Claude starts a subagent with its Agent tool (named Task in older versions).
+const SPAWN = new Set(["Agent", "Task"]);
+
+/**
+ * A subagent's hand-back is its report inside a framing note ("... The report
+ * follows:" then the report, every line indented two spaces). Show the report.
+ */
+export function subagentReport(content: unknown): string {
+  const text = Array.isArray(content)
+    ? content.map((c) => (c && typeof c === "object" && typeof (c as { text?: unknown }).text === "string" ? (c as { text: string }).text : "")).join("\n")
+    : typeof content === "string"
+      ? content
+      : "";
+  const at = text.indexOf("The report follows:\n");
+  if (at === -1) return text.trim();
+  return text
+    .slice(at + "The report follows:\n".length)
+    .split("\n")
+    .map((line) => line.replace(/^ {2}/, ""))
+    .join("\n")
+    .trim();
+}
+
+const idOf = (d: Record<string, any>) => (typeof d.toolUseId === "string" ? d.toolUseId : typeof d.id === "string" ? d.id : undefined);
 
 /**
  * Folds one turn's raw events into what a chat shows: replies as prose,
- * reasoning folded away, tool calls grouped with their results.
+ * reasoning folded away, tool calls grouped with their results, and each
+ * subagent's work nested under the call that started it.
+ * Results pair with their call by id; all three agents send one (Claude's
+ * tool_use id, Codex's item id, ACP's toolCallId). A call seen again under the
+ * same id (Codex reports a command when it starts and as it runs) updates its row.
  * Gemini streams its reply in fragments that join with nothing between them;
  * Claude and Codex emit whole messages that need a paragraph break.
  */
 export function buildBlocks(events: StreamEvent[], harness: string): Block[] {
   const joiner = harness === "gemini-acp" ? "" : "\n\n";
-  const blocks: Block[] = [];
-
+  const root: Block[] = [];
+  const subagents = new Map<string, SubagentBlock>();
+  const calls = new Map<string, ToolItem>();
   const hidden = new Set<string>();
+
   for (const e of events) {
     const d = e.data as Record<string, any> | string | null;
+    const obj = d && typeof d === "object" ? d : null;
+    const parent = typeof obj?.parent === "string" ? obj.parent : undefined;
+    const blocks = (parent && subagents.get(parent)?.blocks) || root;
     const last = blocks.at(-1);
+    const id = obj ? idOf(obj) : undefined;
 
     // Gemini narrates its progress through an internal "Update topic" tool.
     // That is bookkeeping, not something the user asked for.
-    if ((e.kind === "tool_call" || e.kind === "tool_result") && d && typeof d === "object") {
-      if (e.kind === "tool_call" && typeof d.title === "string" && /^Update topic/i.test(d.title)) {
-        if (typeof d.id === "string") hidden.add(d.id);
+    if (e.kind === "tool_call" && typeof obj?.title === "string" && /^Update topic/i.test(obj.title)) {
+      if (id) hidden.add(id);
+      continue;
+    }
+    if (e.kind === "tool_result" && id && hidden.has(id)) continue;
+
+    if (e.kind === "text") {
+      const text = typeof d === "string" ? d : typeof obj?.text === "string" ? obj.text : null;
+      if (text === null) continue;
+      if (last?.t === "text") last.text += joiner + text;
+      else blocks.push({ t: "text", text });
+    } else if (e.kind === "raw" && typeof obj?.thought === "string") {
+      if (last?.t === "thought") last.text += obj.thought;
+      else blocks.push({ t: "thought", text: obj.thought });
+    } else if (e.kind === "tool_call") {
+      if (obj && SPAWN.has(obj.name) && id) {
+        const input = (obj.input ?? {}) as Record<string, unknown>;
+        const sub: SubagentBlock = {
+          t: "subagent",
+          id,
+          kind: typeof input.subagent_type === "string" ? input.subagent_type : "general-purpose",
+          description: typeof input.description === "string" ? input.description : "",
+          blocks: [],
+          done: false,
+        };
+        subagents.set(id, sub);
+        blocks.push(sub);
         continue;
       }
-      if (e.kind === "tool_result" && typeof d.id === "string" && hidden.has(d.id)) continue;
-    }
-
-    if (e.kind === "text" && typeof d === "string") {
-      if (last?.t === "text") last.text += joiner + d;
-      else blocks.push({ t: "text", text: d });
-    } else if (e.kind === "raw" && d && typeof d === "object" && typeof d.thought === "string") {
-      if (last?.t === "thought") last.text += d.thought;
-      else blocks.push({ t: "thought", text: d.thought });
-    } else if (e.kind === "tool_call") {
-      const item = { call: describeEvent(e) };
+      const known = id ? calls.get(id) : undefined;
+      if (known) {
+        known.call = describeEvent(e);
+        continue;
+      }
+      const item: ToolItem = { call: describeEvent(e) };
+      if (id) calls.set(id, item);
       if (last?.t === "tools") last.items.push(item);
       else blocks.push({ t: "tools", items: [item] });
     } else if (e.kind === "tool_result") {
-      const target = [...blocks].reverse().find((b) => b.t === "tools");
-      const pending = target?.t === "tools" ? [...target.items].reverse().find((i) => !i.result) : undefined;
-      if (pending) pending.result = describeEvent(e).slice(0, 140);
+      const sub = id ? subagents.get(id) : undefined;
+      if (sub) {
+        sub.done = true;
+        sub.report = subagentReport(obj?.content);
+        continue;
+      }
+      const result = describeEvent(e).slice(0, 140);
+      const item = id ? calls.get(id) : [...blocks].reverse().flatMap((b) => (b.t === "tools" ? [...b.items].reverse() : [])).find((i) => !i.result);
+      if (item) item.result = result;
+      else if (id) {
+        // A result with no call before it (Codex reports a file change only once it's done).
+        const row: ToolItem = { call: result };
+        calls.set(id, row);
+        if (last?.t === "tools") last.items.push(row);
+        else blocks.push({ t: "tools", items: [row] });
+      }
     } else if (e.kind === "error") {
       blocks.push({ t: "error", text: describeEvent(e) });
     }
   }
-  return blocks;
+  return root;
 }

@@ -19,13 +19,14 @@ import {
   PencilSimpleLine,
   Robot,
   Stop,
+  TreeStructure,
   Terminal,
   WarningCircle,
   Wrench,
 } from "@phosphor-icons/react";
 import { api, ApiError, type ThreadView, type Turn } from "@/lib/api";
 import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus } from "@/lib/harness";
-import { buildBlocks, type StreamEvent } from "@/lib/events";
+import { buildBlocks, type Block, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
@@ -115,6 +116,63 @@ function Activity({ items, live }: { items: { call: string; result?: string }[];
   );
 }
 
+/** One level of a turn's work. Subagents render their own work with the same component. */
+function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
+  return (
+    <>
+      {blocks.map((b, i) => {
+        if (b.t === "text")
+          return (
+            <div key={i} className="reply">
+              <Markdown>{b.text}</Markdown>
+            </div>
+          );
+        if (b.t === "thought")
+          return (
+            <details key={i} className="thought">
+              <summary>
+                <Lightbulb size={15} />
+                Reasoning
+              </summary>
+              <p>{b.text}</p>
+            </details>
+          );
+        if (b.t === "error")
+          return (
+            <div key={i} className="notice" data-tone="danger">
+              <WarningCircle size={16} weight="bold" />
+              {b.text}
+            </div>
+          );
+        if (b.t === "subagent") {
+          const running = live && !b.done;
+          return (
+            <details key={b.id} className="subagent" data-running={running || undefined}>
+              <summary>
+                {running ? <StatusIcon status="running" size={15} /> : <TreeStructure size={15} />}
+                <span className="label">
+                  <span className={running ? "shimmer-text" : undefined}>{b.description || "Subagent"}</span>
+                  <span className="kind">{b.kind}</span>
+                </span>
+                <CaretRight size={12} weight="bold" className="chev" />
+              </summary>
+              <div className="subagent-body">
+                {b.blocks.length ? <Blocks blocks={b.blocks} live={running} /> : running ? <p className="hint">Starting</p> : null}
+                {b.report ? (
+                  <div className="reply subagent-report">
+                    <Markdown>{b.report}</Markdown>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          );
+        }
+        return <Activity key={i} items={b.items} live={live && i === blocks.length - 1} />;
+      })}
+    </>
+  );
+}
+
 function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEvent[]; harness: string; now: number }) {
   const h = harnessById(harness);
   const blocks = useMemo(() => buildBlocks(events, harness), [events, harness]);
@@ -128,32 +186,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
       </div>
 
       <div className="msg-agent">
-        {blocks.map((b, i) => {
-          if (b.t === "text")
-            return (
-              <div key={i} className="reply">
-                <Markdown>{b.text}</Markdown>
-              </div>
-            );
-          if (b.t === "thought")
-            return (
-              <details key={i} className="thought">
-                <summary>
-                  <Lightbulb size={15} />
-                  Reasoning
-                </summary>
-                <p>{b.text}</p>
-              </details>
-            );
-          if (b.t === "error")
-            return (
-              <div key={i} className="notice" data-tone="danger">
-                <WarningCircle size={16} weight="bold" />
-                {b.text}
-              </div>
-            );
-          return <Activity key={i} items={b.items} live={active && i === blocks.length - 1} />;
-        })}
+        <Blocks blocks={blocks} live={active} />
 
         {active && blocks.length === 0 ? (
           <p className="shimmer-text" role="status" style={{ fontSize: 14, justifySelf: "start" }}>

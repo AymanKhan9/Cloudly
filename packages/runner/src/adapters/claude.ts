@@ -14,14 +14,18 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
             return [{ kind: "status", data: message }];
 
         case "assistant": {
+            // A subagent's messages carry the id of the Agent call that started it.
+            // Its text is tagged rather than a plain string, so the chat nests it
+            // under that call and the transcript (plain strings only) skips it.
+            const parent = message.parent_tool_use_id ?? undefined;
             const events: NormalizedEvent[] = [];
             for (const block of message.message.content) {
                 if (block.type === "text") {
-                    events.push({ kind: "text", data: block.text });
+                    events.push({ kind: "text", data: parent ? { text: block.text, parent } : block.text });
                 } else if (block.type === "tool_use") {
                     events.push({
                         kind: "tool_call",
-                        data: { id: block.id, name: block.name, input: block.input },
+                        data: { id: block.id, name: block.name, input: block.input, ...(parent ? { parent } : {}) },
                     });
                 }
             }
@@ -29,13 +33,14 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
         }
 
         case "user": {
+            const parent = message.parent_tool_use_id ?? undefined;
             const events: NormalizedEvent[] = [];
             if (Array.isArray(message.message.content)) {
                 for (const block of message.message.content) {
                     if (block.type === "tool_result") {
                         events.push({
                             kind: "tool_result",
-                            data: { toolUseId: block.tool_use_id, content: block.content },
+                            data: { toolUseId: block.tool_use_id, content: block.content, ...(parent ? { parent } : {}) },
                         });
                     }
                 }
