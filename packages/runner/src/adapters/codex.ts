@@ -1,4 +1,5 @@
 import type { RunAdapter } from "../adapter";
+import { CodexSubagents } from "./codex-subagents";
 import type { RunEvent } from "@repo/shared/run-event";
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import type { NormalizedEvent } from "./claude";
@@ -73,11 +74,28 @@ export class CodexAdapter implements RunAdapter {
 
         let seq = 0;
         const { events } = await thread.runStreamed(task, { signal: this.controller.signal });
+        const subagents = new CodexSubagents();
+        if (resume) subagents.threadId = resume;
 
-        for await (const event of events) {
-            for (const normalized of mapCodexEvent(event)) {
+        // Main-thread events as they come, and every half second whatever the
+        // subagents' own logs have added since.
+        const it = events[Symbol.asyncIterator]();
+        let next = it.next();
+        for (;;) {
+            const step = await Promise.race([next, Bun.sleep(500).then(() => null)]);
+            for (const event of await subagents.poll().catch(() => [])) {
+                yield { seq: seq++, ts: Date.now(), ...event };
+            }
+            if (step === null) continue;
+            if (step.done) break;
+            next = it.next();
+            if (step.value.type === "thread.started") subagents.threadId = step.value.thread_id;
+            for (const normalized of mapCodexEvent(step.value)) {
                 yield { seq: seq++, ts: Date.now(), ...normalized };
             }
+        }
+        for (const event of await subagents.poll().catch(() => [])) {
+            yield { seq: seq++, ts: Date.now(), ...event };
         }
     }
 
