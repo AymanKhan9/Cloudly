@@ -1965,6 +1965,17 @@ kbd,
 
 .pill select {
   padding-right: 16px;
+  /* A native select is as wide as its longest option; size it to the chosen one. */
+  field-sizing: content;
+  max-width: min(260px, 52vw);
+  text-overflow: ellipsis;
+}
+
+/* The OS draws the option list; without explicit colors Linux Chrome shows
+   light text on a white popup in dark mode. */
+select option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .pill input {
@@ -1985,6 +1996,7 @@ kbd,
 }
 
 .send {
+  margin-left: auto;
   display: inline-grid;
   place-items: center;
   width: 36px;
