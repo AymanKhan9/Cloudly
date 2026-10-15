@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckIcon, CopyIcon } from "./icons";
+import { Check, Copy } from "@phosphor-icons/react";
 
 export const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh";
 
@@ -24,8 +24,8 @@ export function InstallCard() {
         <span className="prompt">$</span>
         {INSTALL_COMMAND}
       </code>
-      <button type="button" className="btn btn-signal" onClick={copy} aria-label="Copy install command">
-        {copied ? <CheckIcon /> : <CopyIcon />}
+      <button type="button" className="btn btn-primary btn-sm" onClick={copy} aria-label="Copy install command">
+        {copied ? <Check size={15} weight="bold" /> : <Copy size={15} />}
         <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
       </button>
     </div>

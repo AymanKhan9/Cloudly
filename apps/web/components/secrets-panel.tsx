@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { CheckCircle, Circle, LockSimple, Trash } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 
 interface SettingRow {
@@ -52,18 +53,14 @@ function Row({ row, onChange }: { row: SettingRow; onChange: () => void }) {
       : `Saved${row.preview ? ` (${row.preview})` : ""}`;
 
   return (
-    <div className="secret-row">
+    <div className="secret">
       <div>
-        <div className="secret-name">{row.label}</div>
-        <div className="secret-state" role="status">
+        <div className="name">{row.label}</div>
+        <div className="state" role="status" data-set={row.set || undefined} data-locked={(!row.set && row.locked) || undefined}>
+          {row.set ? <CheckCircle size={13} weight="bold" /> : row.locked ? <LockSimple size={13} weight="bold" /> : <Circle size={13} />}
           {state}
         </div>
       </div>
-      {row.source === "db" ? (
-        <button type="button" className="btn btn-quiet" onClick={remove} disabled={busy}>
-          Remove
-        </button>
-      ) : null}
       <form onSubmit={save}>
         <input
           type={row.secret ? "password" : "text"}
@@ -72,13 +69,24 @@ function Row({ row, onChange }: { row: SettingRow; onChange: () => void }) {
           placeholder={row.set ? "Replace" : row.secret ? "Paste a key" : "Value"}
           autoComplete="off"
           aria-label={row.label}
-          className={row.secret ? "mono" : undefined}
+          className={`input${row.secret ? " mono" : ""}`}
         />
-        <button type="submit" className="btn btn-signal" disabled={busy || !value.trim()}>
+        <button type="submit" className="btn btn-secondary" disabled={busy || !value.trim()}>
           Save
         </button>
+        {row.source === "db" ? (
+          <button type="button" className="icon-btn" onClick={remove} disabled={busy} aria-label={`Remove ${row.label}`} title="Remove">
+            <Trash size={16} />
+          </button>
+        ) : (
+          <span style={{ width: 36, flex: "none" }} aria-hidden="true" />
+        )}
       </form>
-      {error ? <div className="error-box" style={{ gridColumn: "1 / -1" }}>{error}</div> : null}
+      {error ? (
+        <div className="notice err" data-tone="danger">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -105,21 +113,28 @@ function RestorePanel({ locked, onChange }: { locked: SettingRow[]; onChange: ()
   }
 
   return (
-    <div className="secret-row">
+    <div className="secret" style={{ background: "var(--warn-soft)" }}>
       <div>
-        <div className="secret-name">Restore from an earlier install</div>
-        <div className="secret-state">
-          Locked: {locked.map((r) => r.label).join(", ")}. Paste the recovery key the earlier install printed to unlock
-          them. Anything you&apos;ve saved here since stays as it is.
+        <div className="name">Restore from an earlier install</div>
+        <div className="state" data-locked>
+          <LockSimple size={13} weight="bold" />
+          Locked: {locked.map((r) => r.label).join(", ")}
         </div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          Paste the recovery key the earlier install printed to unlock them. Anything you&apos;ve saved here since stays as it is.
+        </p>
       </div>
       <form onSubmit={restore}>
-        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Recovery key" autoComplete="off" aria-label="Recovery key" className="mono" />
-        <button type="submit" className="btn btn-signal" disabled={busy || !key.trim()}>
-          {busy ? "Restoring…" : "Restore"}
+        <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Recovery key" autoComplete="off" aria-label="Recovery key" className="input mono" />
+        <button type="submit" className="btn btn-primary" disabled={busy || !key.trim()}>
+          {busy ? "Restoring" : "Restore"}
         </button>
       </form>
-      {error ? <div className="error-box" style={{ gridColumn: "1 / -1" }}>{error}</div> : null}
+      {error ? (
+        <div className="notice err" data-tone="danger">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -134,19 +149,25 @@ export function SecretsPanel() {
   const github = rows?.find((r) => r.name === "GITHUB_APP_SLUG");
 
   return (
-    <section className="sheet" style={{ marginTop: 28 }} aria-labelledby="keys-heading">
-      <div className="sheet-head">
-        <span id="keys-heading" className="caps" style={{ color: "var(--slate)" }}>
-          Keys and connections
-        </span>
+    <section className="set-sec" aria-labelledby="keys-h">
+      <header>
+        <h2 id="keys-h">Keys and connections</h2>
+        <p>
+          Stored encrypted on this server and never shown again after saving. Agents get them through the key gateway, never inside the sandbox.
+          {github?.set ? ` GitHub is connected through the app "${github.preview}".` : ""}
+        </p>
+      </header>
+      <div className="set-body">
+        <div className="panel">
+          {rows === null ? (
+            <div className="panel-row" aria-busy="true">
+              <div className="skeleton" style={{ width: "50%" }} />
+            </div>
+          ) : null}
+          {rows?.some((r) => r.locked) ? <RestorePanel locked={rows.filter((r) => r.locked)} onChange={load} /> : null}
+          {rows?.filter((r) => SHOWN.includes(r.group)).map((r) => <Row key={r.name} row={r} onChange={load} />)}
+        </div>
       </div>
-      {rows === null ? <div className="skeleton" style={{ margin: 20, width: "50%" }} aria-busy="true" /> : null}
-      {rows?.some((r) => r.locked) ? <RestorePanel locked={rows.filter((r) => r.locked)} onChange={load} /> : null}
-      {rows?.filter((r) => SHOWN.includes(r.group)).map((r) => <Row key={r.name} row={r} onChange={load} />)}
-      <p className="field-hint" style={{ padding: "12px 20px 16px", margin: 0 }}>
-        Keys are stored encrypted on this server and never shown again after saving. The agents use them when a run starts.
-        {github?.set ? ` GitHub is connected through the app "${github.preview}".` : ""}
-      </p>
     </section>
   );
 }

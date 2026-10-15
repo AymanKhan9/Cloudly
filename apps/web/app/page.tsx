@@ -1,284 +1,132 @@
 import Link from "next/link";
-import { HeroReplay } from "@/components/hero-replay";
+import { ArrowRight, GithubLogo } from "@phosphor-icons/react/dist/ssr";
 import { InstallCard } from "@/components/install-card";
+import { RunStory } from "@/components/run-story";
 import { SpendDemo } from "@/components/spend-demo";
-import { StationFigure } from "@/components/station-figure";
-import { AltitudeStrip } from "@/components/altitude-strip";
-import { Oktas } from "@/components/notation";
-import { ArrowIcon, GitHubIcon, Mark } from "@/components/icons";
+import { AgentsDemo } from "@/components/agents-demo";
+import { Mark } from "@/components/icons";
 
 const REPO_URL = "https://github.com/AymanKhan9/Cloudly";
 const MARKETING = process.env.NEXT_PUBLIC_SITE_MODE === "marketing";
 
-// The real event names each adapter in packages/runner maps from.
-const DIALECTS = [
-  { claude: "assistant · text block", codex: "item.completed · agent_message", gemini: "session/update · agent_message_chunk", out: "Agent" },
-  { claude: "assistant · tool_use", codex: "item.started · command_execution", gemini: "session/update · tool_call", out: "Tool" },
-  { claude: "user · tool_result", codex: "item.completed · command_execution", gemini: "session/update · tool_call_update", out: "Result" },
-  { claude: "result · total_cost_usd", codex: "turn.completed · usage tokens", gemini: "prompt response · token quota", out: "Done + cost" },
-];
-
-const DEMO_LOG = [
-  { oktas: 3, task: "Add per-key rate limiting to POST /invoices", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Agent", status: "Running", cost: "$0.21", est: false, pr: null },
-  { oktas: 8, task: "Upgrade the test runner and fix the two flaky specs", repo: "acme/web", genus: "Cirrus", harness: "Gemini CLI", status: "PR opened", cost: "~$0.07", est: true, pr: "#88" },
-  { oktas: 8, task: "Write a migration that backfills invoice currency", repo: "acme/billing-api", genus: "Altocumulus", harness: "Codex", status: "PR opened", cost: "~$0.44", est: true, pr: "#213" },
-  { oktas: 8, task: "Refactor invoice export to streaming CSV", repo: "acme/billing-api", genus: "Cumulus", harness: "Claude Agent", status: "Cancelled", cost: "$1.12", est: false, pr: null, struck: true },
-];
+const HOSTS = ["Oracle Cloud Always Free (Arm, 12 GB)", "Google Cloud e2-micro (1 GB, one run at a time)", "AWS (new-account credits)", "DigitalOcean"];
 
 export default function Landing() {
   return (
     <div className="landing">
-      <section className="band band-0">
-        <header className="topbar">
+      <header className="topbar">
+        <div className="wrap">
           <Link href="/" className="wordmark" aria-label="Cloudly home">
             <Mark />
             Cloudly
           </Link>
           <nav aria-label="Main">
-            <a href="#station" className="hide-sm">
-              Where it runs
+            <a href="#how" className="hide-sm">
+              How it works
             </a>
             <a href="#spend" className="hide-sm">
               Spend limit
             </a>
-            <a href={REPO_URL}>GitHub</a>
+            <a href="#agents" className="hide-sm">
+              Agents
+            </a>
+            <a href={REPO_URL} aria-label="Cloudly on GitHub">
+              <GithubLogo size={18} />
+            </a>
             {MARKETING ? null : (
-              <Link href="/signin" className="btn btn-line" style={{ minHeight: 36, color: "var(--chalk)" }}>
+              <Link href="/signin" className="btn btn-secondary btn-sm">
                 Sign in
               </Link>
             )}
           </nav>
-        </header>
+        </div>
+      </header>
 
-        <div className="wrap hero">
-          <div>
-            <h1 className="display">Coding agents you own, end to end.</h1>
-            <p className="lede">
-              Cloudly runs <strong>Claude Agent, Codex or Gemini CLI</strong> against your GitHub repos on a VM in your
-              own cloud account, on your API keys or the Claude or ChatGPT plan you already pay for. Hand it a task,
-              close the laptop, and come back to a pull request. Your server, your database, your keys, your limit.
-              Free and MIT-licensed.
+      <main>
+        <RunStory
+          hero={
+            <section className="hero">
+              <h1>Coding agents you own, end to end.</h1>
+              <p className="sub">
+                Run Claude Agent, Codex or Gemini CLI on your GitHub repos from a VM in your own cloud. Close the
+                laptop, get a pull request.
+              </p>
+              <div className="hero-actions">
+                <InstallCard />
+                <a href={REPO_URL} className="text-link">
+                  <GithubLogo size={16} />
+                  Read the source on GitHub
+                  <ArrowRight size={14} />
+                </a>
+              </div>
+            </section>
+          }
+        />
+
+        <section id="spend" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2>Set a limit. It actually stops.</h2>
+              <p>
+                Claude Agent reports exact cost per run. Codex and Gemini report tokens, priced from a table you control
+                and marked as estimates. Runs on your Claude or ChatGPT plan don&apos;t count.
+              </p>
+            </div>
+            <SpendDemo />
+          </div>
+        </section>
+
+        <section id="agents" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2>Switch agents with a dropdown.</h2>
+              <p>
+                Each agent reports its work in its own dialect. Cloudly translates all three into one log, so cancel,
+                the spend limit and the pull request work the same whichever you pick.
+              </p>
+            </div>
+            <AgentsDemo />
+            <p className="agents-note">
+              Each agent keeps its own session across your follow-ups, and its commands work as typed:{" "}
+              <code className="mono">/compact</code>, <code className="mono">/context</code>,{" "}
+              <code className="mono">/model</code> and the skills in your repo. Gemini CLI runs over the Agent Client
+              Protocol, so other ACP agents can plug in the same way.
             </p>
-            <div className="hero-actions">
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="wrap close">
+            <div>
+              <h2>Put Cloudly on your own cloud.</h2>
               <InstallCard />
-              <p className="hero-note">
+              <p className="hint" style={{ marginTop: 14, maxWidth: 520 }}>
                 Run it on a fresh Linux VM. It installs Docker, gets an HTTPS certificate even without a domain, and
                 finishes setup in the browser.
               </p>
-              <a href={REPO_URL} className="link-arrow">
-                <GitHubIcon width={15} height={15} />
-                Read the source on GitHub
-                <ArrowIcon />
-              </a>
             </div>
-          </div>
-          <HeroReplay />
-        </div>
-      </section>
-
-      <section id="station" className="band band-1 section">
-        <div className="wrap">
-          <AltitudeStrip plate="II" genus={2} name="Cirrus fibratus" altitude="9 000 m" />
-          <h2 className="display">Nothing runs anywhere you don't control.</h2>
-          <p className="section-lede">
-            One VM in your account runs the web app, the API and the worker, with Postgres on the same VM or in a
-            database you already run. Each run gets its own throwaway container. Your keys are stored encrypted on that
-            VM, and your code is never sent to an agent service in between.
-          </p>
-          <div className="station">
-            <StationFigure />
-            <div>
-              <ul className="station-facts">
-                <li>
-                  <strong>Your keys and plan never enter the sandbox</strong>
-                  <span>Agents get a placeholder. A gateway outside the container adds your API key or Claude or ChatGPT plan token on the way to the vendor, so a malicious repo has nothing to steal. No markup, no Cloudly account.</span>
-                </li>
-                <li>
-                  <strong>The sandbox can't phone home</strong>
-                  <span>Run containers reach only the model APIs, the main package registries and GitHub, plus any hosts you add. Everything else, DNS included, is blocked.</span>
-                </li>
-                <li>
-                  <strong>GitHub credentials never enter the sandbox</strong>
-                  <span>The worker pushes the branch and opens the pull request from outside the container, with a short-lived GitHub App token.</span>
-                </li>
-                <li>
-                  <strong>Untrusted output is treated as untrusted</strong>
-                  <span>The agent's patch is exported in a network-less container, validated, then committed deterministically in a clone the agent never touched.</span>
-                </li>
+            <div className="hosts">
+              <h3>Good fits today</h3>
+              <ul>
+                {HOSTS.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
               </ul>
-              <div className="providers">
-                Good fits today, if you check each provider's current terms:
-                <ul>
-                  <li>Oracle Cloud Always Free (Arm, 12 GB)</li>
-                  <li>Google Cloud e2-micro (1 GB, one run at a time)</li>
-                  <li>AWS (new-account credits)</li>
-                  <li>DigitalOcean (paid droplet)</li>
-                </ul>
-              </div>
+              <p>Check each provider&apos;s current terms before you rely on a free tier.</p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      <section id="spend" className="band band-2 section">
+      <footer className="footer">
         <div className="wrap">
-          <AltitudeStrip plate="III" genus={1} name="Altocumulus stratiformis" altitude="4 000 m" />
-          <h2 className="display">Set a limit. It actually stops.</h2>
-          <p className="section-lede">
-            Pick a monthly model-spend limit. Claude Agent reports exact cost per run; Codex and Gemini report tokens,
-            which Cloudly prices from a table you control and marks as an estimate. Runs on your Claude or ChatGPT plan
-            cost nothing extra and don't count; your plan's own limits apply.
-          </p>
-          <SpendDemo />
+          <span>Cloudly is free software under the MIT license.</span>
+          <nav>
+            <a href={REPO_URL}>GitHub</a>
+            {MARKETING ? null : <Link href="/signin">Sign in to your instance</Link>}
+          </nav>
         </div>
-      </section>
-
-      <section className="band band-3 section">
-        <div className="wrap">
-          <AltitudeStrip plate="IV" genus={0} name="Stratocumulus" altitude="1 500 m" />
-          <h2 className="display">Switch agents with a dropdown.</h2>
-          <p className="section-lede" style={{ marginBottom: 0 }}>
-            Each agent reports its work in its own dialect. Cloudly translates all three into one event stream, so the
-            run log, the cancel button, the spend limit and the pull request work the same whichever agent you pick.
-            Each keeps its own session across your follow-ups, and its commands work as typed:{" "}
-            <span className="mono">/compact</span>, <span className="mono">/context</span>,{" "}
-            <span className="mono">/model</span> and the skills in your repo. Gemini CLI runs over the Agent Client
-            Protocol, so other ACP agents can plug in the same way.
-          </p>
-          <ul className="dialects-stacked">
-            {DIALECTS.map((d) => (
-              <li key={d.out}>
-                <strong>{d.out}</strong>
-                <dl>
-                  <dt className="latin">Cumulus · Claude Agent</dt>
-                  <dd className="mono">{d.claude}</dd>
-                  <dt className="latin">Altocumulus · Codex</dt>
-                  <dd className="mono">{d.codex}</dd>
-                  <dt className="latin">Cirrus · Gemini CLI</dt>
-                  <dd className="mono">{d.gemini}</dd>
-                </dl>
-              </li>
-            ))}
-          </ul>
-          <div className="dialects-wide">
-            <table className="dialects">
-              <thead>
-                <tr>
-                  <th scope="col">
-                    <span className="latin">Cumulus</span>
-                    <span>Claude Agent · Agent SDK</span>
-                  </th>
-                  <th scope="col">
-                    <span className="latin">Altocumulus</span>
-                    <span>Codex · Codex SDK</span>
-                  </th>
-                  <th scope="col">
-                    <span className="latin">Cirrus</span>
-                    <span>Gemini CLI · ACP</span>
-                  </th>
-                  <th scope="col">
-                    <span className="latin">Cloudly</span>
-                    <span>one log</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {DIALECTS.map((d) => (
-                  <tr key={d.out}>
-                    <td className="mono">{d.claude}</td>
-                    <td className="mono">{d.codex}</td>
-                    <td className="mono">{d.gemini}</td>
-                    <td className="out">
-                      <ArrowIcon className="arrow" width={16} height={16} />
-                      {d.out}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section className="band band-ground">
-        <div className="wrap section" style={{ paddingBottom: 0 }}>
-          <h2 className="display">Every run, logged like an observation.</h2>
-          <p className="section-lede">
-            Each run records its repo, agent, status, cost and pull request. Progress is drawn the way a weather
-            station records cloud cover: in eighths of the sky.
-          </p>
-          <div style={{ overflowX: "auto" }}>
-            <table className="log">
-              <thead>
-                <tr>
-                  <th scope="col">
-                    <span className="visually-hidden">Progress</span>
-                  </th>
-                  <th scope="col">Task</th>
-                  <th scope="col" className="hide-sm">
-                    Agent
-                  </th>
-                  <th scope="col">Status</th>
-                  <th scope="col" className="r">
-                    Cost
-                  </th>
-                  <th scope="col" className="r hide-sm">
-                    PR
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEMO_LOG.map((r) => (
-                  <tr key={r.task}>
-                    <td style={{ width: 36 }}>
-                      <Oktas eighths={r.oktas} title={`${r.oktas} of 8`} />
-                    </td>
-                    <td className="task">
-                      {r.task}
-                      <small className="mono">{r.repo}</small>
-                    </td>
-                    <td className="hide-sm">
-                      <span className="latin">{r.genus}</span>
-                      <span className="h-name">{r.harness}</span>
-                    </td>
-                    <td>
-                      <span className="status-label" data-status={r.struck ? "cancelled" : undefined}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="r num">{r.cost}</td>
-                    <td className="r num hide-sm">{r.pr ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="synthetic-note">Illustrative data. A tilde marks an estimated cost.</p>
-        </div>
-
-        <div className="wrap close">
-          <div>
-            <h2 className="display">Put a station on your own cloud.</h2>
-            <InstallCard />
-          </div>
-          <a href={REPO_URL} className="link-arrow" style={{ borderColor: "var(--hair-ink)" }}>
-            <GitHubIcon width={15} height={15} />
-            AymanKhan9/Cloudly
-            <ArrowIcon />
-          </a>
-        </div>
-
-        <footer className="footer">
-          <div className="wrap">
-            <span>Cloudly is free software under the MIT license. Bring your own cloud, database, keys or plan, and GitHub.</span>
-            {MARKETING ? null : (
-              <span>
-                <Link href="/signin">Sign in to your instance</Link>
-              </span>
-            )}
-          </div>
-        </footer>
-      </section>
+      </footer>
     </div>
   );
 }

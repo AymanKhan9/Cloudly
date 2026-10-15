@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { CaretRight, Check, CheckCircle, CircleNotch, WarningCircle } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
 
 interface Preset {
@@ -31,7 +32,7 @@ function toggle(script: string, preset: Preset, on: boolean): string {
 }
 
 const STATUS: Record<SandboxView["build"]["status"], string> = {
-  pending: "Waiting for the worker to start the build…",
+  pending: "Waiting for the worker to start the build.",
   building: "Building the sandbox image. This takes a few minutes; runs keep using the previous image meanwhile.",
   ready: "Ready. New runs use this setup.",
   failed: "The last build failed. Runs keep using the previous image.",
@@ -85,105 +86,133 @@ export function SandboxPanel() {
   const dirty = view !== null && script.trim() !== view.script.trim();
   const notes = view?.presets.filter((p) => p.note && script.includes(marker(p.id))) ?? [];
 
+  const BuildIcon = view?.build.status === "ready" ? CheckCircle : view?.build.status === "failed" ? WarningCircle : CircleNotch;
+
   return (
-    <section className="sheet" style={{ marginTop: 28 }} aria-labelledby="sandbox-heading">
-      <div className="sheet-head">
-        <span id="sandbox-heading" className="caps" style={{ color: "var(--slate)" }}>
-          Sandbox tools
-        </span>
-      </div>
-      {view === null ? (
-        <div className="skeleton" style={{ margin: 20, width: "50%" }} aria-busy="true" />
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            send("/settings/sandbox", { method: "PUT", body: JSON.stringify({ script }) });
-          }}
-        >
-          <div className="field field-wide">
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              Every run has Node 22, Bun, Python 3, git and C build tools. Add more here; the agent is told what&apos;s installed.
-            </p>
-            <div className="preset-list">
-              {view.presets.map((p) => (
-                <label key={p.id} className="preset">
-                  <input type="checkbox" checked={script.includes(marker(p.id))} onChange={(e) => setScript(toggle(script, p, e.target.checked))} />
-                  {p.label}
+    <>
+      <section className="set-sec" aria-labelledby="sandbox-h">
+        <header>
+          <h2 id="sandbox-h">Sandbox tools</h2>
+          <p>Every run has Node 22, Bun, Python 3, git and C build tools. Add more here; the agent is told what&apos;s installed.</p>
+        </header>
+        <div className="set-body">
+          {view === null ? (
+            error ? (
+              <div className="notice" data-tone="danger">
+                {error}
+              </div>
+            ) : (
+              <div className="skeleton" style={{ width: "50%" }} aria-busy="true" />
+            )
+          ) : (
+            <form
+              className="panel"
+              onSubmit={(e) => {
+                e.preventDefault();
+                send("/settings/sandbox", { method: "PUT", body: JSON.stringify({ script }) });
+              }}
+            >
+              <div className="panel-row field">
+                <span className="label">Presets</span>
+                <div className="chips">
+                  {view.presets.map((p) => (
+                    <label key={p.id} className="chip">
+                      <input type="checkbox" checked={script.includes(marker(p.id))} onChange={(e) => setScript(toggle(script, p, e.target.checked))} />
+                      <span className="box">
+                        <Check size={11} weight="bold" />
+                      </span>
+                      {p.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="panel-row field">
+                <label className="label" htmlFor="setup-script">
+                  Setup script
                 </label>
-              ))}
-            </div>
-          </div>
-          <div className="field field-wide">
-            <label className="field-label" htmlFor="setup-script">
-              Setup script
-            </label>
-            <textarea
-              id="setup-script"
-              className="mono setup-script"
-              value={script}
-              onChange={(e) => setScript(e.target.value)}
-              rows={Math.min(18, Math.max(5, script.split("\n").length + 1))}
-              spellCheck={false}
-              placeholder="# Runs as root when the sandbox image is built, after apt-get update. For example:&#10;apt-get install -y --no-install-recommends jq"
-            />
-            <p className="field-hint">
-              Runs as root once, when the image is built, not on every run. Each tool adds roughly 0.3–1 GB of disk.
-              {notes.map((p) => ` ${p.note}`).join("")}
-            </p>
-          </div>
-          <div className="sheet-foot">
-            <span className="saved" role="status" style={{ color: view.build.status === "failed" ? "var(--storm)" : undefined }}>
-              {error ?? STATUS[view.build.status]}
-            </span>
-            {view.build.status === "failed" && !dirty ? (
-              <button type="button" className="btn btn-quiet" disabled={saving} onClick={() => send("/settings/sandbox/rebuild", { method: "POST" })}>
-                Retry build
-              </button>
-            ) : null}
-            <button type="submit" className="btn btn-signal" disabled={saving || !dirty}>
-              {saving ? "Saving…" : "Save and build"}
-            </button>
-          </div>
-          {view.build.log && view.build.status !== "pending" ? (
-            <details className="build-log">
-              <summary>Build log</summary>
-              <pre className="mono">{view.build.log}</pre>
-            </details>
-          ) : null}
-        </form>
-      )}
+                <textarea
+                  id="setup-script"
+                  className="textarea mono code-area"
+                  value={script}
+                  onChange={(e) => setScript(e.target.value)}
+                  rows={Math.min(18, Math.max(5, script.split("\n").length + 1))}
+                  spellCheck={false}
+                  placeholder="# Runs as root when the sandbox image is built, after apt-get update. For example:&#10;apt-get install -y --no-install-recommends jq"
+                />
+                <p className="hint">
+                  Runs as root once, when the image is built, not on every run. Each tool adds roughly 0.3 to 1 GB of disk.
+                  {notes.map((p) => ` ${p.note}`).join("")}
+                </p>
+              </div>
+              <div className="panel-row" style={{ display: "grid", gap: 12 }}>
+                <div className="form-foot">
+                  <span className="msg build-status" role="status" data-s={error ? "failed" : view.build.status}>
+                    <BuildIcon size={15} weight="bold" className={busy ? "spin" : undefined} />
+                    {error ?? STATUS[view.build.status]}
+                  </span>
+                  {view.build.status === "failed" && !dirty ? (
+                    <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => send("/settings/sandbox/rebuild", { method: "POST" })}>
+                      Retry build
+                    </button>
+                  ) : null}
+                  <button type="submit" className="btn btn-primary" disabled={saving || !dirty}>
+                    {saving ? "Saving" : "Save and build"}
+                  </button>
+                </div>
+                {view.build.log && view.build.status !== "pending" ? (
+                  <details className="disclosure">
+                    <summary>
+                      <CaretRight size={12} weight="bold" />
+                      Build log
+                    </summary>
+                    <pre className="mono">{view.build.log}</pre>
+                  </details>
+                ) : null}
+              </div>
+            </form>
+          )}
+        </div>
+      </section>
+
       {view ? (
-        <form
-          className="network-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send("/settings/sandbox/network", { method: "PUT", body: JSON.stringify({ hosts }) });
-          }}
-        >
-          <div className="field field-wide">
-            <label className="field-label" htmlFor="egress-hosts">
-              Network: extra hosts the agent may reach
-            </label>
-            <p className="field-hint" style={{ marginTop: 0 }}>
-              Runs can only reach the model APIs, the main package registries and GitHub, so a malicious repo can&apos;t make the
-              agent send your key somewhere else. Add hosts here, one per line; subdomains are included. <span className="mono">*</span> allows
-              everything. Applies from the next run.
-            </p>
-            <textarea id="egress-hosts" className="mono setup-script" rows={3} value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="docs.example.com" spellCheck={false} />
-            <details className="build-log" style={{ padding: 0, marginTop: 8 }}>
-              <summary>Always allowed ({view.network.defaults.length})</summary>
-              <pre className="mono">{view.network.defaults.join("\n")}</pre>
-            </details>
+        <section className="set-sec" aria-labelledby="network-h">
+          <header>
+            <h2 id="network-h">Network</h2>
+            <p>Runs reach only the model APIs, the main package registries and GitHub, so a malicious repo can&apos;t send your key elsewhere.</p>
+          </header>
+          <div className="set-body">
+            <form
+              className="panel"
+              onSubmit={(e) => {
+                e.preventDefault();
+                send("/settings/sandbox/network", { method: "PUT", body: JSON.stringify({ hosts }) });
+              }}
+            >
+              <div className="panel-row field">
+                <label className="label" htmlFor="egress-hosts">
+                  Extra hosts the agent may reach
+                </label>
+                <textarea id="egress-hosts" className="textarea mono code-area" rows={3} value={hosts} onChange={(e) => setHosts(e.target.value)} placeholder="docs.example.com" spellCheck={false} />
+                <p className="hint">
+                  One per line; subdomains are included. <code className="mono">*</code> allows everything. Applies from the next run.
+                </p>
+                <details className="disclosure">
+                  <summary>
+                    <CaretRight size={12} weight="bold" />
+                    Always allowed ({view.network.defaults.length})
+                  </summary>
+                  <pre className="mono">{view.network.defaults.join("\n")}</pre>
+                </details>
+              </div>
+              <div className="panel-row form-foot">
+                <button type="submit" className="btn btn-primary" disabled={saving || hosts.trim() === view.network.extra.trim()}>
+                  Save hosts
+                </button>
+              </div>
+            </form>
           </div>
-          <div className="sheet-foot">
-            <span />
-            <button type="submit" className="btn btn-signal" disabled={saving || hosts.trim() === view.network.extra.trim()}>
-              Save hosts
-            </button>
-          </div>
-        </form>
+        </section>
       ) : null}
-    </section>
+    </>
   );
 }

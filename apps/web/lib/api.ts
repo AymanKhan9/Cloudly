@@ -1,6 +1,6 @@
 "use client";
 
-import type { BudgetState } from "@/components/notation";
+import type { BudgetState } from "@/components/status";
 import type { RunStatus } from "./harness";
 
 export class ApiError extends Error {
@@ -46,8 +46,6 @@ export interface RunSummary {
   branch: string | null;
   error: string | null;
   cancelRequested: boolean;
-  /** This run's position among the user's runs, oldest first: its plate number. */
-  ordinal?: number;
 }
 
 export interface Budget {

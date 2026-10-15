@@ -4,11 +4,29 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Markdown from "react-markdown";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowSquareOut,
+  ArrowUp,
+  CaretRight,
+  CloudSlash,
+  FileText,
+  GitBranch,
+  GitPullRequest,
+  GithubLogo,
+  Globe,
+  Lightbulb,
+  MagnifyingGlass,
+  PencilSimpleLine,
+  Robot,
+  Stop,
+  Terminal,
+  WarningCircle,
+  Wrench,
+} from "@phosphor-icons/react";
 import { api, ApiError, type ThreadView, type Turn } from "@/lib/api";
-import { harnessById, oktasFor, STATUS_LABEL, usd, type RunStatus } from "@/lib/harness";
+import { harnessById, STATUS_LABEL, usd, type RunStatus } from "@/lib/harness";
 import { buildBlocks, type StreamEvent } from "@/lib/events";
-import { Oktas } from "@/components/notation";
-import { ArrowIcon, ExternalIcon, StopIcon } from "@/components/icons";
+import { StatusIcon } from "@/components/status";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -19,70 +37,177 @@ function elapsed(from: string, now: number) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
 }
 
+// Tool calls arrive as "Name  argument" lines from all three agents; group them
+// by what they did so a turn's activity reads as one sentence.
+const KINDS = {
+  cmd: { icon: Terminal, one: "Ran a command", many: (n: number) => `Ran ${n} commands`, live: "Running" },
+  read: { icon: FileText, one: "Read a file", many: (n: number) => `Read ${n} files`, live: "Reading" },
+  edit: { icon: PencilSimpleLine, one: "Edited a file", many: (n: number) => `Edited ${n} files`, live: "Editing" },
+  search: { icon: MagnifyingGlass, one: "Searched once", many: (n: number) => `Searched ${n} times`, live: "Searching" },
+  web: { icon: Globe, one: "Fetched a page", many: (n: number) => `Fetched ${n} pages`, live: "Fetching" },
+  other: { icon: Wrench, one: "Used a tool", many: (n: number) => `Used ${n} tools`, live: "Using" },
+};
+type Kind = keyof typeof KINDS;
+
+function parseCall(call: string): { kind: Kind; name: string; arg: string } {
+  const split = call.split(/\s{2,}/);
+  let [name, arg] = split.length > 1 ? [split[0]!, split.slice(1).join(" ")] : [call.split(" ")[0]!, call.split(" ").slice(1).join(" ")];
+  arg = arg.replaceAll("/workspace/", "");
+  const n = name.toLowerCase();
+  const kind: Kind = /bash|command|shell|exec/.test(n)
+    ? "cmd"
+    : /edit|write|replace|file_change|patch|edited|changed/.test(n)
+      ? "edit"
+      : /read|view|cat/.test(n)
+        ? "read"
+        : /grep|glob|search|find|^ls$|list|rg/.test(n)
+          ? "search"
+          : /web|fetch|url/.test(n)
+            ? "web"
+            : "other";
+  return { kind, name, arg };
+}
+
+function Activity({ items, live }: { items: { call: string; result?: string }[]; live: boolean }) {
+  const parsed = items.map((i) => ({ ...parseCall(i.call), result: i.result }));
+  const last = parsed.at(-1)!;
+  const counts = new Map<Kind, number>();
+  for (const p of parsed) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
+  const summary = [...counts]
+    .map(([k, n], i) => {
+      const text = n === 1 ? KINDS[k].one : KINDS[k].many(n);
+      return i === 0 ? text : text[0]!.toLowerCase() + text.slice(1);
+    })
+    .join(", ");
+  const LastIcon = KINDS[last.kind].icon;
+
+  return (
+    <details className="activity">
+      <summary>
+        <LastIcon size={15} />
+        {live ? (
+          <span className="label shimmer-text">
+            {KINDS[last.kind].live} <span className="mono">{last.arg || last.name}</span>
+          </span>
+        ) : (
+          <span className="label">{summary}</span>
+        )}
+        <CaretRight size={12} weight="bold" className="chev" />
+      </summary>
+      <ol>
+        {parsed.map((p, i) => {
+          const Icon = KINDS[p.kind].icon;
+          return (
+            <li key={i}>
+              <Icon size={14} />
+              <span className="call mono" title={`${p.name} ${p.arg}`}>
+                <b>{p.name}</b>
+                {p.arg}
+              </span>
+              {p.result ? <span className="result mono">{p.result.replaceAll("/workspace/", "")}</span> : null}
+            </li>
+          );
+        })}
+      </ol>
+    </details>
+  );
+}
+
 function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEvent[]; harness: string; now: number }) {
   const h = harnessById(harness);
   const blocks = useMemo(() => buildBlocks(events, harness), [events, harness]);
   const active = ACTIVE.includes(turn.status);
-  const hasReply = blocks.some((b) => b.t === "text" || b.t === "tools");
+  const status = turn.cancelRequested && active ? "Cancelling" : turn.status === "succeeded" && !turn.prUrl ? "Done" : STATUS_LABEL[turn.status];
 
   return (
     <article className="turn">
-      <div className="msg-user">{turn.prompt}</div>
+      <div className="msg-user">
+        <div>{turn.prompt}</div>
+      </div>
 
       <div className="msg-agent">
         {blocks.map((b, i) => {
-          if (b.t === "text") return <div key={i} className="reply"><Markdown>{b.text}</Markdown></div>;
+          if (b.t === "text")
+            return (
+              <div key={i} className="reply">
+                <Markdown>{b.text}</Markdown>
+              </div>
+            );
           if (b.t === "thought")
             return (
               <details key={i} className="thought">
-                <summary>Reasoning</summary>
+                <summary>
+                  <Lightbulb size={15} />
+                  Reasoning
+                </summary>
                 <p>{b.text}</p>
               </details>
             );
-          if (b.t === "error") return <div key={i} className="error-box">{b.text}</div>;
-          return (
-            <ul key={i} className="tool-rows">
-              {b.items.map((item, j) => (
-                <li key={j}>
-                  <span className="mono">{item.call}</span>
-                  {item.result ? <span className="tool-result mono">{item.result}</span> : null}
-                </li>
-              ))}
-            </ul>
-          );
+          if (b.t === "error")
+            return (
+              <div key={i} className="notice" data-tone="danger">
+                <WarningCircle size={16} weight="bold" />
+                {b.text}
+              </div>
+            );
+          return <Activity key={i} items={b.items} live={active && i === blocks.length - 1} />;
         })}
 
-        {active && !hasReply ? (
-          <p className="waiting" role="status">
-            {turn.status === "queued" ? "Waiting for the worker" : "Waiting for the model"} · <span className="num">{elapsed(turn.createdAt, now)}</span>
+        {active && blocks.length === 0 ? (
+          <p className="shimmer-text" role="status" style={{ fontSize: 14, justifySelf: "start" }}>
+            {turn.status === "queued" ? "Waiting for the worker to pick this up" : "Thinking"}
           </p>
         ) : null}
 
-        {turn.error ? <div className="error-box" role="alert">{turn.error}</div> : null}
+        {turn.error ? (
+          <div className="notice" data-tone="danger" role="alert">
+            <WarningCircle size={16} weight="bold" />
+            {turn.error}
+          </div>
+        ) : null}
 
         <footer className="turn-foot">
-          <Oktas eighths={oktasFor(turn.status, Math.min(0.9, events.length / 24))} obscured={turn.status === "failed"} size={18} title={STATUS_LABEL[turn.status]} />
-          <span className="stamp" data-inked={!active && turn.status === "succeeded" ? true : undefined} data-struck={turn.status === "cancelled" ? true : undefined}>
-            {turn.cancelRequested && active ? "Cancelling" : turn.status === "succeeded" && !turn.prUrl ? "Done" : STATUS_LABEL[turn.status]}
+          <span className="status">
+            <StatusIcon status={turn.status} pr={Boolean(turn.prUrl)} size={14} />
+            {status}
           </span>
           {active ? <span className="num">{elapsed(turn.createdAt, now)}</span> : null}
           {turn.onPlan ? (
-            <span className="num">on your plan</span>
+            <span>On your plan</span>
           ) : turn.costUsd !== null ? (
-            <span className="num">
+            <span className="num" title={h.cost === "estimated" ? "Estimated from token counts" : "Reported by the agent"}>
               {usd(turn.costUsd, h.cost === "estimated")}
-              {h.cost === "estimated" ? <span className="est"> est.</span> : null}
+              {h.cost === "estimated" ? " est." : ""}
             </span>
           ) : null}
           {turn.prUrl ? (
-            <a href={turn.prUrl} target="_blank" rel="noreferrer" className="link-arrow" style={{ marginLeft: "auto", borderColor: "var(--hair-ink)" }}>
+            <a href={turn.prUrl} target="_blank" rel="noreferrer" className="pr-chip">
+              <GitPullRequest size={14} weight="bold" />
               Pull request
-              <ExternalIcon />
+              <ArrowSquareOut size={12} />
             </a>
           ) : null}
         </footer>
       </div>
     </article>
+  );
+}
+
+const compact = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${+(n / 1000).toFixed(1)}k` : String(n));
+
+/** How full the agent's context window is, as in Claude Code. /compact empties it. */
+function ContextRing({ tokens, max, percentage }: { tokens: number; max: number; percentage: number }) {
+  const r = 6.5;
+  const c = 2 * Math.PI * r;
+  const label = `Context: ${compact(tokens)} of ${compact(max)} tokens (${percentage}%). /compact frees it up.`;
+  return (
+    <span className="ring" title={label} aria-label={label} role="img" data-full={percentage >= 80 || undefined}>
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" strokeWidth="2.2">
+        <circle cx="8" cy="8" r={r} className="track" />
+        <circle cx="8" cy="8" r={r} className="fill" strokeLinecap="round" strokeDasharray={`${Math.min(1, percentage / 100) * c} ${c}`} transform="rotate(-90 8 8)" />
+      </svg>
+      <span className="num">{percentage}%</span>
+    </span>
   );
 }
 
@@ -96,11 +221,15 @@ export default function SessionPage() {
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [pick, setPick] = useState(0);
   const stickRef = useRef(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setView(null);
     setEvents({});
+    setLoadError(null);
     api<ThreadView>(`/threads/${id}`)
       .then(setView)
       .catch((e: Error) => setLoadError(e instanceof ApiError && e.status === 404 ? "This session doesn't exist, or it belongs to someone else." : e.message));
@@ -157,35 +286,54 @@ export default function SessionPage() {
     }
     return { model, usage };
   }, [events]);
-  // To the page's real bottom: an anchor above the sticky composer would scroll
-  // the page up on every event and hide the newest output behind the composer.
+
+  // Follow new output only while the reader is already at the bottom.
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => (stickRef.current = Boolean(e?.isIntersecting)), { rootMargin: "0px 0px 160px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [view !== null]);
+
+  // To the page's real bottom: an anchor above the sticky composer would leave
+  // the newest output hidden behind it.
   useEffect(() => {
     if (stickRef.current) window.scrollTo({ top: document.documentElement.scrollHeight });
   }, [eventCount, view?.turns.length]);
 
-  useEffect(() => {
-    const onScroll = () => {
-      stickRef.current = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  // While typing a command name: "/" alone or "/co", but not once arguments start.
+  const typing = /^\/([\w:.-]*)$/.exec(draft);
+  const suggestions = typing ? commands.filter((c) => c.startsWith(typing[1]!) && c !== typing[1]).slice(0, 10) : [];
+  useEffect(() => setPick(0), [suggestions.length]);
 
   if (loadError) {
     return (
-      <div className="empty">
-        <Oktas eighths={8} obscured size={56} />
+      <div className="center-state">
         <div>
-          <h2 className="display">Session not found.</h2>
+          <CloudSlash size={36} style={{ color: "var(--text-3)" }} />
+          <h2>Session not found</h2>
           <p>{loadError}</p>
-          <Link href="/app" className="btn btn-quiet">
-            New session
+          <Link href="/app" className="btn btn-secondary">
+            Start a new session
           </Link>
         </div>
       </div>
     );
   }
-  if (!view) return <div className="skeleton" style={{ width: "40%", height: 28 }} aria-busy="true" />;
+
+  if (!view) {
+    return (
+      <div className="chat" aria-busy="true">
+        <div className="thread" style={{ display: "grid", gap: 16, paddingTop: 48 }}>
+          <div className="skeleton" style={{ width: "45%", height: 38, justifySelf: "end", borderRadius: 18 }} />
+          <div className="skeleton" style={{ width: "80%" }} />
+          <div className="skeleton" style={{ width: "65%" }} />
+          <div className="skeleton" style={{ width: "30%" }} />
+        </div>
+      </div>
+    );
+  }
 
   const { thread, turns } = view;
   const h = harnessById(thread.harness);
@@ -193,13 +341,11 @@ export default function SessionPage() {
   const busy = latest ? ACTIVE.includes(latest.status) : false;
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
 
-  // While typing a command name: "/" alone or "/co", but not once arguments start.
-  const typing = /^\/([\w:.-]*)$/.exec(draft);
-  const suggestions = typing ? commands.filter((c) => c.startsWith(typing[1]!) && c !== typing[1]).slice(0, 10) : [];
   // A /word the agent didn't announce isn't a command in this mode (interactive-only
   // ones like /stats or /plan): it would go to the model as text, which then improvises.
   const typed = /^\/([\w:.-]+)(\s|$)/.exec(draft)?.[1];
-  const unknownCommand = typed && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
+  const unknownCommand =
+    typed && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
 
   async function send(e?: React.FormEvent) {
     e?.preventDefault();
@@ -227,124 +373,143 @@ export default function SessionPage() {
     }
   }
 
+  const choose = (name: string) => {
+    setDraft(`/${name} `);
+    inputRef.current?.focus();
+  };
+
+  const hint = actionError
+    ? { tone: "danger", text: actionError }
+    : typed && thread.harness === "native-codex"
+      ? { tone: "warn", text: "Codex has no / commands when it runs headless, so this will be sent as an ordinary message." }
+      : unknownCommand
+        ? { tone: "warn", text: `/${unknownCommand} isn't one of this agent's commands here, so it will be sent as an ordinary message.` }
+        : !connected
+          ? { tone: undefined, text: "Reconnecting to the live log" }
+          : busy
+            ? { tone: undefined, text: "The agent is working. Your next message can wait here until the turn ends." }
+            : null;
+
   return (
     <div className="chat">
       <header className="chat-head">
-        <div>
-          <h1 className="display">{thread.title}</h1>
-          <p className="chat-meta">
-            <span className="mono">{thread.repo}</span>
-            <span aria-hidden="true">·</span>
+        <div className="titles">
+          <h1 title={thread.title}>{thread.title}</h1>
+          <div className="meta">
             <span>
-              <span className="latin">{h.genus}</span> {h.name}
+              <GithubLogo size={13} />
+              <span className="mono">{thread.repo}</span>
             </span>
-            <span aria-hidden="true">·</span>
-            <span className="mono">{thread.branch}</span>
-            {context.model ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="mono">{context.model}</span>
-              </>
-            ) : null}
-            {context.usage ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <ContextRing {...context.usage} />
-              </>
-            ) : null}
-            {total > 0 ? (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="num">{usd(total, h.cost === "estimated")}</span>
-              </>
-            ) : null}
-          </p>
+            <span className="hide-sm">
+              <GitBranch size={13} />
+              <span className="mono">{thread.branch}</span>
+            </span>
+            <span className="hide-sm">
+              <Robot size={13} />
+              {h.name}
+              {context.model ? <span className="mono">{context.model}</span> : null}
+            </span>
+          </div>
         </div>
-        {thread.prUrl ? (
-          <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-signal">
-            Pull request
-            <ExternalIcon />
-          </a>
-        ) : null}
+        <div className="tools">
+          {context.usage ? <ContextRing {...context.usage} /> : null}
+          {total > 0 ? (
+            <span className="num hide-sm" title={h.cost === "estimated" ? "Session total, estimated" : "Session total"}>
+              {usd(total, h.cost === "estimated")}
+            </span>
+          ) : null}
+          {thread.prUrl ? (
+            <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+              <GitPullRequest size={15} weight="bold" style={{ color: "var(--ok)" }} />
+              <span className="hide-sm">Pull request</span>
+            </a>
+          ) : null}
+        </div>
       </header>
 
-      <div className="turns">
+      <div className="thread">
         {turns.map((t) => (
           <TurnView key={t.id} turn={t} events={events[t.id] ?? []} harness={thread.harness} now={now} />
         ))}
       </div>
 
-      <form className="composer" onSubmit={send}>
-        {suggestions.length > 0 ? (
-          <div className="command-suggest" role="listbox" aria-label="Agent commands">
-            {suggestions.map((name) => (
-              <button key={name} type="button" role="option" aria-selected={false} className="mono" onClick={() => setDraft(`/${name} `)}>
-                /{name}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Tab" && suggestions.length > 0) {
-              e.preventDefault();
-              setDraft(`/${suggestions[0]} `);
-              return;
-            }
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder={busy ? "The agent is working. You can type the next message now." : commands.length ? "Ask for a change, or type / for the agent's commands" : "Ask for a change, or a question about the code"}
-          rows={2}
-          maxLength={8000}
-          aria-label="Message"
-        />
-        <div className="composer-row">
-          <span className="composer-hint" role={actionError ? "alert" : undefined} style={actionError ? { color: "var(--storm)" } : undefined}>
-            {actionError ??
-              (typed && thread.harness === "native-codex"
-                ? "Codex has no / commands when it runs headless, so this will be sent as an ordinary message."
-                : unknownCommand
-                ? `/${unknownCommand} isn't one of this agent's commands here, so it will be sent as an ordinary message.`
-                : connected
-                  ? "Enter to send · Shift+Enter for a new line"
-                  : "Reconnecting…")}
-          </span>
-          {busy ? (
-            <button type="button" className="btn btn-quiet" onClick={cancel} disabled={latest?.cancelRequested}>
-              <StopIcon />
-              {latest?.cancelRequested ? "Cancelling" : "Cancel turn"}
-            </button>
+      <form className="dock" onSubmit={send}>
+        <div className="composer">
+          {suggestions.length > 0 ? (
+            <div className="suggest" role="listbox" id="commands" aria-label="Agent commands">
+              {suggestions.map((name, i) => (
+                <button
+                  key={name}
+                  id={`cmd-${i}`}
+                  type="button"
+                  role="option"
+                  aria-selected={i === pick}
+                  className="mono"
+                  onMouseEnter={() => setPick(i)}
+                  onClick={() => choose(name)}
+                >
+                  /{name}
+                </button>
+              ))}
+            </div>
           ) : null}
-          <button type="submit" className="btn btn-signal" disabled={busy || sending || !draft.trim()}>
-            Send
-            <ArrowIcon />
-          </button>
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (suggestions.length > 0) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setPick((p) => (p + (e.key === "ArrowDown" ? 1 : suggestions.length - 1)) % suggestions.length);
+                  return;
+                }
+                if (e.key === "Tab" || e.key === "Enter") {
+                  e.preventDefault();
+                  choose(suggestions[pick]!);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  setDraft("");
+                  return;
+                }
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder={commands.length ? "Reply to the agent, or type / for its commands" : "Ask for a change, or a question about the code"}
+            rows={1}
+            maxLength={8000}
+            aria-label="Message"
+            aria-controls={suggestions.length ? "commands" : undefined}
+            aria-activedescendant={suggestions.length ? `cmd-${pick}` : undefined}
+          />
+          <div className="composer-bar">
+            <span className="hint" style={{ fontSize: 12.5, color: "var(--text-3)" }}>
+              {h.name}
+            </span>
+            <span className="spacer" />
+            {busy ? (
+              <button type="button" className="send stop" onClick={cancel} disabled={latest?.cancelRequested} aria-label="Cancel turn" title="Cancel turn">
+                <Stop size={15} weight="fill" />
+              </button>
+            ) : (
+              <button type="submit" className="send" disabled={sending || !draft.trim()} aria-label="Send">
+                <ArrowUp size={18} weight="bold" />
+              </button>
+            )}
+          </div>
         </div>
+        <div className="composer-note" data-tone={hint?.tone === "danger" ? "danger" : undefined} role={hint?.tone ? "alert" : undefined}>
+          <span style={hint?.tone === "warn" ? { color: "var(--warn)" } : undefined}>{hint?.text ?? "Follow-ups continue on the same branch and pull request."}</span>
+          <span className="hide-sm">
+            <kbd>Enter</kbd> to send
+          </span>
+        </div>
+        <div ref={bottomRef} />
       </form>
     </div>
-  );
-}
-
-const compact = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${+(n / 1000).toFixed(1)}k` : String(n));
-
-/** How full the agent's context window is, as in Claude Code. /compact empties it. */
-function ContextRing({ tokens, max, percentage }: { tokens: number; max: number; percentage: number }) {
-  const r = 7;
-  const circumference = 2 * Math.PI * r;
-  const filled = Math.min(1, percentage / 100);
-  const label = `Context: ${compact(tokens)} of ${compact(max)} tokens (${percentage}%). /compact frees it up.`;
-  return (
-    <span className="context-ring" title={label} aria-label={label} role="img" data-full={percentage >= 80 ? true : undefined}>
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <circle cx="9" cy="9" r={r} className="track" />
-        <circle cx="9" cy="9" r={r} className="fill" strokeDasharray={`${filled * circumference} ${circumference}`} transform="rotate(-90 9 9)" />
-      </svg>
-      <span className="num">{percentage}%</span>
-    </span>
   );
 }

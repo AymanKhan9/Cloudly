@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { CloudPlate } from "@/components/cloud-plate";
-import { GitHubIcon, Mark } from "@/components/icons";
+import { GithubLogo, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { Mark } from "@/components/icons";
 import { SetupNotice } from "@/components/setup-notice";
 
 const ERRORS: Record<string, string> = {
@@ -15,52 +15,33 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   const message = error ? (ERRORS[error] ?? ERRORS.server) : null;
 
   return (
-    <main className="signin">
-      <figure className="signin-sky mount">
-        <div className="mount-head">
-          <span className="caps">Plate I</span>
-          <span className="caps" style={{ color: "var(--slate)" }}>
-            Fair weather
-          </span>
-        </div>
-        <div className="mount-window">
-          <CloudPlate growth={0.55} genus={0} label="Cumulus cloud over the station" />
-        </div>
-        <figcaption className="mount-caption">
-          <span>
-            <span className="latin">Cumulus mediocris</span>, fair weather over the station.
-          </span>
-        </figcaption>
-      </figure>
-
-      <div className="signin-panel">
+    <main className="auth">
+      <div className="auth-card">
         <Link href="/" className="wordmark" aria-label="Cloudly home">
           <Mark />
           Cloudly
         </Link>
-
-        <div className="signin-card">
-          <h1 className="display">Sign in to your station.</h1>
-          <p>Use the GitHub account you listed when you set up this instance.</p>
-          <SetupNotice />
-          {message ? (
-            <div className="alert" role="alert">
-              {message}
-            </div>
-          ) : null}
-          <a className="btn btn-signal" href="/api/auth/github/login">
-            <GitHubIcon />
-            Continue with GitHub
-          </a>
-          <p className="signin-fine">
-            Only the GitHub accounts listed during setup can sign in. Cloudly asks GitHub for your
-            public profile only; repository access comes from the GitHub App you installed.
-          </p>
+        <h1>Sign in to your instance</h1>
+        <p className="lede">Use the GitHub account you listed when you set it up.</p>
+        <SetupNotice />
+        {message ? (
+          <div className="notice" data-tone="danger" role="alert">
+            <WarningCircle size={16} weight="bold" />
+            {message}
+          </div>
+        ) : null}
+        <a className="btn btn-primary btn-lg" href="/api/auth/github/login">
+          <GithubLogo size={18} weight="fill" />
+          Continue with GitHub
+        </a>
+        <p className="fine">
+          Cloudly asks GitHub for your public profile only. Repository access comes from the GitHub App you installed,
+          and only the accounts listed during setup can sign in.
+        </p>
+        <div className="auth-foot">
+          <span>Self-hosted, MIT licensed</span>
+          <Link href="/">About Cloudly</Link>
         </div>
-
-        <span className="signin-fine" style={{ margin: 0 }}>
-          Self-hosted · MIT
-        </span>
       </div>
     </main>
   );

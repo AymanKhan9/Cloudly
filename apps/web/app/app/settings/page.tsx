@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useApp } from "@/components/app-context";
-import { Barometer, STATE_WORD } from "@/components/notation";
+import { SpendBar } from "@/components/status";
 import { HARNESSES, usd } from "@/lib/harness";
 import { SecretsPanel } from "@/components/secrets-panel";
 import { SandboxPanel } from "@/components/sandbox-panel";
+
+const STATE_TEXT = { fair: "Runs start normally", change: "Warning sent", storm: "New runs blocked" };
 
 export default function SettingsPage() {
   const { budget, refreshBudget } = useApp();
@@ -42,105 +44,116 @@ export default function SettingsPage() {
     }
   }
 
-  const state = budget?.state ?? "fair";
+  const state = budget?.limitUsd ? budget.state : "fair";
 
   return (
-    <>
+    <div className="page">
       <div className="page-head">
-        <div>
-          <h1 className="display">Settings</h1>
-          <p>Spend limit, keys and sandbox tools for this instance.</p>
-        </div>
+        <h1>Settings</h1>
+        <p>Spend limit, keys and sandbox tools for this instance.</p>
       </div>
 
-      <div className="settings-grid">
-        <section className="settings-reading" aria-label="This month's spend">
-          {budget ? (
-            <>
-              <Barometer
-                ratio={budget.limitUsd ? budget.ratio : 0}
-                spentLabel={usd(budget.spentUsd)}
-                limitLabel={budget.limitUsd ? usd(budget.limitUsd) : "no limit"}
-              />
-              <p style={{ textAlign: "center", marginTop: 8 }}>
-                {budget.limitUsd ? `${STATE_WORD[state]} · ${Math.round(budget.ratio * 100)}% used this month (UTC)` : "No limit set. Runs are never stopped for cost."}
-              </p>
-            </>
-          ) : (
-            <div className="skeleton" style={{ height: 220, opacity: 0.3 }} />
-          )}
-        </section>
-
-        <form className="sheet" onSubmit={save}>
-          <div className="sheet-head">
-            <span className="caps" style={{ color: "var(--slate)" }}>
-              Spend limit
-            </span>
-          </div>
-          <div className="field field-wide">
-            <label className="field-label" htmlFor="limit">
-              Monthly model-spend limit
-            </label>
-            <div className="money-input">
-              <span>$</span>
-              <input id="limit" type="number" min={0} step="0.5" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} required className="num" />
+      <section className="set-sec" aria-labelledby="spend-h">
+        <header>
+          <h2 id="spend-h">Spend limit</h2>
+          <p>Model spend only. Your VM is billed by your cloud provider. Months reset on the 1st (UTC).</p>
+        </header>
+        <div className="set-body">
+          <div className="panel">
+            <div className="panel-row">
+              {budget ? (
+                <>
+                  <div className="usage-read">
+                    <span className="big num">{usd(budget.spentUsd)}</span>
+                    <span className="of">{budget.limitUsd ? `of ${usd(budget.limitUsd)} this month` : "this month, no limit set"}</span>
+                    {budget.limitUsd ? (
+                      <span className="usage-state" data-state={state}>
+                        {Math.round(budget.ratio * 100)}%, {STATE_TEXT[state].toLowerCase()}
+                      </span>
+                    ) : null}
+                  </div>
+                  {budget.limitUsd ? (
+                    <div style={{ marginTop: 16 }}>
+                      <SpendBar ratio={budget.ratio} state={state} large />
+                      <div className="usage-scale">
+                        <span>$0</span>
+                        <span>Warning at 80%, stop at 100%</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="skeleton" style={{ width: "40%", height: 30 }} />
+              )}
             </div>
-            <p className="field-hint">
-              At 80% you get a banner and one email. At 100% new runs are refused. A turn that's already running
-              finishes first, so a task isn't left half done; Claude Agent stops itself at 25% over the limit, and Codex and
-              Gemini can go over by that one turn. Covers model spend only; your VM is billed by your cloud provider.
-            </p>
+            <form className="panel-row" onSubmit={save} style={{ display: "grid", gap: 18 }}>
+              <div className="field">
+                <label className="label" htmlFor="limit">
+                  Monthly limit
+                </label>
+                <div className="input-prefix">
+                  <span>$</span>
+                  <input id="limit" type="number" min={0} step="0.5" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} required className="num" />
+                </div>
+                <p className="hint">
+                  At 80% you get a banner and one email. At 100% new runs are refused. A turn that&apos;s already running
+                  finishes first; Claude Agent stops itself at 25% over, and Codex and Gemini can go over by that one turn.
+                </p>
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="email">
+                  Alert email
+                </label>
+                <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" style={{ maxWidth: 360 }} />
+                <p className="hint">Sent through Resend when its key is set below. Leave empty for in-app alerts only.</p>
+              </div>
+              <div className="form-foot">
+                <span className="msg" role="status" data-tone={message ? (message.ok ? "ok" : "danger") : undefined}>
+                  {message?.text ?? ""}
+                </span>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? "Saving" : "Save limit"}
+                </button>
+              </div>
+            </form>
           </div>
-          <div className="field field-wide">
-            <label className="field-label" htmlFor="email">
-              Alert email
-            </label>
-            <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-            <p className="field-hint">Sent through Resend when RESEND_API_KEY is set on the server. Leave empty for in-app alerts only.</p>
-          </div>
-          <div className="sheet-foot">
-            <span className="saved" role="status" style={{ color: message && !message.ok ? "var(--storm)" : undefined }}>
-              {message?.text ?? ""}
-            </span>
-            <button type="submit" className="btn btn-signal" disabled={saving}>
-              {saving ? "Saving…" : "Save limit"}
-            </button>
-          </div>
-        </form>
-      </div>
+        </div>
+      </section>
 
       <SecretsPanel />
 
       <SandboxPanel />
 
-      <section className="sheet" style={{ marginTop: 28 }} aria-labelledby="harness-heading">
-        <div className="sheet-head">
-          <span id="harness-heading" className="caps" style={{ color: "var(--slate)" }}>
-            Agents
-          </span>
+      <section className="set-sec" aria-labelledby="agents-h">
+        <header>
+          <h2 id="agents-h">Agents</h2>
+          <p>An agent runs only if its key or plan sign-in is set above. Turns on a plan don&apos;t count toward the limit.</p>
+        </header>
+        <div className="set-body">
+          <div className="panel">
+            <table className="agents-table">
+              <thead>
+                <tr>
+                  <th scope="col">Agent</th>
+                  <th scope="col" className="hide-sm">
+                    ID
+                  </th>
+                  <th scope="col">Cost reporting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {HARNESSES.map((h) => (
+                  <tr key={h.id}>
+                    <td>{h.name}</td>
+                    <td className="mono hide-sm">{h.id}</td>
+                    <td>{h.cost === "exact" ? "Exact, from the agent" : "Estimated from tokens"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <table className="harness-table">
-          <tbody>
-            {HARNESSES.map((h) => (
-              <tr key={h.id}>
-                <td>
-                  <span className="latin" style={{ fontSize: 17 }}>
-                    {h.genus}
-                  </span>{" "}
-                  {h.name}
-                </td>
-                <td className="mono" style={{ color: "var(--slate)" }}>
-                  {h.id}
-                </td>
-                <td>{h.cost === "exact" ? "Exact cost from the agent" : "Estimated from tokens (PRICE_* in .env)"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="field-hint" style={{ padding: "0 16px 16px" }}>
-          An agent runs only if its key or plan sign-in is set above (or in the server's .env). Turns on a plan show "on your plan" and don't count toward the spend limit.
-        </p>
       </section>
-    </>
+    </div>
   );
 }

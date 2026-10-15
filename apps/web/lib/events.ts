@@ -1,8 +1,6 @@
-import type { Course } from "@/components/courses";
-
 export interface StreamEvent {
   seq: number;
-  kind: Course["kind"];
+  kind: "status" | "text" | "tool_call" | "tool_result" | "raw" | "error" | "done" | "pr";
   data: unknown;
   ts: string;
 }
@@ -62,12 +60,6 @@ export function describeEvent(e: StreamEvent): string {
     default:
       return clip(str(d));
   }
-}
-
-export function stampFrom(start: string, ts: string) {
-  const s = Math.max(0, Math.round((new Date(ts).getTime() - new Date(start).getTime()) / 1000));
-  if (s >= 3600) return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`;
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export type Block =

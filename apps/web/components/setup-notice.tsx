@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Info } from "@phosphor-icons/react";
 
 /** A fresh instance can't sign anyone in yet; say so instead of failing at GitHub. */
 export function SetupNotice() {
@@ -14,11 +15,14 @@ export function SetupNotice() {
   }, []);
   if (!needsSetup) return null;
   return (
-    <div className="alert" role="status">
-      This instance isn't set up yet.&nbsp;
-      <Link href="/setup" style={{ fontWeight: 600 }}>
-        Finish setup
-      </Link>
+    <div className="notice" data-tone="warn" role="status">
+      <Info size={16} weight="bold" />
+      <span>
+        This instance isn&apos;t set up yet.{" "}
+        <Link href="/setup" style={{ fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 3 }}>
+          Finish setup
+        </Link>
+      </span>
     </div>
   );
 }

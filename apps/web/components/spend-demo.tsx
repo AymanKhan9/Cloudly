@@ -1,84 +1,85 @@
 "use client";
 
 import { useState } from "react";
-import { Barometer, Oktas, budgetStateFor } from "./notation";
-import { StormFlag } from "./icons";
+import { Bell, Prohibit, CheckCircle } from "@phosphor-icons/react";
+import { budgetStateFor } from "./status";
 
 const LIMIT = 20;
+const MAX = 25;
+const money = (n: number) => `$${n.toFixed(2)}`;
 
-function money(n: number) {
-  return `$${n.toFixed(2)}`;
-}
+const OUTCOME = {
+  fair: {
+    icon: <CheckCircle size={22} weight="bold" style={{ color: "var(--ok)" }} />,
+    title: "Runs start normally.",
+    body: "Under 80% of your limit nothing interrupts you. Each run's cost is recorded the moment the agent reports it.",
+    preview: null,
+  },
+  change: {
+    icon: <Bell size={22} weight="bold" style={{ color: "var(--warn)" }} />,
+    title: "You get one warning.",
+    body: "At 80% the app shows a banner and sends one email for the month. Runs keep going.",
+    preview: "80% of your monthly spend limit used",
+  },
+  storm: {
+    icon: <Prohibit size={22} weight="bold" style={{ color: "var(--danger)" }} />,
+    title: "New runs are refused.",
+    body: "A turn that's already running finishes, so nothing is left half done. Claude Agent turns can't run past 25% over your limit.",
+    preview: "Spend limit reached. New runs are blocked",
+  },
+};
 
 export function SpendDemo() {
   const [spent, setSpent] = useState(9.4);
-  const ratio = spent / LIMIT;
-  const state = budgetStateFor(ratio);
-  const spentOf = `${money(spent)} of ${money(LIMIT)}`;
+  const state = budgetStateFor(spent / LIMIT);
+  const o = OUTCOME[state];
 
   return (
     <div className="spend">
-      <div>
-        <Barometer ratio={ratio} spentLabel={money(spent)} limitLabel={money(LIMIT)} />
-        <div className="spend-control">
-          <label htmlFor="spend-range">
-            <span>Drag to spend this month</span>
-            <span className="num">{Math.round(ratio * 100)}% of limit</span>
+      <div className="spend-gauge">
+        <div className="spend-read">
+          <span className="big num">{money(spent)}</span>
+          <span className="of">of {money(LIMIT)} this month</span>
+        </div>
+        <div className="meter" data-state={state}>
+          <label htmlFor="spend-range" className="visually-hidden">
+            Spend this month
           </label>
           <input
             id="spend-range"
+            className="meter-range"
             type="range"
             min={0}
-            max={25}
+            max={MAX}
             step={0.1}
             value={spent}
             onChange={(e) => setSpent(Number(e.target.value))}
+            aria-valuetext={`${money(spent)}, ${Math.round((spent / LIMIT) * 100)}% of the limit`}
+            style={{ "--pct": `${(spent / MAX) * 100}%` } as React.CSSProperties}
           />
+          <div className="meter-marks" aria-hidden="true">
+            <span style={{ left: 0 }}>$0</span>
+            <span style={{ left: `${(16 / MAX) * 100}%` }}>80%</span>
+            <span style={{ left: `${(LIMIT / MAX) * 100}%` }}>Limit</span>
+          </div>
         </div>
+        <p className="hint" style={{ marginTop: 8 }}>Drag to spend the month.</p>
       </div>
 
-      <div className="consequence" data-state={state} aria-live="polite">
-        {state === "fair" ? (
-          <>
-            <h3 className="display">Fair. Runs start normally.</h3>
-            <p>Under 80% of your limit nothing interrupts you. Every run's cost is recorded the moment its harness reports it.</p>
-            <div className="last-run">
-              <Oktas eighths={8} title="Finished" />
-              <span>Add per-key rate limiting to POST /invoices</span>
-              <span className="num">$0.38</span>
-            </div>
-          </>
-        ) : null}
-
-        {state === "change" ? (
-          <>
-            <h3 className="display">Change. You get one warning.</h3>
-            <p>At 80% Cloudly shows a banner in the app and sends one email for the month. Runs keep going.</p>
-            <div className="mail">
-              <div className="from">Cloudly · to you</div>
-              <div className="subj">Cloudly: 80% of your monthly spend limit used ({spentOf})</div>
-            </div>
-          </>
-        ) : null}
-
-        {state === "storm" ? (
-          <>
-            <h3 className="display state-head">
-              <StormFlag size={26} />
-              Storm. Then it stops.
-            </h3>
-            <p>At 100%, new runs are refused. A turn that's already running finishes, so nothing is left half done. Claude Agent turns can't run past 25% over your limit.</p>
-            <div className="mail">
-              <div className="from">Cloudly · to you</div>
-              <div className="subj">Cloudly stopped: spend limit reached ({spentOf})</div>
-            </div>
-            <div className="stopped-row">
-              <span className="stamp" data-inked>
-                Cancelled
-              </span>
-              <s>Refactor invoice export to streaming CSV</s>
-            </div>
-          </>
+      <div className="spend-outcome" aria-live="polite">
+        <h3>
+          {o.icon}
+          {o.title}
+        </h3>
+        <p>{o.body}</p>
+        {o.preview ? (
+          <div className="preview-banner" key={state}>
+            <span className="state-dot" style={{ background: state === "storm" ? "var(--danger)" : "var(--warn)", marginTop: 5 }} />
+            <span>
+              <small>Email and in-app banner</small>
+              {o.preview} ({money(spent)} of {money(LIMIT)}).
+            </span>
+          </div>
         ) : null}
       </div>
     </div>

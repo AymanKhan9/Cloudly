@@ -1,12 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, CaretDown, GitBranch, GithubLogo, Lightning, Robot } from "@phosphor-icons/react";
 import { api, ApiError, type Repo } from "@/lib/api";
 import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
-import { Oktas } from "@/components/notation";
-import { ArrowIcon } from "@/components/icons";
+
+const STARTERS = [
+  "Explain how this repo is structured and where to start reading",
+  "Find and fix the flakiest test, and explain what made it flaky",
+  "Add input validation to the API routes that are missing it",
+];
 
 export default function NewSessionPage() {
   const router = useRouter();
@@ -19,6 +24,7 @@ export default function NewSessionPage() {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     api<{ repos: Repo[] }>("/repos")
@@ -33,9 +39,12 @@ export default function NewSessionPage() {
   }, []);
 
   const stopped = budget?.state === "storm";
+  const ready = !submitting && !stopped && Boolean(repo) && Boolean(branch.trim()) && Boolean(prompt.trim());
+  const h = HARNESSES.find((x) => x.id === harness)!;
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!ready) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -50,111 +59,118 @@ export default function NewSessionPage() {
     }
   }
 
+  const note = stopped
+    ? { tone: "danger", text: "Your monthly spend limit is reached. Raise it in Settings to start sessions." }
+    : error
+      ? { tone: "danger", text: error }
+      : repoError
+        ? { tone: "danger", text: `Couldn't load repositories: ${repoError}` }
+        : repos && repos.length === 0
+          ? { tone: "danger", text: "The GitHub App can't see any repositories yet. Add one to its installation on GitHub." }
+          : null;
+
   return (
-    <div className="chat">
-      <div className="page-head">
-        <div>
-          <h1 className="display">New session</h1>
-          <p>Describe the first task. You can keep talking to the agent afterward, and everything lands on one branch and one pull request.</p>
-        </div>
-      </div>
+    <div className="start">
+      <h1>What should the agent work on?</h1>
+      <p>Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward.</p>
 
-      <form className="sheet" onSubmit={submit}>
-        <div className="sheet-head">
-          <span className="caps" style={{ color: "var(--slate)" }}>
-            Observation sheet
-          </span>
-          <Oktas eighths={0} title="Not started" />
-        </div>
-
-        <div className="sheet-grid">
-          <div className="field">
-            <label className="field-label" htmlFor="repo">
-              Repository
-            </label>
-            {repoError ? (
-              <div className="error-box">{repoError}</div>
-            ) : (
+      <form onSubmit={submit}>
+        <div className="composer">
+          <label htmlFor="prompt" className="visually-hidden">
+            First task
+          </label>
+          <textarea
+            id="prompt"
+            ref={input}
+            autoFocus
+            rows={4}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Add per-key rate limiting to POST /invoices, 60 requests a minute, and cover the 429 path with a test."
+            maxLength={8000}
+            style={{ minHeight: 112 }}
+          />
+          <div className="composer-bar">
+            <label className="pill" title="Repository">
+              <GithubLogo size={15} />
+              <span className="visually-hidden">Repository</span>
               <select
-                id="repo"
                 value={repo}
-                disabled={!repos}
+                disabled={!repos || repos.length === 0}
                 onChange={(e) => {
                   setRepo(e.target.value);
                   const r = repos?.find((x) => x.fullName === e.target.value);
                   if (r) setBranch(r.defaultBranch);
                 }}
               >
-                {!repos ? <option>Loading repositories…</option> : null}
+                {!repos ? <option>Loading repositories</option> : null}
                 {repos?.map((r) => (
                   <option key={r.fullName} value={r.fullName}>
                     {r.fullName}
                   </option>
                 ))}
               </select>
-            )}
-            {repos && repos.length === 0 ? (
-              <p className="field-hint">The GitHub App can't see any repositories yet. Add one to its installation on GitHub.</p>
-            ) : null}
-          </div>
-          <div className="field">
-            <label className="field-label" htmlFor="branch">
-              Base branch
+              <CaretDown size={11} className="caret" />
             </label>
-            <input id="branch" value={branch} onChange={(e) => setBranch(e.target.value)} required className="mono" />
-            <p className="field-hint">The pull request targets this branch.</p>
-          </div>
-          <div className="field">
-            <span className="field-label">Cost reporting</span>
-            <div className="field-value">
-              {HARNESSES.find((h) => h.id === harness)?.cost === "exact" ? "Exact, reported by the agent" : "Estimated from token counts"}
-            </div>
+            <label className="pill" title="Base branch: the pull request targets it">
+              <GitBranch size={15} />
+              <span className="visually-hidden">Base branch</span>
+              <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} />
+            </label>
+            <label className="pill" title="Agent">
+              <Robot size={15} />
+              <span className="visually-hidden">Agent</span>
+              <select value={harness} onChange={(e) => setHarness(e.target.value as HarnessId)}>
+                {HARNESSES.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+              <CaretDown size={11} className="caret" />
+            </label>
+            <span className="spacer" />
+            <button type="submit" className="send" disabled={!ready} aria-label="Start session">
+              <ArrowUp size={18} weight="bold" />
+            </button>
           </div>
         </div>
 
-        <fieldset className="field field-wide" style={{ border: 0, margin: 0, borderBottom: "1px solid var(--hair-ink)" }}>
-          <legend className="field-label" style={{ float: "left", width: "100%" }}>
-            Agent
-          </legend>
-          <div className="genus-pick">
-            {HARNESSES.map((h) => (
-              <label key={h.id}>
-                <input type="radio" name="harness" value={h.id} checked={harness === h.id} onChange={() => setHarness(h.id)} />
-                <span className="latin">{h.genus}</span>
-                <span className="name">{h.name}</span>
-                <span className="cost">{h.cost === "exact" ? "exact cost" : "estimated cost"}</span>
-              </label>
-            ))}
-          </div>
-          <p className="field-hint">The agent needs its API key in the server's .env. A session keeps one agent.</p>
-        </fieldset>
-
-        <div className="field field-wide">
-          <label className="field-label" htmlFor="prompt">
-            First task
-          </label>
-          <textarea
-            id="prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Add per-key rate limiting to POST /invoices, 60 requests a minute, and cover the 429 path with a test."
-            required
-            maxLength={8000}
-          />
-        </div>
-
-        <div className="sheet-foot">
-          <span style={{ fontSize: 14, color: stopped ? "var(--storm)" : "var(--slate)" }} role={stopped || error ? "alert" : undefined}>
-            {stopped
-              ? "Your monthly spend limit is reached. Raise it in Settings to start sessions."
-              : error ?? "Turns run one at a time; follow-ups wait for the current turn."}
+        <div className="composer-note" data-tone={note?.tone} role={note ? "alert" : undefined}>
+          <span>
+            {note?.text ??
+              `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`}
           </span>
-          <button type="submit" className="btn btn-signal" disabled={submitting || stopped || !repo || !prompt.trim()}>
-            {submitting ? "Starting…" : "Start session"}
-            <ArrowIcon />
-          </button>
+          <span>
+            <kbd>Enter</kbd> to start, <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
+          </span>
         </div>
       </form>
+
+      {prompt.trim() ? null : (
+        <div className="starters">
+          <h2>Or start from</h2>
+          {STARTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                setPrompt(s);
+                input.current?.focus();
+              }}
+            >
+              <Lightning size={15} />
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
