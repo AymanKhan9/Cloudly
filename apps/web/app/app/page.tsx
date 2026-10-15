@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CaretDown, GitBranch, GithubLogo, Lightning, Robot } from "@phosphor-icons/react";
+import { ArrowUp, GitBranch, GithubLogo, Lightning, Robot } from "@phosphor-icons/react";
 import { api, ApiError, type Repo } from "@/lib/api";
 import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
+import { Picker } from "@/components/picker";
 
 const STARTERS = [
   "Explain how this repo is structured and where to start reading",
@@ -97,44 +98,32 @@ export default function NewSessionPage() {
             style={{ minHeight: 112 }}
           />
           <div className="composer-bar">
-            <label className="pill" title="Repository">
-              <GithubLogo size={15} />
-              <span className="visually-hidden">Repository</span>
-              <select
-                value={repo}
-                disabled={!repos || repos.length === 0}
-                onChange={(e) => {
-                  setRepo(e.target.value);
-                  const r = repos?.find((x) => x.fullName === e.target.value);
-                  if (r) setBranch(r.defaultBranch);
-                }}
-              >
-                {!repos ? <option>Loading repositories</option> : null}
-                {repos?.map((r) => (
-                  <option key={r.fullName} value={r.fullName}>
-                    {r.fullName}
-                  </option>
-                ))}
-              </select>
-              <CaretDown size={11} className="caret" />
-            </label>
+            <Picker
+              label="Repository"
+              icon={<GithubLogo size={15} />}
+              value={repo}
+              placeholder={repos ? "No repositories" : "Loading repositories"}
+              disabled={!repos || repos.length === 0}
+              searchable
+              options={(repos ?? []).map((r) => ({ value: r.fullName, label: r.fullName, hint: r.private ? "Private" : undefined }))}
+              onChange={(v) => {
+                setRepo(v);
+                const r = repos?.find((x) => x.fullName === v);
+                if (r) setBranch(r.defaultBranch);
+              }}
+            />
             <label className="pill" title="Base branch: the pull request targets it">
               <GitBranch size={15} />
               <span className="visually-hidden">Base branch</span>
               <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} />
             </label>
-            <label className="pill" title="Agent">
-              <Robot size={15} />
-              <span className="visually-hidden">Agent</span>
-              <select value={harness} onChange={(e) => setHarness(e.target.value as HarnessId)}>
-                {HARNESSES.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-              <CaretDown size={11} className="caret" />
-            </label>
+            <Picker
+              label="Agent"
+              icon={<Robot size={15} />}
+              value={harness}
+              options={HARNESSES.map((x) => ({ value: x.id, label: x.name, hint: x.cost === "exact" ? "Exact cost" : "Estimated cost" }))}
+              onChange={(v) => setHarness(v as HarnessId)}
+            />
             <span className="spacer" />
             <button type="submit" className="send" disabled={!ready} aria-label="Start session">
               <ArrowUp size={18} weight="bold" />
