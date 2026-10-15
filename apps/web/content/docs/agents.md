@@ -37,6 +37,10 @@ You can also type the command directly:
 
 For Gemini CLI, the default is `gemini-3-flash-preview`. Gemini's own `auto` setting tends to route free-tier keys to models with no quota and stall, so Cloudly pins a fast model unless you set `GEMINI_MODEL` in the [configuration](/docs/configuration).
 
+## Subagents
+
+All three agents can delegate to subagents, which run in the same sandbox and show nested in the chat. See [Sessions and chat](/docs/sessions#subagents).
+
 ## Sessions across turns
 
 Each agent keeps its own session between your messages: Claude Agent and Codex resume their native sessions, and Gemini CLI gets the recent conversation replayed. Commands that depend on the session, like `/compact`, work across turns.

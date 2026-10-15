@@ -28,6 +28,22 @@ When the turn ends, Cloudly commits what changed, pushes the branch and opens th
 
 Keep talking to the agent in the same session; it remembers the conversation. Turns run one at a time, so a message you send while the agent is working waits until the current turn ends.
 
+## Subagents
+
+Agents can hand part of a task to subagents, and Cloudly runs them in the same sandbox as the main agent. They get the same placeholder keys and network rules, and their changes land in the same commit and pull request. On Claude Agent, the turn's cost includes its subagents.
+
+Each subagent shows as one row in the turn, with its task and type. Click it to see its own tool activity and the report it handed back. While it works, the row shows that it's running.
+
+| Agent | Subagents | Notes |
+|---|---|---|
+| Claude Agent | Its built-in subagents and any defined in your repo's `.claude/agents/` | |
+| Codex | Spawned with its own multi-agent tools | Each subagent gets a nickname, shown as its type. |
+| Gemini CLI | Its built-in agents, such as `codebase_investigator` | Gemini's own policy may refuse some agents, such as its general-purpose one. |
+
+To use them, ask for them in your message, for example "use two subagents in parallel: one to map the tests, one to read the API routes".
+
+> Codex and Gemini CLI don't report subagent work through their usual output, so Cloudly reads it from their session logs. If a future version changes those logs, the subagent's row still appears, but its inner steps may not.
+
 ## Cancel a turn
 
 Click the stop button in the chat box. The agent stops, and whatever it had already changed is still committed and pushed to the branch, so nothing is lost; that turn just doesn't open a pull request.
