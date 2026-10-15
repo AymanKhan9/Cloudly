@@ -94,6 +94,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Reserve the scrollbar so pages don't jump sideways when content grows. */
+  scrollbar-gutter: stable;
   scroll-padding-top: 80px;
 }
 
@@ -2345,6 +2347,8 @@ button.pill:disabled {
 .msg-agent {
   margin-top: 20px;
   display: grid;
+  /* Without this the column grows to fit a long tool line and widens the page. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -2470,6 +2474,7 @@ button.pill:disabled {
 }
 
 .activity summary .label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -220,6 +220,17 @@ app.get('/threads/:id', async (c) => {
   return c.json(view);
 })
 
+// Picking a model from the menu: saved on the session and used from the next
+// turn, without sending a chat message. null goes back to the agent's default.
+app.patch('/threads/:id', zValidator('json', z.object({ model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').nullable() })), async (c) => {
+  const { count } = await prisma.thread.updateMany({
+    where: { id: c.req.param('id'), userId: c.get('user').id },
+    data: { model: c.req.valid('json').model },
+  });
+  if (count === 0) return c.json({ message: 'Session not found' }, 404);
+  return c.json({ ok: true });
+})
+
 app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) => {
   const user = c.get('user');
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: user.id } });

@@ -382,6 +382,19 @@ export default function SessionPage() {
     }
   }
 
+  // Saved on the session, not sent as a message: the next turn picks it up.
+  async function setModel(model: string | null) {
+    const before = view!.thread.model ?? null;
+    setView((v) => (v ? { ...v, thread: { ...v.thread, model } } : v));
+    setActionError(null);
+    try {
+      await api(`/threads/${id}`, { method: "PATCH", body: JSON.stringify({ model }) });
+    } catch (err) {
+      setView((v) => (v ? { ...v, thread: { ...v.thread, model: before } } : v));
+      setActionError(err instanceof Error ? err.message : "Couldn't change the model.");
+    }
+  }
+
   // The second line of a model in the menu: vendor logo, vendor, and a note.
   const by = (note?: string) => (
     <>
@@ -507,9 +520,9 @@ export default function SessionPage() {
                 ...(MODELS[thread.harness as HarnessId] ?? []).map((m) => ({ value: m.value, label: m.label, sub: by(m.hint) })),
               ]}
               custom={(q) => `Use ${q}`}
-              note={busy ? "You can switch models once this turn finishes." : undefined}
+              note={busy ? "A new model applies from the next turn." : undefined}
               onChange={(v) => {
-                send(undefined, `/model ${v}`);
+                setModel(v === "default" ? null : v);
                 inputRef.current?.focus();
               }}
             />

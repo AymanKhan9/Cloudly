@@ -41,7 +41,7 @@ export function Picker({
   up?: boolean;
   /** Offer the typed search text as a value of its own, labelled by this. */
   custom?: (query: string) => string;
-  /** A line under the list, for when choosing isn't possible right now. */
+  /** A line under the list, e.g. when a choice takes effect. */
   note?: string;
   ref?: React.Ref<{ show: () => void }>;
 }) {
@@ -74,7 +74,6 @@ export function Picker({
     if (refocus) trigger.current?.focus();
   };
   const pick = (o: Option) => {
-    if (note) return;
     close();
     // After closing, so the caller can move focus (e.g. back to a message box).
     onChange(o.value);
@@ -177,7 +176,6 @@ export function Picker({
                 aria-selected={o.value === value}
                 data-active={i === active || undefined}
                 className="menu-item"
-                aria-disabled={note ? true : undefined}
                 onPointerEnter={() => setActive(i)}
                 onClick={() => pick(o)}
               >
