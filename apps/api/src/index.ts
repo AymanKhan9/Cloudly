@@ -17,7 +17,7 @@ for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/
 }
 
 export const HARNESSES = [
-  { id: 'native-claude', name: 'Claude Code', cost: 'exact' },
+  { id: 'native-claude', name: 'Claude Agent', cost: 'exact' },
   { id: 'native-codex', name: 'Codex', cost: 'estimated' },
   { id: 'gemini-acp', name: 'Gemini CLI', cost: 'estimated' },
 ] as const;

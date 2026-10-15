@@ -7,7 +7,7 @@ export interface RunCost {
 
 // USD per million tokens. These are defaults for estimating harnesses that
 // report tokens rather than dollars; override them in .env to match the
-// model you actually run. Claude Code reports exact USD and ignores these.
+// model you actually run. Claude Agent reports exact USD and ignores these.
 function price(name: string, fallback: number): number {
   const raw = process.env[name];
   const parsed = raw === undefined ? NaN : Number(raw);
