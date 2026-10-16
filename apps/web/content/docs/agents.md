@@ -37,6 +37,20 @@ You can also type the command directly:
 
 For Gemini CLI, the default is `gemini-3-flash-preview`. Gemini's own `auto` setting tends to route free-tier keys to models with no quota and stall, so Cloudly pins a fast model unless you set `GEMINI_MODEL` in the [configuration](/docs/configuration).
 
+## Set the effort
+
+Click the effort pill (the gauge) in the chat box to set how hard the agent thinks. Lower is faster and cheaper; higher thinks longer before acting. The levels depend on the agent:
+
+| Agent | Levels | Default |
+|---|---|---|
+| Claude Agent | Low, Medium, High, Extra high, Max | High |
+| Codex | Low, Medium, High, Extra high | Medium |
+| Gemini CLI | Low, High | High |
+
+Like the model, effort is saved on the session and applies from the next turn, so you can change it while a turn runs. You can also set it on the new-session page before the first turn. **Use default** goes back to the agent's own level.
+
+On Claude Agent, Extra high and Max only exist on some models; on others Claude uses the nearest level the model has. On Gemini CLI the level applies to Gemini 3 models; Gemini 2.5 models keep their default.
+
 ## Subagents
 
 All three agents can delegate to subagents, which run in the same sandbox and show nested in the chat. See [Sessions and chat](/docs/sessions#subagents).

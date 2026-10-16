@@ -30,6 +30,7 @@ import { buildBlocks, type Block, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
+import { EffortControl } from "@/components/effort-control";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -416,17 +417,19 @@ export default function SessionPage() {
   }
 
   // Saved on the session, not sent as a message: the next turn picks it up.
-  async function setModel(model: string | null) {
-    const before = view!.thread.model ?? null;
-    setView((v) => (v ? { ...v, thread: { ...v.thread, model } } : v));
+  // Saved on the session, not sent as a message: the next turn picks it up.
+  async function saveSetting(field: "model" | "effort", value: string | null) {
+    const before = view!.thread[field] ?? null;
+    setView((v) => (v ? { ...v, thread: { ...v.thread, [field]: value } } : v));
     setActionError(null);
     try {
-      await api(`/threads/${id}`, { method: "PATCH", body: JSON.stringify({ model }) });
+      await api(`/threads/${id}`, { method: "PATCH", body: JSON.stringify({ [field]: value }) });
     } catch (err) {
-      setView((v) => (v ? { ...v, thread: { ...v.thread, model: before } } : v));
-      setActionError(err instanceof Error ? err.message : "Couldn't change the model.");
+      setView((v) => (v ? { ...v, thread: { ...v.thread, [field]: before } } : v));
+      setActionError(err instanceof Error ? err.message : `Couldn't change the ${field}.`);
     }
   }
+  const setModel = (model: string | null) => saveSetting("model", model);
 
   // The second line of a model in the menu: vendor logo, vendor, and a note.
   const by = (note?: string) => (
@@ -558,6 +561,13 @@ export default function SessionPage() {
                 setModel(v === "default" ? null : v);
                 inputRef.current?.focus();
               }}
+            />
+            <EffortControl
+              harness={thread.harness}
+              value={thread.effort ?? null}
+              up
+              note={busy ? "A new effort applies from the next turn." : undefined}
+              onChange={(effort) => saveSetting("effort", effort)}
             />
             <span className="composer-meta">
               <Robot size={14} />

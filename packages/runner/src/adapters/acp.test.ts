@@ -89,3 +89,28 @@ test("the agent's command list is passed on so the chat can offer it", () => {
     } as unknown as SessionUpdate;
     expect(mapAcpUpdate(update)).toEqual([{ kind: "status", data: { type: "commands", slash_commands: ["compress", "memory"] } }]);
 });
+
+test("Gemini effort is written as a thinkingLevel override and removed when back to default", async () => {
+    const { mkdtemp, readFile, mkdir, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { writeGeminiEffort } = await import("./acp");
+    const home = await mkdtemp(path.join(tmpdir(), "gemini-effort-"));
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(path.join(home, ".gemini", "settings.json"), JSON.stringify({ ui: { theme: "x" } }));
+
+    await writeGeminiEffort("low", home);
+    let s = JSON.parse(await readFile(path.join(home, ".gemini", "settings.json"), "utf8"));
+    expect(s.ui).toEqual({ theme: "x" });
+    expect(s.modelConfigs.customOverrides).toEqual([
+        { match: { model: "chat-base-3" }, modelConfig: { generateContentConfig: { thinkingConfig: { thinkingLevel: "LOW" } } } },
+    ]);
+
+    await writeGeminiEffort("high", home);
+    s = JSON.parse(await readFile(path.join(home, ".gemini", "settings.json"), "utf8"));
+    expect(s.modelConfigs.customOverrides.map((o: any) => o.modelConfig.generateContentConfig.thinkingConfig.thinkingLevel)).toEqual(["HIGH"]);
+
+    await writeGeminiEffort(undefined, home);
+    s = JSON.parse(await readFile(path.join(home, ".gemini", "settings.json"), "utf8"));
+    expect(s.modelConfigs.customOverrides).toEqual([]);
+});

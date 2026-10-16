@@ -61,6 +61,7 @@ Type `/` in the chat box to see the commands the agent announced, and use the ar
 | Item | What it shows |
 |---|---|
 | Model | The session's model. Click it, or type `/model` and press **Enter**, to switch. |
+| Effort | How hard the agent thinks. See [Agents and models](/docs/agents#set-the-effort). |
 | Agent | The session's agent. |
 | Context ring | How full the agent's context window is. `/compact` frees it up on Claude Agent. |
 | Cost | The session's total, with `~` when it is estimated. |

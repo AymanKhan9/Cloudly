@@ -5,6 +5,32 @@ import type { SessionUpdate, PermissionOption, PermissionOptionKind, SessionId }
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import { GeminiSubagents } from "./gemini-subagents";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import path from "node:path";
+
+/**
+ * Gemini CLI has no ACP option for how hard it thinks, so the chat box's effort
+ * goes in as a model config override in its own settings file. It targets
+ * "chat-base-3", the config Gemini 3 models build on (2.5 models use a thinking
+ * budget instead, and keep their default). Other settings in the file are kept.
+ */
+export async function writeGeminiEffort(effort: string | undefined, home = process.env.HOME ?? homedir()) {
+    const file = path.join(home, ".gemini", "settings.json");
+    const existing = await readFile(file, "utf8").catch(() => null);
+    // The session's home persists across turns: back on the default, drop our override.
+    if (!effort && existing === null) return;
+    const settings = JSON.parse(existing ?? "{}") as Record<string, any>;
+    const configs = (settings.modelConfigs ??= {});
+    const others = (Array.isArray(configs.customOverrides) ? configs.customOverrides : []).filter(
+        (o: any) => !(o?.match?.model === "chat-base-3" && o?.modelConfig?.generateContentConfig?.thinkingConfig),
+    );
+    configs.customOverrides = effort
+        ? [...others, { match: { model: "chat-base-3" }, modelConfig: { generateContentConfig: { thinkingConfig: { thinkingLevel: effort.toUpperCase() } } } }]
+        : others;
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(settings, null, 2));
+}
 
 export type NormalizedEvent = Pick<RunEvent, "kind" | "data">;
 
@@ -117,13 +143,14 @@ async function startResumedSession(
 
 export class AcpAdapter implements RunAdapter {
     /** The session's "/model" choice; otherwise GEMINI_MODEL or the pinned flash model. */
-    constructor(private model?: string) {}
+    constructor(private model?: string, private effort?: string) {}
 
     private process?: ChildProcessByStdio<Writable, Readable, null>;
     private ctx?: acp.ClientContext;
     private sessionId?: SessionId;
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
+        await writeGeminiEffort(this.effort).catch((err) => console.error("could not set Gemini effort:", err));
         this.process = spawn("gemini", ["--acp"], {
             cwd: "/workspace",
             stdio: ["pipe", "pipe", "inherit"],

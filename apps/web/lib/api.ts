@@ -89,7 +89,7 @@ export interface Turn {
 }
 
 export interface ThreadView {
-  /** model: chosen with /model for the rest of the session; null is the agent's default. */
-  thread: Omit<ThreadSummary, "lastStatus"> & { model?: string | null };
+  /** model and effort: chosen in the chat box for the rest of the session; null is the agent's default. */
+  thread: Omit<ThreadSummary, "lastStatus"> & { model?: string | null; effort?: string | null };
   turns: Turn[];
 }

@@ -1,7 +1,7 @@
 import type { RunAdapter } from "../adapter";
 import { CodexSubagents } from "./codex-subagents";
 import type { RunEvent } from "@repo/shared/run-event";
-import { Codex, type ThreadEvent } from "@openai/codex-sdk";
+import { Codex, type ModelReasoningEffort, type ThreadEvent } from "@openai/codex-sdk";
 import type { NormalizedEvent } from "./claude";
 
 export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
@@ -52,7 +52,7 @@ export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
 export class CodexAdapter implements RunAdapter {
     private controller?: AbortController;
 
-    constructor(private model?: string) {}
+    constructor(private model?: string, private effort?: string) {}
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
@@ -67,6 +67,7 @@ export class CodexAdapter implements RunAdapter {
             // file. The Cloudly container (limits, egress proxy) is the sandbox.
             sandboxMode: "danger-full-access" as const,
             model: this.model,
+            modelReasoningEffort: this.effort as ModelReasoningEffort | undefined,
         };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)

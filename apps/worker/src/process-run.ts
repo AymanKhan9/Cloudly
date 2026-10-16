@@ -171,6 +171,7 @@ export async function processRun(
     }
     containerOptions.image = await sandboxImage();
     if (thread?.model) containerOptions.model = thread.model;
+    if (thread?.effort) containerOptions.effort = thread.effort;
     const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
     // A command goes to the agent as typed; history in front of it would turn it into text.
     const prompt = thread && !resumed && !isCommand(run.prompt)

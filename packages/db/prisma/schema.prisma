@@ -39,6 +39,8 @@ model Thread {
   /// Chosen with "/model <name>" in the chat; passed to every later turn, so it
   /// beats a model pinned in the repo's own agent settings.
   model          String?
+  /// How hard the agent thinks (see @repo/shared/effort); null is its default.
+  effort         String?
   prUrl          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

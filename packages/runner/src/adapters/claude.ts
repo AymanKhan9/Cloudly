@@ -1,6 +1,6 @@
 import type { RunAdapter } from "../adapter";
 import type { RunEvent } from "@repo/shared/run-event";
-import { query, type SDKMessage, type SDKUserMessage, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+import { query, type SDKMessage, type SDKUserMessage, type CanUseTool, type EffortLevel } from "@anthropic-ai/claude-agent-sdk";
 
 const canUseTool: CanUseTool = async (_toolName, _input, options) => {
     return { behavior: "allow", toolUseID: options.toolUseID };
@@ -78,7 +78,7 @@ export class ClaudeAdapter implements RunAdapter {
      * (none on a subscription). systemAppend: added to Claude Code's own system
      * prompt, so the user's message (and any /command) reaches it untouched.
      */
-    constructor(private maxBudgetUsd?: number, private systemAppend?: string, private model?: string) {}
+    constructor(private maxBudgetUsd?: number, private systemAppend?: string, private model?: string, private effort?: string) {}
 
     async *start(
         task: string,
@@ -108,6 +108,8 @@ export class ClaudeAdapter implements RunAdapter {
                 maxBudgetUsd: this.maxBudgetUsd,
                 // Like `claude --model`: beats a model pinned in the repo's .claude/settings.json.
                 model: this.model,
+                // The chat box's effort; the SDK falls back to the nearest level the model has.
+                effort: this.effort as EffortLevel | undefined,
                 // Claude Code's own system prompt, as in the CLI, plus Cloudly's rules.
                 systemPrompt: { type: "preset", preset: "claude_code", append: this.systemAppend },
                 resume,

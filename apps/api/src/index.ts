@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { modelCommand } from '@repo/shared/model-command'
+import { effortLevels } from '@repo/shared/effort'
 import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, recoverSettings, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
@@ -31,7 +32,7 @@ const CreateRunSchema = z.object({
   harness: HarnessId,
 });
 
-const NewThreadSchema = CreateRunSchema;
+const NewThreadSchema = CreateRunSchema.extend({ effort: z.string().nullable().optional() });
 const MessageSchema = z.object({ prompt: z.string().trim().min(1).max(8000) });
 
 const BudgetSchema = z.object({
@@ -200,13 +201,17 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness } = c.req.valid('json');
+  const { repo, baseBranch, prompt, harness, effort } = c.req.valid('json');
+  if (effort && !effortLevels(harness).includes(effort)) {
+    return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
+  }
   const id = crypto.randomUUID();
   await prisma.thread.create({
     data: {
       id, userId: user.id, repo, baseBranch, harness,
       title: threadTitle(prompt),
       model: modelCommand(prompt) ?? undefined,
+      effort: effort ?? undefined,
       branch: `agent/thread-${id.slice(0, 8)}`,
       runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id } },
     },
@@ -220,14 +225,24 @@ app.get('/threads/:id', async (c) => {
   return c.json(view);
 })
 
-// Picking a model from the menu: saved on the session and used from the next
-// turn, without sending a chat message. null goes back to the agent's default.
-app.patch('/threads/:id', zValidator('json', z.object({ model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').nullable() })), async (c) => {
-  const { count } = await prisma.thread.updateMany({
-    where: { id: c.req.param('id'), userId: c.get('user').id },
-    data: { model: c.req.valid('json').model },
+// Picking a model or effort in the chat box: saved on the session and used from
+// the next turn, without sending a chat message. null goes back to the agent's default.
+const ThreadSettingsSchema = z.object({
+  model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').nullable().optional(),
+  effort: z.string().nullable().optional(),
+});
+
+app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) => {
+  const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
+  if (!thread) return c.json({ message: 'Session not found' }, 404);
+  const { model, effort } = c.req.valid('json');
+  if (effort && !effortLevels(thread.harness).includes(effort)) {
+    return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
+  }
+  await prisma.thread.update({
+    where: { id: thread.id },
+    data: { ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) },
   });
-  if (count === 0) return c.json({ message: 'Session not found' }, 404);
   return c.json({ ok: true });
 })
 

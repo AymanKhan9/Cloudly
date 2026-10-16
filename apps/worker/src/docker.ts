@@ -30,7 +30,8 @@ interface ControlConfig{
     resume?:string,
     maxBudgetUsd?:number,
     systemAppend?:string,
-    model?:string
+    model?:string,
+    effort?:string
 }
 
 export interface ContainerOptions {
@@ -44,6 +45,8 @@ export interface ContainerOptions {
     systemAppend?: string;
     /** The session's "/model" choice; beats a model pinned in the repo's settings. */
     model?: string;
+    /** How hard the agent thinks, from the chat box (see @repo/shared/effort). */
+    effort?: string;
     /** Built from the setup script in Settings; the base image when there is none. */
     image?: string;
 }
@@ -185,6 +188,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             maxBudgetUsd: options.maxBudgetUsd,
             systemAppend: options.systemAppend,
             model: options.model,
+            effort: options.effort,
         };
 
         await writeFile(

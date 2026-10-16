@@ -15,7 +15,7 @@ export const HARNESSES: Harness[] = [
 /**
  * Models offered by the /model menu. The agents accept any model ID their
  * vendor serves, so the menu also lets you type one; these are the common picks.
- * Codex: developers.openai.com/codex/models. Gemini: geminicli.com/docs/cli/model.
+ * Codex: developers.openai.com/codex/models. Gemini: the list its ACP session reports.
  */
 export const MODELS: Record<HarnessId, { value: string; label: string; hint?: string }[]> = {
   "native-claude": [
@@ -26,10 +26,11 @@ export const MODELS: Record<HarnessId, { value: string; label: string; hint?: st
   ],
   "native-codex": [{ value: "gpt-5.5", label: "GPT-5.5" }],
   "gemini-acp": [
-    { value: "gemini-3-pro-preview", label: "Gemini 3 Pro", hint: "Preview" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", hint: "Preview" },
+    { value: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
     { value: "gemini-3-flash-preview", label: "Gemini 3 Flash", hint: "Preview" },
+    { value: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
     { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
   ],
 };
 

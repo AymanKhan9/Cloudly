@@ -8,6 +8,7 @@ import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
+import { EffortControl } from "@/components/effort-control";
 
 const STARTERS = [
   "Explain how this repo is structured and where to start reading",
@@ -23,6 +24,7 @@ export default function NewSessionPage() {
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [harness, setHarness] = useState<HarnessId>("native-claude");
+  const [effort, setEffort] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function NewSessionPage() {
     try {
       const { id } = await api<{ id: string }>("/threads", {
         method: "POST",
-        body: JSON.stringify({ repo, baseBranch: branch, prompt, harness }),
+        body: JSON.stringify({ repo, baseBranch: branch, prompt, harness, effort }),
       });
       router.push(`/app/s/${id}`);
     } catch (err) {
@@ -133,8 +135,12 @@ export default function NewSessionPage() {
                   </>
                 ),
               }))}
-              onChange={(v) => setHarness(v as HarnessId)}
+              onChange={(v) => {
+                setHarness(v as HarnessId);
+                setEffort(null); // levels differ per agent
+              }}
             />
+            <EffortControl harness={harness} value={effort} onChange={setEffort} />
             <span className="spacer" />
             <button type="submit" className="send" disabled={!ready} aria-label="Start session">
               <ArrowUp size={18} weight="bold" />
