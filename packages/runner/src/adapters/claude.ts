@@ -1,5 +1,6 @@
 import type { RunAdapter } from "../adapter";
 import type { RunEvent } from "@repo/shared/run-event";
+import { claudeMcpServers, type McpSpec } from "../mcp";
 import { query, type SDKMessage, type SDKUserMessage, type CanUseTool, type EffortLevel } from "@anthropic-ai/claude-agent-sdk";
 
 const canUseTool: CanUseTool = async (_toolName, _input, options) => {
@@ -78,7 +79,7 @@ export class ClaudeAdapter implements RunAdapter {
      * (none on a subscription). systemAppend: added to Claude Code's own system
      * prompt, so the user's message (and any /command) reaches it untouched.
      */
-    constructor(private maxBudgetUsd?: number, private systemAppend?: string, private model?: string, private effort?: string) {}
+    constructor(private maxBudgetUsd?: number, private systemAppend?: string, private model?: string, private effort?: string, private mcp: McpSpec[] = []) {}
 
     async *start(
         task: string,
@@ -113,6 +114,8 @@ export class ClaudeAdapter implements RunAdapter {
                 // Claude Code's own system prompt, as in the CLI, plus Cloudly's rules.
                 systemPrompt: { type: "preset", preset: "claude_code", append: this.systemAppend },
                 resume,
+                // Cloudly's MCP servers, on top of any the repo configures itself.
+                ...(this.mcp.length ? { mcpServers: claudeMcpServers(this.mcp) } : {}),
                 abortController: this.controller,
             },
         });
