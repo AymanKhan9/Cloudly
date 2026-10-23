@@ -65,7 +65,7 @@ function Sessions({ pathname }: { pathname: string }) {
               <StatusIcon status={t.lastStatus} pr={Boolean(t.prUrl)} size={15} />
               <span className="t">{t.title}</span>
               <span className="m">
-                {t.repo.split("/")[1]} · {harnessById(t.harness).name}, {relativeTime(t.updatedAt)}
+                {t.repo.split("/")[1]} · {harnessById(t.harness).name}{t.arenaId ? " in an arena" : ""}, {relativeTime(t.updatedAt)}
               </span>
             </Link>
           </div>

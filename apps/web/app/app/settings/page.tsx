@@ -1,12 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { Suspense, useEffect, useState } from "react";
+import { api, ApiError, type Repo } from "@/lib/api";
 import { useApp } from "@/components/app-context";
 import { SpendBar } from "@/components/status";
 import { HARNESSES, usd } from "@/lib/harness";
 import { SecretsPanel } from "@/components/secrets-panel";
 import { SandboxPanel } from "@/components/sandbox-panel";
+import { McpPanel } from "@/components/mcp-panel";
+import { EnvPanel } from "@/components/env-panel";
+import { FilesPanel } from "@/components/files-panel";
+
+// A repo's kept files (/files in its runs), picked from the installation's repos.
+function RepoFilesSection() {
+  const [repos, setRepos] = useState<Repo[] | null>(null);
+  const [repo, setRepo] = useState("");
+  useEffect(() => {
+    api<{ repos: Repo[] }>("/repos")
+      .then((r) => {
+        setRepos(r.repos);
+        setRepo(r.repos[0]?.fullName ?? "");
+      })
+      .catch(() => setRepos([]));
+  }, []);
+  return (
+    <section className="set-sec" aria-labelledby="files-h" id="files">
+      <header>
+        <h2 id="files-h">Repo files</h2>
+        <p>Files a repo&apos;s sessions find at /files: data, fixtures, a local config. They aren&apos;t committed, and what the agent saves there is kept for the next session.</p>
+      </header>
+      <div className="set-body">
+        <div className="panel">
+          <div className="panel-row field">
+            <label className="label" htmlFor="files-repo">
+              Repository
+            </label>
+            <select id="files-repo" className="select" value={repo} onChange={(e) => setRepo(e.target.value)} disabled={!repos?.length} style={{ maxWidth: 360 }}>
+              {(repos ?? []).map((r) => (
+                <option key={r.fullName} value={r.fullName}>
+                  {r.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="panel-row">{repo ? <FilesPanel repo={repo} /> : <p className="hint">{repos ? "No repositories yet." : "Loading"}</p>}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 const STATE_TEXT = { fair: "Runs start normally", change: "Warning sent", storm: "New runs blocked" };
 
@@ -50,7 +92,7 @@ export default function SettingsPage() {
     <div className="page">
       <div className="page-head">
         <h1>Settings</h1>
-        <p>Spend limit, keys and sandbox tools for this instance.</p>
+        <p>Spend limit, keys, MCP servers, secrets, files and sandbox tools for this instance.</p>
       </div>
 
       <section className="set-sec" aria-labelledby="spend-h">
@@ -121,6 +163,14 @@ export default function SettingsPage() {
       </section>
 
       <SecretsPanel />
+
+      <Suspense fallback={null}>
+        <McpPanel />
+      </Suspense>
+
+      <EnvPanel />
+
+      <RepoFilesSection />
 
       <SandboxPanel />
 

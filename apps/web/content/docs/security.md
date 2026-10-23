@@ -8,6 +8,16 @@ Your API keys and plan tokens never enter a run container. The agent gets a plac
 
 The agent can still make model calls on your account while its turn runs, through the gateway. It just can't take the credential with it.
 
+## MCP tokens and secrets
+
+[MCP servers](/docs/mcp) work like model keys: a run sees each server as an address on the key gateway, and the gateway adds the token. [Secrets for runs](/docs/secrets-and-files) reach the sandbox as placeholders. For the hosts a secret may go to, the egress proxy terminates TLS with a certificate from Cloudly's own CA, puts the real value into the request's headers and URL, and sends it on. It sends the request only to the host the tunnel was opened for, whatever the request's `Host` header says, so a placeholder can't be turned into the value for any other host. The CA's private key stays in the worker's data directory and is never mounted into a container.
+
+## Desktops and previews
+
+These are the one deliberate way in to a sandbox. The browser never connects to a container: it gets a short-lived token from the API, signed for one container and one purpose, and Cloudly's relay checks it before connecting to that container's VNC port (desktop) or preview port (app). The relay has no other routes. A desktop's VNC server also has its own password per turn, so other containers on the sandbox network can't watch it.
+
+A preview runs code from the agent's branch, so it opens on its own origin (the same host, port 8443 or 3141), never on Cloudly's. The relay strips Cloudly's cookies from requests to it and refuses to let the app set them, and the API refuses writes from any origin but its own, so the app's code can't act as you in Cloudly. A preview container gets no model keys. To keep a preview's code out of your browser altogether, view it on the sandbox's desktop instead.
+
 ## GitHub credentials
 
 The sandbox never sees GitHub credentials. The worker does every git operation (commit, push, pull request) itself, from outside the container, with a short-lived GitHub App token. The agent's own clone has no real remote, so a push from inside the sandbox has nowhere to go.
@@ -37,6 +47,7 @@ Everything the agent wrote is treated as untrusted. Its changes are exported in 
 
 ## Known limitations
 
+- **A preview shares your instance's host name.** Browsers keep cookies per host, not per port, and the relay strips Cloudly's own ones, but a preview's app can still set and read cookies of its own on that host.
 - **Docker is the isolation boundary.** It's weaker than a virtual machine, so only connect repositories you'd be comfortable running on the VM. A microVM backend is planned.
 - **A container escape lands as the worker's user,** who can run Docker.
 - **Plain HTTP is possible.** If you decline HTTPS at install time, the session cookie and anything typed into Settings cross the network unencrypted.

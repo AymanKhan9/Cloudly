@@ -13,7 +13,13 @@ Every run has Node 22, Bun, Python 3, git and C build tools. To add more, open *
 apt-get install -y --no-install-recommends jq
 ```
 
+Tick **Desktop and browser** to give sessions a virtual desktop with Chromium; see [Desktop and previews](/docs/desktop-and-previews).
+
 Saving starts a build in the background. Runs keep using the previous image until the new one is ready, and a failed build leaves the last good image in place. The agent is told what's installed. Each tool adds roughly 0.3 to 1 GB of disk.
+
+## Beyond the repository
+
+Every run also has `/files`, the repository's [kept files](/docs/secrets-and-files#repo-files), the user's [secrets](/docs/secrets-and-files) as placeholders, and the tools of any connected [MCP servers](/docs/mcp).
 
 ## Network access
 
@@ -22,6 +28,7 @@ Run containers have no direct route to the internet and no outside DNS. They can
 - the model APIs, through Cloudly's key gateway,
 - the main package registries,
 - GitHub,
+- the hosts your [secrets](/docs/secrets-and-files) may be sent to,
 - and any hosts you add.
 
 This means a malicious repository can't make the agent send data, or your key, anywhere else.

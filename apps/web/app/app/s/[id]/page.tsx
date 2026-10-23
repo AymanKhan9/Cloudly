@@ -10,6 +10,10 @@ import {
   CaretRight,
   CloudSlash,
   FileText,
+  FolderSimple,
+  Monitor,
+  AppWindow,
+  Scales,
   GitBranch,
   GitPullRequest,
   GithubLogo,
@@ -24,13 +28,16 @@ import {
   WarningCircle,
   Wrench,
 } from "@phosphor-icons/react";
-import { api, ApiError, type ThreadView, type Turn } from "@/lib/api";
+import { api, ApiError, type Capabilities, type ThreadView, type Turn } from "@/lib/api";
 import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus } from "@/lib/harness";
 import { buildBlocks, type Block, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
 import { EffortControl } from "@/components/effort-control";
+import { FilesPanel } from "@/components/files-panel";
+import { PreviewPanel } from "@/components/preview-panel";
+import { DesktopViewer } from "@/components/desktop-viewer";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -216,6 +223,11 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
               {h.cost === "estimated" ? " est." : ""}
             </span>
           ) : null}
+          {turn.filesChanged ? (
+            <span className="num diffstat" title={`${turn.filesChanged} file${turn.filesChanged === 1 ? "" : "s"} changed`}>
+              <span className="add">+{turn.additions ?? 0}</span> <span className="del">−{turn.deletions ?? 0}</span>
+            </span>
+          ) : null}
           {turn.prUrl ? (
             <a href={turn.prUrl} target="_blank" rel="noreferrer" className="pr-chip">
               <GitPullRequest size={14} weight="bold" />
@@ -258,6 +270,8 @@ export default function SessionPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pick, setPick] = useState(0);
+  const [panel, setPanel] = useState<"files" | "preview" | "desktop" | null>(null);
+  const [caps, setCaps] = useState<Capabilities | null>(null);
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -289,6 +303,10 @@ export default function SessionPage() {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    api<Capabilities>("/capabilities").then(setCaps).catch(() => {});
   }, []);
 
   const eventCount = Object.values(events).reduce((n, l) => n + l.length, 0);
@@ -376,6 +394,9 @@ export default function SessionPage() {
   const h = harnessById(thread.harness);
   const latest = turns.at(-1);
   const busy = latest ? ACTIVE.includes(latest.status) : false;
+  // The running turn has a desktop to watch.
+  const desktopLive = Boolean(latest && latest.status === "running" && latest.desktop);
+  const toggle = (p: NonNullable<typeof panel>) => setPanel((cur) => (cur === p ? null : p));
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
 
   // A /word the agent didn't announce isn't a command in this mode (interactive-only
@@ -418,7 +439,7 @@ export default function SessionPage() {
 
   // Saved on the session, not sent as a message: the next turn picks it up.
   // Saved on the session, not sent as a message: the next turn picks it up.
-  async function saveSetting(field: "model" | "effort", value: string | null) {
+  async function saveSetting(field: "model" | "effort" | "desktop", value: string | boolean | null) {
     const before = view!.thread[field] ?? null;
     setView((v) => (v ? { ...v, thread: { ...v.thread, [field]: value } } : v));
     setActionError(null);
@@ -474,6 +495,26 @@ export default function SessionPage() {
           </div>
         </div>
         <div className="tools">
+          {thread.arenaId ? (
+            <Link href={`/app/arena/${thread.arenaId}`} className="btn btn-secondary btn-sm" title="Compare with the other agents on this task" aria-label="Arena">
+              <Scales size={15} />
+              <span className="hide-sm">Arena</span>
+            </Link>
+          ) : null}
+          {desktopLive ? (
+            <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "desktop"} onClick={() => toggle("desktop")} title="Watch the agent's desktop" aria-label="Desktop">
+              <Monitor size={15} />
+              <span className="hide-sm">Desktop</span>
+            </button>
+          ) : null}
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title="Run this branch's app" aria-label="Preview">
+            <AppWindow size={15} />
+            <span className="hide-sm">Preview</span>
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "files"} onClick={() => toggle("files")} title="The repo's kept files, at /files in every run" aria-label="Files">
+            <FolderSimple size={15} />
+            <span className="hide-sm">Files</span>
+          </button>
           {thread.prUrl ? (
             <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
               <GitPullRequest size={15} weight="bold" style={{ color: "var(--ok)" }} />
@@ -482,6 +523,29 @@ export default function SessionPage() {
           ) : null}
         </div>
       </header>
+
+      {panel ? (
+        <section className="side-panel" aria-label={panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : "Desktop"}>
+          {panel === "files" ? (
+            <>
+              <h2>
+                Files in <span className="mono">/files</span>
+              </h2>
+              <p className="hint">Kept for {thread.repo} outside git, in every session&apos;s sandbox. Mention them in your message to point the agent at them.</p>
+              <FilesPanel repo={thread.repo} compact />
+            </>
+          ) : panel === "preview" ? (
+            <>
+              <h2>Preview</h2>
+              <PreviewPanel threadId={thread.id} />
+            </>
+          ) : desktopLive && latest ? (
+            <DesktopViewer key={latest.id} source={`/threads/${thread.id}/desktop`} title="The agent's desktop" onClose={() => setPanel(null)} />
+          ) : (
+            <p className="hint">The desktop is only there while a turn runs.</p>
+          )}
+        </section>
+      ) : null}
 
       <div className="thread">
         {turns.map((t) => (
@@ -569,6 +633,18 @@ export default function SessionPage() {
               note={busy ? "A new effort applies from the next turn." : undefined}
               onChange={(effort) => saveSetting("effort", effort)}
             />
+            {caps?.desktop || thread.desktop ? (
+              <button
+                type="button"
+                className="pill"
+                aria-pressed={Boolean(thread.desktop)}
+                onClick={() => saveSetting("desktop", !thread.desktop)}
+                title={thread.desktop ? "Turns get a virtual desktop. Click to turn it off from the next turn." : "Give the agent a virtual desktop and browser from the next turn"}
+              >
+                <Monitor size={14} />
+                <span className="pill-text">{thread.desktop ? "Desktop on" : "Desktop"}</span>
+              </button>
+            ) : null}
             <span className="composer-meta">
               <Robot size={14} />
               {h.name}

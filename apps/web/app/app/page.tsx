@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, GitBranch, GithubLogo, Lightning } from "@phosphor-icons/react";
-import { api, ApiError, type Repo } from "@/lib/api";
+import { ArrowUp, Check, GitBranch, GithubLogo, Lightning, Monitor, Scales } from "@phosphor-icons/react";
+import { api, ApiError, type Capabilities, type Repo } from "@/lib/api";
 import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
@@ -25,6 +25,11 @@ export default function NewSessionPage() {
   const [branch, setBranch] = useState("");
   const [harness, setHarness] = useState<HarnessId>("native-claude");
   const [effort, setEffort] = useState<string | null>(null);
+  // Compare mode: the same task to several agents at once (an arena).
+  const [compare, setCompare] = useState(false);
+  const [rivals, setRivals] = useState<HarnessId[]>(["native-claude", "native-codex"]);
+  const [desktop, setDesktop] = useState(false);
+  const [caps, setCaps] = useState<Capabilities | null>(null);
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,10 +45,11 @@ export default function NewSessionPage() {
         }
       })
       .catch((e: Error) => setRepoError(e.message));
+    api<Capabilities>("/capabilities").then(setCaps).catch(() => {});
   }, []);
 
   const stopped = budget?.state === "storm";
-  const ready = !submitting && !stopped && Boolean(repo) && Boolean(branch.trim()) && Boolean(prompt.trim());
+  const ready = !submitting && !stopped && Boolean(repo) && Boolean(branch.trim()) && Boolean(prompt.trim()) && (!compare || rivals.length >= 2);
   const h = HARNESSES.find((x) => x.id === harness)!;
 
   async function submit(e?: React.FormEvent) {
@@ -52,9 +58,17 @@ export default function NewSessionPage() {
     setSubmitting(true);
     setError(null);
     try {
+      if (compare) {
+        const { id } = await api<{ id: string }>("/arenas", {
+          method: "POST",
+          body: JSON.stringify({ repo, baseBranch: branch, prompt, harnesses: rivals, desktop }),
+        });
+        router.push(`/app/arena/${id}`);
+        return;
+      }
       const { id } = await api<{ id: string }>("/threads", {
         method: "POST",
-        body: JSON.stringify({ repo, baseBranch: branch, prompt, harness, effort }),
+        body: JSON.stringify({ repo, baseBranch: branch, prompt, harness, effort, desktop }),
       });
       router.push(`/app/s/${id}`);
     } catch (err) {
@@ -120,6 +134,25 @@ export default function NewSessionPage() {
               <span className="visually-hidden">Base branch</span>
               <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} />
             </label>
+            {compare ? (
+              <span className="rivals" role="group" aria-label="Agents to compare">
+                {HARNESSES.map((x) => {
+                  const on = rivals.includes(x.id);
+                  return (
+                    <button
+                      key={x.id}
+                      type="button"
+                      className="pill"
+                      aria-pressed={on}
+                      onClick={() => setRivals((r) => (on ? r.filter((id) => id !== x.id) : [...r, x.id]))}
+                    >
+                      {on ? <Check size={13} weight="bold" /> : <AgentLogo harness={x.id} size={14} />}
+                      <span className="pill-text">{x.name}</span>
+                    </button>
+                  );
+                })}
+              </span>
+            ) : (
             <Picker
               label="Agent"
               icon={<AgentLogo harness={harness} size={15} />}
@@ -140,7 +173,18 @@ export default function NewSessionPage() {
                 setEffort(null); // levels differ per agent
               }}
             />
-            <EffortControl harness={harness} value={effort} onChange={setEffort} />
+            )}
+            {compare ? null : <EffortControl harness={harness} value={effort} onChange={setEffort} />}
+            <button type="button" className="pill" aria-pressed={compare} onClick={() => setCompare((c) => !c)} title="Give the same task to several agents and pick the best result">
+              <Scales size={14} />
+              <span className="pill-text">Compare</span>
+            </button>
+            {caps?.desktop ? (
+              <button type="button" className="pill" aria-pressed={desktop} onClick={() => setDesktop((d) => !d)} title="Give the agent a virtual desktop and browser">
+                <Monitor size={14} />
+                <span className="pill-text">Desktop</span>
+              </button>
+            ) : null}
             <span className="spacer" />
             <button type="submit" className="send" disabled={!ready} aria-label="Start session">
               <ArrowUp size={18} weight="bold" />
@@ -151,7 +195,11 @@ export default function NewSessionPage() {
         <div className="composer-note" data-tone={note?.tone} role={note ? "alert" : undefined}>
           <span>
             {note?.text ??
-              `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`}
+              (compare
+                ? rivals.length < 2
+                  ? "Pick at least two agents to compare."
+                  : `Each agent works on its own branch. Nothing opens a pull request until you pick a result. Each one's turn costs as usual.`
+                : `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`)}
           </span>
           <span>
             <kbd>Enter</kbd> to start, <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
