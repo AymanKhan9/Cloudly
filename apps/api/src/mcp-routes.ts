@@ -48,6 +48,8 @@ mcp.get("/", async (c) => {
 
 mcp.post("/", zValidator("json", CreateSchema), async (c) => {
   const body = c.req.valid("json");
+  // Cloudly's own in-sandbox servers.
+  if (["context", "desktop"].includes(body.name)) return c.json({ message: `"${body.name}" is the name of one of Cloudly's own tools. Pick another.` }, 400);
   if (await prisma.mcpServer.findUnique({ where: { name: body.name } })) {
     return c.json({ message: `There's already a server called ${body.name}.` }, 409);
   }

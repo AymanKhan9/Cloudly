@@ -2,6 +2,7 @@
 // sees and drives the run's virtual display with ImageMagick and xdotool. Claude,
 // Codex and Gemini all speak MCP, so one server serves all three.
 import { openBrowser, SCREEN } from "./desktop";
+import { serveStdio } from "./mcp-stdio";
 
 type Json = Record<string, any>;
 
@@ -139,24 +140,4 @@ export async function handle(message: Json): Promise<Json | null> {
     }
 }
 
-if (import.meta.main) {
-    let buffer = "";
-    const decoder = new TextDecoder();
-    for await (const chunk of Bun.stdin.stream()) {
-        buffer += decoder.decode(chunk, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, nl).trim();
-            buffer = buffer.slice(nl + 1);
-            if (!line) continue;
-            let message: Json;
-            try {
-                message = JSON.parse(line);
-            } catch {
-                continue;
-            }
-            // Calls run concurrently; each answer goes out whole, on its own line.
-            handle(message).then((out) => out && process.stdout.write(JSON.stringify(out) + "\n"));
-        }
-    }
-}
+if (import.meta.main) await serveStdio(handle);

@@ -13,6 +13,13 @@ export const DESKTOP_MCP: McpSpec = {
     args: [new URL("./desktop-mcp.ts", import.meta.url).pathname],
 };
 
+/** The repo's shared context, when the repo has it turned on. */
+export const CONTEXT_MCP: McpSpec = {
+    name: "context",
+    command: "bun",
+    args: [new URL("./context-mcp.ts", import.meta.url).pathname],
+};
+
 /** Claude Agent SDK's mcpServers option. */
 export function claudeMcpServers(specs: McpSpec[]) {
     return Object.fromEntries(

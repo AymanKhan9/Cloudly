@@ -14,6 +14,7 @@ import {
   Monitor,
   AppWindow,
   Scales,
+  Notebook,
   GitBranch,
   GitPullRequest,
   GithubLogo,
@@ -38,6 +39,7 @@ import { EffortControl } from "@/components/effort-control";
 import { FilesPanel } from "@/components/files-panel";
 import { PreviewPanel } from "@/components/preview-panel";
 import { DesktopViewer } from "@/components/desktop-viewer";
+import { ContextPanel } from "@/components/context-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -270,7 +272,7 @@ export default function SessionPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pick, setPick] = useState(0);
-  const [panel, setPanel] = useState<"files" | "preview" | "desktop" | null>(null);
+  const [panel, setPanel] = useState<"files" | "preview" | "desktop" | "context" | null>(null);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -511,6 +513,10 @@ export default function SessionPage() {
             <AppWindow size={15} />
             <span className="hide-sm">Preview</span>
           </button>
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "context"} onClick={() => toggle("context")} title="Notes and work shared by every agent on this repo" aria-label="Context">
+            <Notebook size={15} />
+            <span className="hide-sm">Context</span>
+          </button>
           <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "files"} onClick={() => toggle("files")} title="The repo's kept files, at /files in every run" aria-label="Files">
             <FolderSimple size={15} />
             <span className="hide-sm">Files</span>
@@ -525,8 +531,15 @@ export default function SessionPage() {
       </header>
 
       {panel ? (
-        <section className="side-panel" aria-label={panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : "Desktop"}>
-          {panel === "files" ? (
+        <section className="side-panel" aria-label={panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : "Desktop"}>
+          {panel === "context" ? (
+            <>
+              <h2>
+                Shared context for <span className="mono">{thread.repo}</span>
+              </h2>
+              <ContextPanel repo={thread.repo} />
+            </>
+          ) : panel === "files" ? (
             <>
               <h2>
                 Files in <span className="mono">/files</span>

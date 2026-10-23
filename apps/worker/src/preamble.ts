@@ -24,6 +24,8 @@ export interface RunExtras {
   /** The repo's kept files are mounted at /files. */
   files?: boolean;
   desktop?: boolean;
+  /** The repo's shared context, as Markdown, when the repo has it on. */
+  context?: string;
 }
 
 /** Lines for what this run has beyond the basics: kept files, secrets, MCP servers, a desktop. */
@@ -41,6 +43,13 @@ export function runExtras(extras: RunExtras): string[] {
   if (extras.mcp?.length) lines.push(`- MCP servers connected by the user: ${extras.mcp.join(", ")}. Use their tools when they fit the task.`);
   if (extras.desktop) {
     lines.push("- A virtual desktop is running (DISPLAY=:99), with a browser. Use the desktop tools (screenshot, click, type, key, scroll, open_url) to see and use web apps you start, and check UI changes visually. The user may be watching it live.");
+  }
+  if (extras.context) {
+    lines.push(
+      "- This repo has shared context: notes and recent work from the other agents and editors working on it (other Cloudly sessions, and tools like Cursor or Claude Code on the user's machine). Follow its notes. Your context tools read it again (repo_context) and add to it (add_note): record conventions, decisions and their reasons, and gotchas worth knowing, so whoever works on this repo next has them. Cloudly records what this turn did on its own.",
+      "",
+      extras.context.trim(),
+    );
   }
   return lines;
 }

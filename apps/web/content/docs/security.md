@@ -12,6 +12,10 @@ The agent can still make model calls on your account while its turn runs, throug
 
 [MCP servers](/docs/mcp) work like model keys: a run sees each server as an address on the key gateway, and the gateway adds the token. [Secrets for runs](/docs/secrets-and-files) reach the sandbox as placeholders. For the hosts a secret may go to, the egress proxy terminates TLS with a certificate from Cloudly's own CA, puts the real value into the request's headers and URL, and sends it on. It sends the request only to the host the tunnel was opened for, whatever the request's `Host` header says, so a placeholder can't be turned into the value for any other host. The CA's private key stays in the worker's data directory and is never mounted into a container.
 
+## Shared context
+
+[Editor tokens](/docs/shared-context) reach the shared-context MCP endpoint and nothing else; only their SHA-256 is stored, and they can be revoked in Settings. Notes an agent adds come back from the sandbox the way the patch does (a regular file, never a symlink, with size and count caps), and are stored as plain text. They are text later agents read, so a misled agent could leave a misleading note: each entry names who added it, and you can remove it.
+
 ## Desktops and previews
 
 These are the one deliberate way in to a sandbox. The browser never connects to a container: it gets a short-lived token from the API, signed for one container and one purpose, and Cloudly's relay checks it before connecting to that container's VNC port (desktop) or preview port (app). The relay has no other routes. A desktop's VNC server also has its own password per turn, so other containers on the sandbox network can't watch it.

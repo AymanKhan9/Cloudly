@@ -10,6 +10,7 @@ import { SandboxPanel } from "@/components/sandbox-panel";
 import { McpPanel } from "@/components/mcp-panel";
 import { EnvPanel } from "@/components/env-panel";
 import { FilesPanel } from "@/components/files-panel";
+import { ContextSettings } from "@/components/context-settings";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
@@ -171,6 +172,8 @@ export default function SettingsPage() {
       <EnvPanel />
 
       <RepoFilesSection />
+
+      <ContextSettings />
 
       <SandboxPanel />
 

@@ -33,7 +33,8 @@ interface ControlConfig{
     model?:string,
     effort?:string,
     mcpServers?:{ name: string; url: string }[],
-    desktop?:{ password: string }
+    desktop?:{ password: string },
+    context?:boolean
 }
 
 export interface ContainerOptions {
@@ -59,6 +60,8 @@ export interface ContainerOptions {
     filesDir?: string;
     /** Environment for the agent: secret placeholders, and exposed secrets' real values. */
     env?: Record<string, string>;
+    /** Host dir mounted at /context: the repo's shared context, when it's on. */
+    contextDir?: string;
 }
 
 /** The gateway URL agents use for a connected MCP server. */
@@ -214,6 +217,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             effort: options.effort,
             mcpServers: options.mcpServers?.map((name) => ({ name, url: mcpGatewayUrl(name) })),
             desktop: options.desktopPassword ? { password: options.desktopPassword } : undefined,
+            context: Boolean(options.contextDir),
         };
 
         await writeFile(
@@ -260,6 +264,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             ...(options.homeDir ? ["-v", `${options.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
 
             ...(options.filesDir ? ["-v", `${options.filesDir}:/files`] : []),
+            ...(options.contextDir ? ["-v", `${options.contextDir}:/context`] : []),
 
             ...runEnv.flags,
             ...credentials.flags,

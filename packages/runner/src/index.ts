@@ -2,7 +2,7 @@ import type { RunAdapter } from "./adapter";
 import { ClaudeAdapter } from "./adapters/claude";
 import { CodexAdapter } from "./adapters/codex";
 import { AcpAdapter } from "./adapters/acp";
-import { DESKTOP_MCP, type McpSpec } from "./mcp";
+import { CONTEXT_MCP, DESKTOP_MCP, type McpSpec } from "./mcp";
 import { startDesktop } from "./desktop";
 
 const CONFIG_PATH = process.env.CONTROL_CONFIG_PATH ?? "/control/config.json";
@@ -23,6 +23,8 @@ type RunConfig = {
     mcpServers?: { name: string; url: string }[];
     /** Start a virtual display the agent can use and the user can watch. */
     desktop?: { password: string };
+    /** The repo's shared context is mounted at /context. */
+    context?: boolean;
 };
 
 const adapters: Record<string,(config: RunConfig, mcp: McpSpec[])=>RunAdapter> = {
@@ -38,7 +40,7 @@ async function loadConfig(): Promise<RunConfig> {
     }
     return {
         task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend,
-        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop,
+        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context,
     };
 }
 
@@ -50,7 +52,7 @@ async function main() {
     if(!makeAdapter){
         throw new Error(`unknown harness: ${config.harness}`);
     }
-    const mcp: McpSpec[] = [...(config.mcpServers ?? [])];
+    const mcp: McpSpec[] = [...(config.mcpServers ?? []), ...(config.context ? [CONTEXT_MCP] : [])];
     if (config.desktop) {
         if (await startDesktop(config.desktop.password)) {
             mcp.push(DESKTOP_MCP);

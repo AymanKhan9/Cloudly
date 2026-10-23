@@ -4252,3 +4252,133 @@ button.pill[aria-pressed="true"] .pill-text {
   overflow: auto;
   font-size: 14px;
 }
+
+/* ---------- Shared context ---------- */
+.context,
+.context-off {
+  display: grid;
+  gap: 16px;
+}
+
+.context-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.context-log li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 8px 10px 12px;
+  min-width: 0;
+}
+
+.context-log li + li {
+  border-top: 1px solid var(--border);
+}
+
+.context-log .who {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.context-log .what {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.context-log .line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.context-log .line svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.context-log .kind {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.context-log .title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.context-log .body {
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.context-log .meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.context-log .meta a {
+  color: var(--text-2);
+}
+
+.context-repos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13.5px;
+}
+
+.context-repos li {
+  display: flex;
+  gap: 10px;
+}
+
+.token-form {
+  display: flex;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.copy-block {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.copy-block pre {
+  margin: 0;
+  padding: 10px 44px 10px 12px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.copy-block .icon-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}

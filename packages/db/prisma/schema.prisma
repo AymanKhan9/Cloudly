@@ -23,6 +23,7 @@ model User {
   threads     Thread[]
   arenas      Arena[]
   previews    Preview[]
+  tokens      AccessToken[]
   budget      Budget?
 }
 
@@ -260,4 +261,47 @@ model SandboxImage {
   /// The last image that built successfully; runs use it.
   image      String   @default("cloud-agents-base")
   updatedAt  DateTime @updatedAt
+}
+
+/// Shared context for a repo, opt-in: notes every agent reads, plus a log of
+/// what each session and connected editor did, so Claude, Codex, Gemini and
+/// local tools (Cursor, Claude Code, through the context MCP endpoint) work from
+/// the same picture of the repo.
+model RepoContext {
+  repo      String   @id
+  enabled   Boolean  @default(true)
+  /// Conventions and decisions, in Markdown. Editable by the user and agents.
+  notes     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+model ContextEntry {
+  id        String   @id @default(uuid())
+  repo      String
+  /// turn | note | decision
+  kind      String
+  /// The agent (its harness id) or the connected tool's name, e.g. "Cursor on my laptop".
+  author    String
+  /// cloudly | mcp
+  source    String
+  title     String
+  body      String   @default("")
+  threadId  String?
+  runId     String?
+  prUrl     String?
+  createdAt DateTime @default(now())
+  @@index([repo, createdAt])
+}
+
+/// A personal token for tools outside Cloudly (Cursor, Claude Code) to reach
+/// the context MCP endpoint. Only its SHA-256 is stored.
+model AccessToken {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  hash       String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }

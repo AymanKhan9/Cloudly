@@ -31,12 +31,12 @@ export async function materializeRepoFiles(repo: string): Promise<FilesDir> {
 }
 
 /** One regular file's bytes, or null if it isn't a regular file or is too big. */
-async function readRegular(full: string): Promise<Uint8Array | null> {
+export async function readRegular(full: string, max = REPO_FILE_MAX_BYTES): Promise<Uint8Array | null> {
   const fh = await open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK).catch(() => null);
   if (!fh) return null;
   try {
     const stat = await fh.stat();
-    if (!stat.isFile() || stat.size > REPO_FILE_MAX_BYTES) return null;
+    if (!stat.isFile() || stat.size > max) return null;
     return new Uint8Array(await fh.readFile());
   } finally {
     await fh.close();
