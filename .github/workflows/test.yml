@@ -37,4 +37,5 @@ jobs:
       - run: cd packages/db && bun test
       - run: cd packages/runner && bun test
       - run: cd apps/web && bun test lib
+      - run: cd apps/api && bun test
       - run: cd apps/worker && bun test

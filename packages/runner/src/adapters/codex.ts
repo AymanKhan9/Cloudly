@@ -3,6 +3,7 @@ import { CodexSubagents } from "./codex-subagents";
 import type { RunEvent } from "@repo/shared/run-event";
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from "@openai/codex-sdk";
 import type { NormalizedEvent } from "./claude";
+import { codexMcpConfig, type McpSpec } from "../mcp";
 
 export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
     switch (event.type) {
@@ -52,12 +53,12 @@ export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
 export class CodexAdapter implements RunAdapter {
     private controller?: AbortController;
 
-    constructor(private model?: string, private effort?: string) {}
+    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = [], private research = false) {}
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
         // With an API key, calls go to Cloudly's gateway, which adds the real key.
-        const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY, baseUrl: process.env.OPENAI_BASE_URL });
+        const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY, baseUrl: process.env.OPENAI_BASE_URL, config: codexMcpConfig(this.mcp) });
 
         const threadOptions = {
             workingDirectory: "/workspace",
@@ -68,6 +69,8 @@ export class CodexAdapter implements RunAdapter {
             sandboxMode: "danger-full-access" as const,
             model: this.model,
             modelReasoningEffort: this.effort as ModelReasoningEffort | undefined,
+            // Research councils: Codex's own web search (run by OpenAI), which is off headless.
+            ...(this.research ? { webSearchMode: "live" as const, networkAccessEnabled: true } : {}),
         };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)

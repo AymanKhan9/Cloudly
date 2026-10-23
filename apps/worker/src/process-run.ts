@@ -1,4 +1,5 @@
-import { prisma, budgetStatus, sandboxToolsLabel, harnessUsesPlan } from "@repo/db";
+import { prisma, budgetStatus, sandboxToolsLabel, harnessUsesPlan, gatewayMcpServers, secretsForRepo } from "@repo/db";
+import { randomBytes } from "node:crypto";
 import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
@@ -19,7 +20,12 @@ import { resolveCloneSource, isRepoSlug } from "./github";
 import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
-import { withPreamble, sandboxRules, isCommand } from "./preamble";
+import { withPreamble, sandboxRules, isCommand, runExtras } from "./preamble";
+import { materializeRepoFiles, syncRepoFiles, destroyFilesDir, type FilesDir } from "./repo-files";
+import { patchStats } from "./patch";
+import { ensureRelay } from "./previews";
+import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./shared-context";
+import { processCouncilTurn } from "./council";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -85,6 +91,8 @@ export async function processRun(
   ) => AsyncIterable<RunEvent> = createRunContainer,
   heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
 ): Promise<void> {
+  // A council member's or chair's turn: an answer, not a change to commit.
+  if (run.councilId) return processCouncilTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
   let cancelled = false;
 
@@ -108,7 +116,17 @@ export async function processRun(
       });
   }, heartbeatIntervalMs);
 
+  // A turn's record in the repo's shared context. Never fails the turn: the work is already done.
+  const shareTurn = async (ctx: ContextDir, extra: { summary?: string; prUrl?: string | null; stats?: { filesChanged: number; additions: number; deletions: number } }) =>
+    // "/compact" and friends aren't work on the repo.
+    !isCommand(run.prompt) &&
+    recordTurn(ctx, { repo: run.repo, harness: run.harness, threadId: run.threadId, runId: run.id, prompt: run.prompt, ...extra }).catch((err) =>
+      console.error(`run ${run.id}: couldn't record the turn in the shared context:`, err),
+    );
+
   let ws: Workspace | undefined;
+  let files: FilesDir | undefined;
+  let context: ContextDir | null = null;
   let publishResult: PublishResult | undefined;
   // The container's stderr is usually empty; the agent's own error event isn't.
   let agentError: string | undefined;
@@ -172,6 +190,25 @@ export async function processRun(
     containerOptions.image = await sandboxImage();
     if (thread?.model) containerOptions.model = thread.model;
     if (thread?.effort) containerOptions.effort = thread.effort;
+
+    // What the user connected: MCP servers (through the gateway), secrets (as
+    // placeholders the proxy fills in), the repo's kept files, and a desktop.
+    const mcp = Object.keys(await gatewayMcpServers());
+    const secrets = await secretsForRepo(run.repo);
+    files = await materializeRepoFiles(run.repo);
+    containerOptions.mcpServers = mcp;
+    containerOptions.filesDir = files.dir;
+    containerOptions.env = Object.fromEntries(secrets.map((s) => [s.name, s.exposed ? s.value : s.placeholder]));
+    if (thread?.desktop) {
+      await ensureRelay().catch((err) => console.error(`run ${run.id}: relay:`, err));
+      // VNC only reads the first 8 characters of a password.
+      containerOptions.desktopPassword = randomBytes(6).toString("base64url");
+      await prisma.run.updateMany({ where: { id: run.id, workerId, leaseGen: run.leaseGen }, data: { desktopPassword: containerOptions.desktopPassword } });
+    }
+    context = await prepareContext(run.repo, thread?.id);
+    if (context) containerOptions.contextDir = context.dir;
+    const extras = runExtras({ mcp, secrets, files: true, desktop: Boolean(thread?.desktop), context: context?.markdown });
+
     const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
     // A command goes to the agent as typed; history in front of it would turn it into text.
     const prompt = thread && !resumed && !isCommand(run.prompt)
@@ -180,18 +217,21 @@ export async function processRun(
     let task: string;
     if (run.harness === "native-claude") {
       // Claude takes the rules in its system prompt, so the message reaches it untouched.
-      containerOptions.systemAppend = sandboxRules(tools);
+      containerOptions.systemAppend = sandboxRules(tools, extras);
       task = prompt.trim();
     } else {
-      task = withPreamble(prompt, tools);
+      task = withPreamble(prompt, tools, extras);
     }
 
     let lastSeq = -1;
     let sessionId = containerOptions.resume;
+    // The agent's last reply: its own summary of the turn, for the shared context.
+    let lastText: string | undefined;
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {
         await insertEvents(run.id, [event]);
         lastSeq = Math.max(lastSeq, event.seq);
+        if (event.kind === "text" && typeof event.data === "string" && event.data.trim()) lastText = event.data;
         if (event.kind === "error") {
           const d = event.data as { message?: unknown; subtype?: unknown } | string | null;
           agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
@@ -239,7 +279,17 @@ export async function processRun(
         const chat = findGeminiChat(containerOptions.homeDir, sessionId);
         usage = chat ? geminiContext(chat) : null;
       }
-      if (usage) await insertEvents(run.id, [{ seq: lastSeq + 1, ts: Date.now(), kind: "status", data: { type: "context", ...usage } }]);
+      if (usage) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "context", ...usage } }]);
+    }
+
+    // The container has exited, so /files can be read without the agent changing it underneath.
+    try {
+      const synced = await syncRepoFiles(files);
+      if (synced.saved.length || synced.deleted.length || synced.skipped.length) {
+        await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "files", ...synced } }]);
+      }
+    } catch (err) {
+      console.error(`run ${run.id}: couldn't save /files:`, err);
     }
 
     if (leaseLost) return;
@@ -265,6 +315,7 @@ export async function processRun(
         // Stopped before changing anything: say so, rather than "work committed".
         data: { status: cancelled ? "cancelled" : "succeeded", error: stopNote && "Stopped at the spend-limit ceiling before it changed any files." },
       });
+      if (context) await shareTurn(context, { summary: lastText });
       return;
     }
 
@@ -275,6 +326,7 @@ export async function processRun(
       createdAt: run.createdAt,
     };
     publishResult = await publishCommit(ws, patch, commitInfo);
+    const stats = patchStats(patch);
 
     if (leaseLost) return;
 
@@ -285,8 +337,9 @@ export async function processRun(
       await pushBranch(publishResult, run.repo);
 
       // Cancelled or not, the push above still lands — only PR creation is
-      // what cancellation skips (see the comment above `exportPatch`).
-      if (!cancelled) {
+      // what cancellation skips (see the comment above `exportPatch`). Arena
+      // sessions push too, but wait for their result to be picked.
+      if (!cancelled && (thread?.autoPr ?? true)) {
         const pr = await openPullRequest({
           repoSlug: run.repo,
           baseBranch: run.baseBranch,
@@ -309,8 +362,10 @@ export async function processRun(
         commitSha: publishResult.commitSha,
         branch: publishResult.branch,
         prUrl,
+        ...stats,
       },
     });
+    if (context) await shareTurn(context, { summary: lastText, prUrl: prUrl ?? thread?.prUrl, stats });
   } catch (err) {
     await prisma.run.updateMany({
       where: { id: run.id, workerId, leaseGen: run.leaseGen },
@@ -323,6 +378,8 @@ export async function processRun(
   } finally {
     clearInterval(heartbeatTimer);
     if (ws) await destroyWorkspace(ws);
+    if (files) await destroyFilesDir(files);
+    if (context) await destroyContext(context);
     if (publishResult) await destroyPublish(publishResult);
   }
 }

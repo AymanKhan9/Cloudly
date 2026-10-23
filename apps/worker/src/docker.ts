@@ -5,7 +5,7 @@ import path from "node:path";
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
 import { config } from "@repo/db";
-import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR } from "./egress";
+import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR, sandboxTrustFlags } from "./egress";
 import { placeholderCodexAuth } from "./egress-proxy";
 
 // What a run container gets instead of a real credential. Shaped like the real
@@ -31,7 +31,11 @@ interface ControlConfig{
     maxBudgetUsd?:number,
     systemAppend?:string,
     model?:string,
-    effort?:string
+    effort?:string,
+    mcpServers?:{ name: string; url: string }[],
+    desktop?:{ password: string },
+    context?:boolean,
+    research?:boolean
 }
 
 export interface ContainerOptions {
@@ -49,6 +53,33 @@ export interface ContainerOptions {
     effort?: string;
     /** Built from the setup script in Settings; the base image when there is none. */
     image?: string;
+    /** Connected MCP servers, by name; the sandbox reaches them through the gateway. */
+    mcpServers?: string[];
+    /** Starts a virtual display with this VNC password. */
+    desktopPassword?: string;
+    /** Host dir mounted at /files: the repo's kept files. */
+    filesDir?: string;
+    /** Environment for the agent: secret placeholders, and exposed secrets' real values. */
+    env?: Record<string, string>;
+    /** Host dir mounted at /context: the repo's shared context, when it's on. */
+    contextDir?: string;
+    /** Extra host dirs to mount: [host path, container path]. */
+    mounts?: [string, string][];
+    /** A research turn: the agent's own web search on. */
+    research?: boolean;
+}
+
+/** The gateway URL agents use for a connected MCP server. */
+export function mcpGatewayUrl(name: string): string {
+    return `${GATEWAY_URL}/mcp/${name}`;
+}
+
+/**
+ * `-e NAME` flags plus the values for the docker client's own environment, so
+ * values stay off the command line (see credentialFlags).
+ */
+export function envFlags(env: Record<string, string> = {}): { flags: string[]; env: Record<string, string> } {
+    return { flags: Object.keys(env).flatMap((name) => ["-e", name]), env };
 }
 
 // Codex takes an API key through the SDK's `apiKey` option (it becomes
@@ -189,6 +220,10 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             systemAppend: options.systemAppend,
             model: options.model,
             effort: options.effort,
+            mcpServers: options.mcpServers?.map((name) => ({ name, url: mcpGatewayUrl(name) })),
+            desktop: options.desktopPassword ? { password: options.desktopPassword } : undefined,
+            context: Boolean(options.contextDir),
+            research: options.research,
         };
 
         await writeFile(
@@ -198,7 +233,9 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         );
 
         credentials = await credentialFlags(harness);
+        const runEnv = envFlags(options.env);
         await ensureEgress();
+        const trust = await sandboxTrustFlags();
         const proc = Bun.spawn([
             "docker",
             "run",
@@ -206,6 +243,9 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             ...SANDBOX_LIMITS,
             ...EGRESS_FLAGS,
+            ...trust,
+            // A desktop starts many processes; tini reaps them and passes SIGINT on.
+            ...(options.desktopPassword ? ["--init", "--shm-size", "256m"] : []),
 
             "--name",
             `run-${runId}`,
@@ -229,6 +269,11 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             ...(options.homeDir ? ["-v", `${options.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
 
+            ...(options.filesDir ? ["-v", `${options.filesDir}:/files`] : []),
+            ...(options.contextDir ? ["-v", `${options.contextDir}:/context`] : []),
+            ...(options.mounts ?? []).flatMap(([host, inside]) => ["-v", `${host}:${inside}`]),
+
+            ...runEnv.flags,
             ...credentials.flags,
 
             "--user",
@@ -242,7 +287,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         ],{
             stdout:"pipe",
             stderr:"pipe",
-            env: { ...process.env, ...credentials.env },
+            env: { ...process.env, ...runEnv.env, ...credentials.env },
         });
 
         const reader = proc.stdout.getReader();

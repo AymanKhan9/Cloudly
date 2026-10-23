@@ -73,6 +73,10 @@ export interface ThreadSummary {
   updatedAt: string;
   createdAt: string;
   lastStatus: RunStatus;
+  /** Set when the session is one agent of an arena. */
+  arenaId?: string | null;
+  /** Turns get a virtual desktop. */
+  desktop?: boolean;
 }
 
 export interface Turn {
@@ -86,10 +90,138 @@ export interface Turn {
   prUrl: string | null;
   error: string | null;
   cancelRequested: boolean;
+  filesChanged?: number | null;
+  additions?: number | null;
+  deletions?: number | null;
+  /** The turn ran with a virtual desktop. */
+  desktop?: boolean;
 }
 
 export interface ThreadView {
   /** model and effort: chosen in the chat box for the rest of the session; null is the agent's default. */
   thread: Omit<ThreadSummary, "lastStatus"> & { model?: string | null; effort?: string | null };
   turns: Turn[];
+}
+
+export interface Capabilities {
+  /** The sandbox image has the desktop preset built in. */
+  desktop: boolean;
+  /** PREVIEW_ORIGIN is set, so previews open in the browser. */
+  previews: boolean;
+  /** Connected MCP servers' names. */
+  mcp: string[];
+}
+
+export interface McpServerRow {
+  id: string;
+  name: string;
+  url: string;
+  auth: "oauth" | "bearer" | "none";
+  enabled: boolean;
+  status: "connected" | "needs_auth" | "error";
+  error: string | null;
+  expiresAt: string | null;
+}
+
+export interface EnvSecretRow {
+  id: string;
+  name: string;
+  repo: string;
+  hosts: string;
+  exposed: boolean;
+  preview: string | null;
+  updatedAt: string;
+}
+
+export interface RepoFileRow {
+  path: string;
+  size: number;
+  sha256: string;
+  updatedAt: string;
+}
+
+export interface Preview {
+  id: string;
+  status: "requested" | "starting" | "running" | "stopping" | "stopped" | "failed";
+  command: string;
+  port: number;
+  desktop: boolean;
+  error: string | null;
+  log: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface ArenaEntry {
+  thread: ThreadSummaryBase & { autoPr: boolean; model: string | null };
+  turns: number;
+  pushed: boolean;
+  result: {
+    id: string;
+    status: RunStatus;
+    latestStatus: RunStatus;
+    cancelRequested: boolean;
+    costUsd: number;
+    onPlan: boolean;
+    error: string | null;
+    filesChanged: number;
+    additions: number;
+    deletions: number;
+    durationMs: number | null;
+    summary: string | null;
+  } | null;
+}
+
+type ThreadSummaryBase = Omit<ThreadSummary, "lastStatus">;
+
+export interface ArenaView {
+  arena: { id: string; repo: string; baseBranch: string; prompt: string; winnerThreadId: string | null; createdAt: string };
+  entries: ArenaEntry[];
+}
+
+export function bytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+
+
+export interface CouncilSummary {
+  id: string;
+  question: string;
+  members: string[];
+  status: "running" | "done" | "stopped" | "failed" | "cancelled";
+  round: number;
+  rounds: number;
+  repo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CouncilTurn {
+  id: string;
+  harness: string;
+  round: number;
+  role: "member" | "chair";
+  status: RunStatus;
+  cancelRequested: boolean;
+  costUsd: number | null;
+  onPlan: boolean;
+  output: string | null;
+  error: string | null;
+  createdAt: string;
+  durationMs: number | null;
+}
+
+export interface CouncilView {
+  council: CouncilSummary & {
+    chair: string;
+    baseBranch: string | null;
+    budgetUsd: number | null;
+    guidance: { text: string; round: number; at: string }[];
+    report: string | null;
+    error: string | null;
+  };
+  turns: CouncilTurn[];
+  spentUsd: number;
 }

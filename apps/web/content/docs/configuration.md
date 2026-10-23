@@ -60,6 +60,19 @@ These are normally entered in the browser. A value in `.env` is only used when n
 | `SANDBOX_MEMORY` | Memory per run container. Default: the VM's RAM minus 768 MB, at least 512 MB. |
 | `SANDBOX_PIDS` | Process limit per run container. Default `2048`. |
 
+## Desktops and previews
+
+See [Desktop and previews](/docs/desktop-and-previews). The installer sets the first two.
+
+| Variable | What it is |
+|---|---|
+| `PREVIEW_ORIGIN` | Where previews open: your address on port 8443 (HTTPS) or 3141 (plain HTTP). Without it, previews only show on the sandbox's desktop. |
+| `PREVIEW_BIND` | Which address the relay's preview port listens on. `127.0.0.1` behind Caddy, `0.0.0.0` on plain HTTP. |
+| `PREVIEW_PORT` | The relay's preview port on the VM. Default `3141`. |
+| `PREVIEW_MAX` | Previews that may run at once. Default `1`. |
+| `PREVIEW_TTL_MINUTES` | How long a preview runs before it's stopped. Default `60`. |
+| `RELAY_PORT` | The relay's desktop port, on the VM only. Default `3140`. |
+
 ## Prices
 
 Used to estimate Codex and Gemini cost, in US dollars per million tokens. Claude Agent reports exact cost and ignores these.

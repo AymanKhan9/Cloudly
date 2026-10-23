@@ -3907,3 +3907,625 @@ button.pill:disabled {
 .menu.effort .menu-note {
   margin: 10px -16px -12px;
 }
+
+/* ---------- Toggle pills, shared bits ---------- */
+.dim {
+  color: var(--text-3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+button.pill[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+button.pill[aria-pressed="true"] .pill-text {
+  color: var(--accent-ink);
+}
+
+.btn[aria-pressed="true"] {
+  border-color: var(--text-3);
+  background: var(--surface-2);
+}
+
+.rivals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.add {
+  color: var(--ok);
+}
+
+.del {
+  color: var(--danger);
+}
+
+.diffstat {
+  font-size: 12.5px;
+}
+
+/* ---------- Settings: MCP servers, secrets ---------- */
+.mcp-row {
+  align-items: start;
+}
+
+.mcp-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.mcp-error {
+  margin-top: 4px;
+  color: var(--danger);
+}
+
+.mcp-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mcp-add {
+  display: grid;
+  gap: 14px;
+}
+
+.mcp-add-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .mcp-add-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mcp-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mcp-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ---------- Repo files ---------- */
+.files {
+  display: grid;
+  gap: 12px;
+  border-radius: var(--r-control);
+  transition: background 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+
+.files[data-dragging] {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  overflow: hidden;
+}
+
+.file-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.file-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.file-list .path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files[data-compact] .file-list {
+  max-height: 280px;
+  overflow: auto;
+}
+
+/* ---------- Session side panel: files, preview, desktop ---------- */
+.side-panel {
+  margin: 16px var(--gutter) 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  display: grid;
+  gap: 12px;
+  max-width: 980px;
+}
+
+@media (min-width: 1100px) {
+  .side-panel {
+    margin-inline: auto;
+    width: calc(100% - 2 * var(--gutter));
+  }
+}
+
+.side-panel > * {
+  min-width: 0;
+}
+
+.side-panel h2 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.preview,
+.preview-form {
+  display: grid;
+  gap: 12px;
+}
+
+.preview-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.preview-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.desktop {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.desktop-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.desktop-bar .label {
+  font-weight: 500;
+}
+
+/* min-width: 0, or the grid grows to the remote screen's size and noVNC never scales it down. */
+.desktop-screen {
+  aspect-ratio: 1280 / 800;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.desktop-screen:fullscreen {
+  aspect-ratio: auto;
+}
+
+/* ---------- Arena ---------- */
+.arena .page-head .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.arena .page-head .meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-task {
+  white-space: pre-wrap;
+  max-width: 72ch;
+}
+
+.arena-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .arena-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.arena-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.arena-card[data-winner] {
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+
+.arena-card > header,
+.arena-card > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.arena-card h2 {
+  font-size: 15px;
+}
+
+.arena-card .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.arena-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.arena-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.arena-stats > div {
+  padding: 8px 10px;
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.arena-stats > div[data-best] {
+  background: var(--ok-soft);
+}
+
+.arena-stats dt {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.arena-stats dd {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arena-stats dd small {
+  display: block;
+  font-size: 12px;
+}
+
+.arena-summary {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 14px;
+}
+
+/* ---------- Shared context ---------- */
+.context,
+.context-off {
+  display: grid;
+  gap: 16px;
+}
+
+.context-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.context-log li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 8px 10px 12px;
+  min-width: 0;
+}
+
+.context-log li + li {
+  border-top: 1px solid var(--border);
+}
+
+.context-log .who {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-2);
+}
+
+.context-log .what {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.context-log .line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.context-log .line svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.context-log .kind {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.context-log .title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.context-log .body {
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.context-log .meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.context-log .meta a {
+  color: var(--text-2);
+}
+
+.context-repos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13.5px;
+}
+
+.context-repos li {
+  display: flex;
+  gap: 10px;
+}
+
+.token-form {
+  display: flex;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.copy-block {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  min-width: 0;
+}
+
+.copy-block pre {
+  margin: 0;
+  padding: 10px 44px 10px 12px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.copy-block .icon-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+/* ---------- Council ---------- */
+.council-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.council-head > span,
+.council-members > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.council-members {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.council-report {
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--border));
+  border-radius: var(--r-box);
+  background: var(--surface);
+  padding: 16px 20px 20px;
+  margin-bottom: 24px;
+}
+
+.council-report > header,
+.council-turn > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.council-report > header h2 {
+  font-size: 15px;
+}
+
+.council-report .reply {
+  margin-top: 8px;
+  font-size: 14.5px;
+}
+
+.council-note {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 760px;
+}
+
+.council-guidance {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13.5px;
+}
+
+.council-round {
+  margin-bottom: 28px;
+}
+
+.council-round > header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.council-round > header h2 {
+  font-size: 15px;
+}
+
+.council-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .council-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.council-turn {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.council-turn h3 {
+  font-size: 14px;
+}
+
+.council-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.council-live {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.council-output summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.council-output summary::-webkit-details-marker {
+  display: none;
+}
+
+.council-output[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.council-output .reply {
+  margin-top: 8px;
+  font-size: 13.5px;
+  max-height: 520px;
+  overflow: auto;
+}

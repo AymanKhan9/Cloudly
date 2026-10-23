@@ -16,6 +16,7 @@ Free tiers change often, so check each provider's current terms. As of October 2
 Open inbound ports in your provider's firewall or security group:
 - 22 for SSH.
 - 80 and 443 for HTTPS (with or without a domain), or 3000 if you choose plain HTTP.
+- Optionally 8443 (HTTPS) or 3141 (plain HTTP), to open [app previews](apps/web/content/docs/desktop-and-previews.md) in your browser.
 
 ## 2. Run the installer
 

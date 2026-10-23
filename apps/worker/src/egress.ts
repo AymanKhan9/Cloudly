@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
+import { createHash, randomBytes } from "node:crypto";
+import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList, gatewayMcpServers, proxySecrets, refreshMcpTokens } from "@repo/db";
 
 // Run containers join an internal network: no route out and no outside DNS.
 // The proxy container sits on it and on the normal network, and is the only
@@ -65,7 +66,9 @@ async function docker(args: string[]): Promise<{ ok: boolean; out: string }> {
 }
 
 export async function allowedHosts(): Promise<string[]> {
-  return [...EGRESS_DEFAULT_HOSTS, ...parseHostList((await config("SANDBOX_EGRESS_HOSTS")) ?? "")];
+  // A secret's hosts are where it's meant to go, so they're reachable too.
+  const secretHosts = (await proxySecrets()).flatMap((s) => s.hosts);
+  return [...new Set([...EGRESS_DEFAULT_HOSTS, ...parseHostList((await config("SANDBOX_EGRESS_HOSTS")) ?? ""), ...secretHosts])];
 }
 
 /** Writes the allowlist the proxy reads on every connection. */
@@ -107,6 +110,89 @@ async function writeCredentials(): Promise<void> {
   await writeFile(path.join(KEYS_DIR, "credentials.json"), JSON.stringify(creds), { mode: 0o600 });
 }
 
+/** Connected MCP servers and their tokens, for the gateway's /mcp/<name> routes. */
+async function writeMcp(): Promise<void> {
+  await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
+  await writeFile(path.join(KEYS_DIR, "mcp.json"), JSON.stringify(await gatewayMcpServers()), { mode: 0o600 });
+}
+
+/**
+ * A certificate from Cloudly's CA for every host a secret may go to (and its
+ * subdomains), made when that set changes. The CA key never leaves the worker.
+ */
+async function interceptCertificate(hosts: string[]): Promise<{ cert: string; key: string }> {
+  const sorted = [...new Set(hosts.map((h) => h.toLowerCase()))].sort();
+  const id = createHash("sha256").update(sorted.join("\n")).digest("hex").slice(0, 16);
+  const certFile = path.join(CA_DIR, `intercept-${id}.pem`);
+  const keyFile = path.join(CA_DIR, `intercept-${id}.key`);
+  if (!(await Bun.file(certFile).exists())) {
+    const run = async (args: string[]) => {
+      const p = Bun.spawn(["openssl", ...args], { cwd: CA_DIR, stdout: "pipe", stderr: "pipe" });
+      if ((await p.exited) !== 0) throw new Error(`openssl ${args[0]} failed: ${await new Response(p.stderr).text()}`);
+    };
+    const sans = sorted.flatMap((h) => [`DNS:${h}`, `DNS:*.${h}`]).join(",");
+    await writeFile(path.join(CA_DIR, `intercept-${id}.ext`),
+      `subjectAltName=${sans}\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n`);
+    await run(["req", "-newkey", "rsa:2048", "-nodes", "-keyout", keyFile, "-out", `intercept-${id}.csr`, "-subj", "/CN=Cloudly secrets"]);
+    await run(["x509", "-req", "-in", `intercept-${id}.csr`, "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial", "-out", certFile, "-days", "825", "-extfile", `intercept-${id}.ext`]);
+  }
+  return { cert: await Bun.file(certFile).text(), key: await Bun.file(keyFile).text() };
+}
+
+/** Secret placeholders, real values and allowed hosts, plus the certificate the proxy needs for those hosts. */
+async function writeSecrets(): Promise<void> {
+  const secrets = await proxySecrets();
+  const conf = secrets.length ? { ...(await interceptCertificate(secrets.flatMap((s) => s.hosts))), secrets } : {};
+  await writeFile(path.join(KEYS_DIR, "secrets.json"), JSON.stringify(conf), { mode: 0o600 });
+}
+
+// Turns allowed on the open web (research councils), by proxy credential. Kept in
+// memory and written whole; the proxy re-reads the file on every connection.
+const openTokens = new Set<string>();
+/** The live credentials, as the proxy reads them. */
+export const OPEN_TOKENS_FILE = path.join(KEYS_DIR, "open-tokens.json");
+
+async function writeOpenTokens(): Promise<void> {
+  await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
+  await writeFile(OPEN_TOKENS_FILE, JSON.stringify([...openTokens]), { mode: 0o600 });
+}
+
+/**
+ * A proxy credential that lets one turn reach any public HTTPS site, and the
+ * environment that makes its tools use it. Revoke it when the turn ends.
+ */
+export async function grantOpenWeb(): Promise<{ token: string; env: Record<string, string> }> {
+  const token = randomBytes(18).toString("base64url");
+  openTokens.add(token);
+  await writeOpenTokens();
+  const url = `http://council:${token}@${PROXY}:3128`;
+  return { token, env: Object.fromEntries(["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"].map((v) => [v, url])) };
+}
+
+export async function revokeOpenWeb(token: string): Promise<void> {
+  openTokens.delete(token);
+  await writeOpenTokens();
+}
+
+/** Rewrites what the gateway reads; it picks the files up on its next request. */
+export async function refreshGatewayFiles(): Promise<void> {
+  await writeCredentials();
+  await writeMcp();
+  await writeSecrets();
+}
+
+/** Refreshes MCP sign-ins close to expiring, so the gateway always holds a working token. */
+export async function runMcpRefreshLoop(signal: AbortSignal, intervalMs = 60_000): Promise<void> {
+  while (!signal.aborted) {
+    try {
+      if ((await refreshMcpTokens()) > 0) await writeMcp();
+    } catch (err) {
+      console.error("[mcp] refresh failed:", err);
+    }
+    await Bun.sleep(intervalMs);
+  }
+}
+
 async function ensureNetwork(name: string, internal: boolean): Promise<void> {
   if ((await docker(["network", "inspect", name])).ok) return;
   const made = await docker(["network", "create", ...(internal ? ["--internal"] : []), name]);
@@ -139,9 +225,38 @@ export async function ensureEgress(fresh = false): Promise<void> {
   await ensureNetwork(OUT_NETWORK, false);
   await writeAllowlist();
   await writeCredentials();
+  await writeOpenTokens();
+  await writeMcp();
   await ensureGatewayTls();
+  await ensureCaFiles();
+  await writeSecrets();
   const running = await docker(["inspect", "-f", "{{.State.Running}}", PROXY]);
   if (fresh || running.out !== "true") await startProxy();
+}
+
+/** Cloudly's CA on its own, for tools that add to their roots rather than replace them. */
+async function ensureCaFiles(): Promise<void> {
+  const caOnly = path.join(CA_BUNDLE_DIR, "ca.pem");
+  if (!(await Bun.file(caOnly).exists())) await writeFile(caOnly, await Bun.file(path.join(CA_DIR, "ca.pem")).text());
+}
+
+/**
+ * When some host's traffic is opened to fill in secrets, the sandbox has to
+ * trust Cloudly's CA for it. Node and Bun add the CA to their own roots; for
+ * OpenSSL-based tools (curl, git, Python) the bundle replaces the system's, so
+ * it's only used when it carries the system's roots too.
+ */
+export async function sandboxTrustFlags(): Promise<string[]> {
+  const conf = await Bun.file(path.join(KEYS_DIR, "secrets.json")).json().catch(() => ({}));
+  if (!conf?.secrets?.length) return [];
+  const flags = ["-v", `${CA_BUNDLE_DIR}:/cloudly-ca:ro`, "-e", "NODE_EXTRA_CA_CERTS=/cloudly-ca/ca.pem"];
+  const bundle = await Bun.file(path.join(CA_BUNDLE_DIR, "bundle.pem")).text().catch(() => "");
+  if ((bundle.match(/BEGIN CERTIFICATE/g) ?? []).length > 1) {
+    for (const name of ["SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "GIT_SSL_CAINFO", "PIP_CERT"]) {
+      flags.push("-e", `${name}=/cloudly-ca/bundle.pem`);
+    }
+  }
+  return flags;
 }
 
 /** docker run flags that put a run container behind the proxy. */

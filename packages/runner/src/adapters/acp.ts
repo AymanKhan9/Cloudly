@@ -5,6 +5,7 @@ import type { SessionUpdate, PermissionOption, PermissionOptionKind, SessionId }
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import { GeminiSubagents } from "./gemini-subagents";
+import { acpMcpServers, type McpSpec } from "../mcp";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -119,6 +120,7 @@ async function startResumedSession(
     ctx: acp.ClientContext,
     sessionId: SessionId,
     cwd: string,
+    mcpServers: acp.McpServer[] = [],
 ): Promise<acp.ActiveSession> {
     // Each run spawns a fresh `gemini --acp` subprocess (see `start()` below),
     // so this connection has no prior auth state even though the session
@@ -133,7 +135,7 @@ async function startResumedSession(
     const loadResponse = await ctx.request(acp.methods.agent.session.load, {
         sessionId,
         cwd,
-        mcpServers: [],
+        mcpServers,
     });
     const attachSession = (
         ctx as unknown as { attachSession(response: acp.NewSessionResponse): acp.ActiveSession }
@@ -143,7 +145,7 @@ async function startResumedSession(
 
 export class AcpAdapter implements RunAdapter {
     /** The session's "/model" choice; otherwise GEMINI_MODEL or the pinned flash model. */
-    constructor(private model?: string, private effort?: string) {}
+    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = []) {}
 
     private process?: ChildProcessByStdio<Writable, Readable, null>;
     private ctx?: acp.ClientContext;
@@ -190,9 +192,10 @@ export class AcpAdapter implements RunAdapter {
                     clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } },
                 });
 
+                const mcpServers = acpMcpServers(this.mcp) as acp.McpServer[];
                 const session = resume
-                    ? await startResumedSession(clientCtx, resume as SessionId, "/workspace")
-                    : await clientCtx.buildSession("/workspace").start();
+                    ? await startResumedSession(clientCtx, resume as SessionId, "/workspace", mcpServers)
+                    : await clientCtx.buildSession({ cwd: "/workspace", mcpServers }).start();
 
                 // Subagents' own work, from their chat logs, every half second.
                 const subagents = new GeminiSubagents();

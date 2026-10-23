@@ -17,7 +17,7 @@ test("CONNECT requests are parsed; anything else isn't", () => {
 });
 
 test("hosts off the list, other ports and plain HTTP are refused", async () => {
-  const server = startProxy(0, (host) => host === "api.anthropic.com");
+  const server = startProxy(0, (host) => host === "api.anthropic.com", () => null, "127.0.0.1");
   const port = (server.address() as net.AddressInfo).port;
   try {
     expect(await ask(port, "CONNECT attacker.example:443 HTTP/1.1\r\n\r\n")).toStartWith("HTTP/1.1 403");
