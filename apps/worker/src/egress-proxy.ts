@@ -3,6 +3,7 @@
 // HTTPS only: clients send CONNECT host:443 and this pipes the encrypted stream
 // through when the host is allowed. It never sees request contents.
 import net from "node:net";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ALLOW_FILE = process.env.ALLOW_FILE ?? "/allow/hosts";
@@ -25,7 +26,124 @@ export function parseConnect(head: string): { host: string; port: number } | nul
   return { host: m[1]!, port: Number(m[2]) };
 }
 
-export function startProxy(port = PORT, isAllowed = allowed): net.Server {
+// --- Secrets ------------------------------------------------------------------------
+// Runs get a placeholder for each secret. For the hosts a secret may be sent to,
+// this proxy doesn't tunnel blindly: it terminates TLS with a certificate from
+// Cloudly's CA (which run containers trust), swaps placeholders for real values
+// in the request's headers and URL, and makes the request itself. Other hosts
+// never see a real value, and the agent never holds one.
+
+const SECRETS_FILE = process.env.SECRETS_FILE ?? "/keys/secrets.json";
+
+export interface ProxySecret {
+  placeholder: string;
+  value: string;
+  hosts: string[];
+}
+
+export interface InterceptConfig {
+  cert: string;
+  key: string;
+  secrets: ProxySecret[];
+}
+
+function readIntercept(): InterceptConfig | null {
+  try {
+    const conf = JSON.parse(readFileSync(SECRETS_FILE, "utf8")) as InterceptConfig;
+    return conf.cert && conf.key && conf.secrets?.length ? conf : null;
+  } catch {
+    return null;
+  }
+}
+
+/** "example.com" covers itself and its subdomains, as on the allowlist. */
+export function hostMatches(host: string, rule: string): boolean {
+  const h = host.toLowerCase();
+  const r = rule.toLowerCase();
+  return h === r || h.endsWith(`.${r}`);
+}
+
+/**
+ * Puts the real values in for every secret allowed to go to `host`: in header
+ * values (Basic credentials decoded first) and the URL. Returns how many
+ * placeholders it replaced.
+ */
+export function substituteSecrets(headers: Headers, url: URL, host: string, secrets: ProxySecret[]): number {
+  const mine = secrets.filter((s) => s.hosts.some((r) => hostMatches(host, r)));
+  if (mine.length === 0) return 0;
+  let count = 0;
+  const swap = (text: string) => {
+    for (const s of mine) {
+      if (text.includes(s.placeholder)) {
+        count += text.split(s.placeholder).length - 1;
+        text = text.split(s.placeholder).join(s.value);
+      }
+    }
+    return text;
+  };
+  for (const [name, value] of [...headers]) {
+    let next = swap(value);
+    const basic = /^Basic\s+(.+)$/i.exec(value);
+    if (basic) {
+      const decoded = Buffer.from(basic[1]!, "base64").toString("utf8");
+      const swapped = swap(decoded);
+      if (swapped !== decoded) next = `Basic ${Buffer.from(swapped).toString("base64")}`;
+    }
+    if (next !== value) headers.set(name, next);
+  }
+  const path = swap(url.pathname + url.search);
+  if (path !== url.pathname + url.search) {
+    const fixed = new URL(path, url.origin);
+    url.pathname = fixed.pathname;
+    url.search = fixed.search;
+  }
+  return count;
+}
+
+// Which host each intercepted tunnel was opened for, by the proxy's own local
+// port on the connection to the TLS server. The request's Host header is the
+// agent's to choose; this is what the agent actually asked the proxy for.
+const tunnelTargets = new Map<number, string>();
+const interceptServers = new Map<string, ReturnType<typeof Bun.serve>>();
+
+export function startInterceptServer(conf: InterceptConfig) {
+  return Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    tls: { cert: conf.cert, key: conf.key },
+    idleTimeout: 0,
+    async fetch(req, server) {
+      const target = tunnelTargets.get(server.requestIP(req)?.port ?? -1);
+      const url = new URL(req.url);
+      if (!target || url.hostname.toLowerCase() !== target.toLowerCase()) {
+        return new Response("This connection was opened for a different host.\n", { status: 421 });
+      }
+      const upstream = new URL(`${url.pathname}${url.search}`, `https://${target}`);
+      const headers = new Headers(req.headers);
+      for (const h of HOP_BY_HOP) headers.delete(h);
+      const swapped = substituteSecrets(headers, upstream, target, readIntercept()?.secrets ?? conf.secrets);
+      console.log(`secrets ${req.method} ${target}${upstream.pathname}${swapped ? ` (${swapped} placeholder${swapped > 1 ? "s" : ""} filled)` : ""}`);
+      const res = await fetch(upstream, { method: req.method, headers, body: req.body, duplex: "half", decompress: false, redirect: "manual" } as RequestInit);
+      const out = new Headers(res.headers);
+      for (const h of HOP_BY_HOP) out.delete(h);
+      return new Response(res.body, { status: res.status, headers: out });
+    },
+  });
+}
+
+/** The local TLS server for hosts that carry a secret, or null when `host` carries none. */
+function interceptPort(host: string): number | null {
+  const conf = readIntercept();
+  if (!conf || !conf.secrets.some((s) => s.hosts.some((r) => hostMatches(host, r)))) return null;
+  // One server per certificate: a new secret host means a new certificate, and
+  // tunnels already open keep the server they started on.
+  const id = createHash("sha256").update(conf.cert).digest("hex");
+  let server = interceptServers.get(id);
+  if (!server) interceptServers.set(id, (server = startInterceptServer(conf)));
+  return server.port ?? null;
+}
+
+export function startProxy(port = PORT, isAllowed = allowed, intercept: (host: string) => number | null = interceptPort, host?: string): net.Server {
   const server = net.createServer((client) => {
     let head = "";
     const onData = (chunk: Buffer) => {
@@ -53,8 +171,15 @@ export function startProxy(port = PORT, isAllowed = allowed): net.Server {
       // its certificate covers chatgpt.com, signed by the CA only Codex's sandbox
       // trusts, and it adds the real token. Anything else sees a bad certificate.
       const viaGateway = target.host.toLowerCase() === "chatgpt.com";
-      console.log(viaGateway ? `allow ${target.host} (via the credential gateway)` : `allow ${target.host}`);
-      const upstream = net.connect(viaGateway ? GATEWAY_PORT + 1 : target.port, viaGateway ? "127.0.0.1" : target.host, () => {
+      const secretPort = viaGateway ? null : intercept(target.host);
+      console.log(viaGateway ? `allow ${target.host} (via the credential gateway)` : secretPort ? `allow ${target.host} (fills secrets)` : `allow ${target.host}`);
+      const local = viaGateway || secretPort !== null;
+      const upstream = net.connect(viaGateway ? GATEWAY_PORT + 1 : (secretPort ?? target.port), local ? "127.0.0.1" : target.host, () => {
+        if (secretPort !== null && upstream.localPort) {
+          const localPort = upstream.localPort;
+          tunnelTargets.set(localPort, target.host);
+          upstream.on("close", () => tunnelTargets.delete(localPort));
+        }
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         const rest = head.slice(end + 4);
         if (rest) upstream.write(Buffer.from(rest, "latin1"));
@@ -66,7 +191,7 @@ export function startProxy(port = PORT, isAllowed = allowed): net.Server {
     client.on("data", onData);
     client.on("error", () => {});
   });
-  server.listen(port);
+  server.listen(port, host);
   return server;
 }
 
@@ -202,6 +327,55 @@ export function injectCredentials(service: string, headers: Headers, url: URL, c
   return false;
 }
 
+// --- MCP servers --------------------------------------------------------------------
+// Each connected MCP server is reachable at /mcp/<name> on the gateway, which
+// adds the server's token. The sandbox's agents are configured with these URLs
+// and never see a token, the same as model keys.
+
+const MCP_FILE = process.env.MCP_FILE ?? "/keys/mcp.json";
+
+export interface GatewayMcp {
+  url: string;
+  authorization?: string;
+}
+
+function readMcp(): Record<string, GatewayMcp> {
+  try {
+    return JSON.parse(readFileSync(MCP_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/** The real URL for /mcp/<name>/<rest>: the server's own URL, plus any sub-path. */
+export function mcpTarget(server: GatewayMcp, rest: string[], search: string): URL {
+  const target = new URL(server.url);
+  const sub = rest.filter(Boolean).join("/");
+  if (sub) target.pathname = `${target.pathname.replace(/\/$/, "")}/${sub}`;
+  if (search) target.search = search;
+  return target;
+}
+
+export async function forwardMcp(req: Request, name: string, rest: string[], servers: Record<string, GatewayMcp>): Promise<Response> {
+  const server = servers[name];
+  if (!server) return new Response(`No MCP server named "${name}" is connected in Cloudly.\n`, { status: 404 });
+  const target = mcpTarget(server, rest, new URL(req.url).search);
+  const headers = new Headers(req.headers);
+  for (const h of [...HOP_BY_HOP, "authorization", "cookie"]) headers.delete(h);
+  if (server.authorization) headers.set("authorization", server.authorization);
+  console.log(`gateway ${req.method} mcp/${name}`);
+  const res = await fetch(target, { method: req.method, headers, body: req.body, duplex: "half", decompress: false, redirect: "manual" } as RequestInit);
+  const out = new Headers(res.headers);
+  for (const h of [...HOP_BY_HOP, "www-authenticate"]) out.delete(h);
+  // Without the challenge, an agent's MCP client won't try to sign in to the
+  // gateway itself; the user reconnects in Settings instead.
+  if (res.status === 401) {
+    await res.body?.cancel().catch(() => {});
+    return new Response(`The MCP server "${name}" refused Cloudly's sign-in. Reconnect it under Settings > MCP servers.\n`, { status: 401 });
+  }
+  return new Response(res.body, { status: res.status, headers: out });
+}
+
 function readCredentials(): Record<string, string | undefined> {
   try {
     return JSON.parse(readFileSync(CREDENTIALS_FILE, "utf8"));
@@ -210,7 +384,7 @@ function readCredentials(): Record<string, string | undefined> {
   }
 }
 
-export function startGateway(port = GATEWAY_PORT, credentials = readCredentials, tls?: { cert: string; key: string }) {
+export function startGateway(port = GATEWAY_PORT, credentials = readCredentials, tls?: { cert: string; key: string }, mcpServers = readMcp) {
   return Bun.serve({
     port,
     ...(tls ? { tls } : {}),
@@ -236,6 +410,7 @@ export function startGateway(port = GATEWAY_PORT, credentials = readCredentials,
       // Codex builds some ChatGPT URLs from the origin alone (/backend-api/...),
       // so that path means ChatGPT too.
       const parts = url.pathname.split("/");
+      if (parts[1] === "mcp" && parts[2]) return forwardMcp(req, parts[2], parts.slice(3), mcpServers());
       const [service, ...rest] = parts[1] === "backend-api" ? ["chatgpt", ...parts.slice(1)] : parts.slice(1);
       const upstream = UPSTREAMS[service ?? ""];
       if (!upstream) return new Response("Unknown service\n", { status: 404 });

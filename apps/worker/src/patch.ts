@@ -61,3 +61,16 @@ export async function validatePatch(
 
 
 
+
+/** How much a patch changes, for comparing agents' results. */
+export function patchStats(patch: string): { filesChanged: number; additions: number; deletions: number } {
+  let filesChanged = 0;
+  let additions = 0;
+  let deletions = 0;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git ")) filesChanged++;
+    else if (line.startsWith("+") && !line.startsWith("+++ ")) additions++;
+    else if (line.startsWith("-") && !line.startsWith("--- ")) deletions++;
+  }
+  return { filesChanged, additions, deletions };
+}
