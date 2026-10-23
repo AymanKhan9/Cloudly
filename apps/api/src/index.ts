@@ -10,20 +10,31 @@ import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { authMiddleware, userFromSessionCookie, type AuthEnv } from './middleware/auth_middleware';
 import { hashToken, SESSION_COOKIE_NAME, SESSION_TTL_MS } from './session';
 import { listInstallationRepos } from './github';
+import { HARNESSES, HarnessId, threadTitle } from './harnesses';
+import { mcp } from './mcp-routes';
+import { envSecrets, repoFiles } from './workspace-routes';
+import { arenas } from './arena-routes';
+import { live } from './live-routes';
 
 const app = new Hono<AuthEnv>()
 
-for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*']) {
+// Writes only from the web app's own origin. Previews serve untrusted code from
+// this same host on another port, which browsers count as the same site, so
+// SameSite cookies alone wouldn't stop it posting here with the user's session.
+app.use('*', async (c, next) => {
+  const web = process.env.WEB_ORIGIN;
+  const origin = c.req.header('origin');
+  if (web && origin && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && origin !== new URL(web).origin) {
+    return c.json({ message: 'Cross-origin request refused' }, 403);
+  }
+  await next();
+});
+
+for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities']) {
   app.use(path, authMiddleware);
 }
 
-export const HARNESSES = [
-  { id: 'native-claude', name: 'Claude Agent', cost: 'exact' },
-  { id: 'native-codex', name: 'Codex', cost: 'estimated' },
-  { id: 'gemini-acp', name: 'Gemini CLI', cost: 'estimated' },
-] as const;
-
-const HarnessId = z.enum(['native-claude', 'native-codex', 'gemini-acp']);
+export { HARNESSES };
 
 const CreateRunSchema = z.object({
   repo: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'expected owner/repo'),
@@ -32,7 +43,7 @@ const CreateRunSchema = z.object({
   harness: HarnessId,
 });
 
-const NewThreadSchema = CreateRunSchema.extend({ effort: z.string().nullable().optional() });
+const NewThreadSchema = CreateRunSchema.extend({ effort: z.string().nullable().optional(), desktop: z.boolean().optional() });
 const MessageSchema = z.object({ prompt: z.string().trim().min(1).max(8000) });
 
 const BudgetSchema = z.object({
@@ -48,6 +59,11 @@ const RUN_LIST_FIELDS = {
 } as const;
 
 app.route('/setup', setup)
+app.route('/settings/mcp', mcp)
+app.route('/settings/env', envSecrets)
+app.route('/files', repoFiles)
+app.route('/arenas', arenas)
+app.route('/', live)
 
 app.get('/health', (c) => c.json({ ok: true }))
 
@@ -160,14 +176,10 @@ app.get('/runs/:id/events', async (c) => {
 
 const ACTIVE_STATUSES = ['queued', 'running', 'finalizing'];
 
-function threadTitle(prompt: string): string {
-  const line = prompt.trim().split('\n')[0]!.replace(/\s+/g, ' ');
-  return line.length > 64 ? `${line.slice(0, 63).trimEnd()}…` : line;
-}
-
 const TURN_FIELDS = {
   id: true, prompt: true, status: true, createdAt: true, costUsd: true, onPlan: true,
-  prUrl: true, error: true, cancelRequested: true,
+  prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
+  desktopPassword: true,
 } as const;
 
 async function threadView(threadId: string, userId: string) {
@@ -179,7 +191,8 @@ async function threadView(threadId: string, userId: string) {
   const { runs, ...meta } = thread;
   return {
     thread: { ...meta, agentSessionId: undefined },
-    turns: runs.map((r) => ({ ...r, costUsd: r.costUsd?.toNumber() ?? null })),
+    // The password itself only goes out alongside a relay token (live-routes).
+    turns: runs.map(({ desktopPassword, ...r }) => ({ ...r, desktop: Boolean(desktopPassword), costUsd: r.costUsd?.toNumber() ?? null })),
   };
 }
 
@@ -201,7 +214,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness, effort } = c.req.valid('json');
+  const { repo, baseBranch, prompt, harness, effort, desktop } = c.req.valid('json');
   if (effort && !effortLevels(harness).includes(effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
   }
@@ -212,6 +225,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
       title: threadTitle(prompt),
       model: modelCommand(prompt) ?? undefined,
       effort: effort ?? undefined,
+      desktop: desktop ?? false,
       branch: `agent/thread-${id.slice(0, 8)}`,
       runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id } },
     },
@@ -230,18 +244,23 @@ app.get('/threads/:id', async (c) => {
 const ThreadSettingsSchema = z.object({
   model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').nullable().optional(),
   effort: z.string().nullable().optional(),
+  desktop: z.boolean().optional(),
 });
 
 app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) => {
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
   if (!thread) return c.json({ message: 'Session not found' }, 404);
-  const { model, effort } = c.req.valid('json');
+  const { model, effort, desktop } = c.req.valid('json');
   if (effort && !effortLevels(thread.harness).includes(effort)) {
     return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
   }
   await prisma.thread.update({
     where: { id: thread.id },
-    data: { ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}) },
+    data: {
+      ...(model !== undefined ? { model } : {}),
+      ...(effort !== undefined ? { effort } : {}),
+      ...(desktop !== undefined ? { desktop } : {}),
+    },
   });
   return c.json({ ok: true });
 })
