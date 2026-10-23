@@ -21,6 +21,8 @@ model User {
   sessions    Session[]
   runs        Run[]
   threads     Thread[]
+  arenas      Arena[]
+  previews    Preview[]
   budget      Budget?
 }
 
@@ -42,11 +44,110 @@ model Thread {
   /// How hard the agent thinks (see @repo/shared/effort); null is its default.
   effort         String?
   prUrl          String?
+  /// Set when the session is one of an arena's agents (see Arena).
+  arenaId        String?
+  /// Open a pull request when a turn changes code. Arena sessions wait until
+  /// their result is picked.
+  autoPr         Boolean  @default(true)
+  /// Turns get a virtual display the agent can use and the user can watch.
+  desktop        Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  arena          Arena?   @relation(fields: [arenaId], references: [id], onDelete: SetNull)
   runs           Run[]
+  previews       Preview[]
   @@index([userId, updatedAt])
+  @@index([arenaId])
+}
+
+/// One task handed to several agents at once, each in its own session and
+/// branch, so their results can be compared before one becomes the PR.
+model Arena {
+  id             String   @id @default(uuid())
+  userId         String
+  repo           String
+  baseBranch     String
+  prompt         String
+  /// The session whose branch was opened as the pull request.
+  winnerThreadId String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threads        Thread[]
+  @@index([userId, createdAt])
+}
+
+/// A remote MCP server the agents may use. Its credentials (OAuth tokens and
+/// client, or a bearer token) are AES-256-GCM ciphertext in `secret`, and only
+/// ever reach the credential gateway, never a sandbox.
+model McpServer {
+  id        String   @id @default(uuid())
+  /// What agents see it as: lowercase letters, digits and dashes.
+  name      String   @unique
+  url       String
+  /// oauth | bearer | none
+  auth      String   @default("oauth")
+  enabled   Boolean  @default(true)
+  /// connected | needs_auth | error
+  status    String   @default("needs_auth")
+  error     String?
+  secret    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// An environment variable for runs. The sandbox gets a placeholder, and the
+/// gateway swaps in the real value only on HTTPS requests to `hosts`, unless
+/// `exposed` puts the real value in the sandbox.
+model EnvSecret {
+  id        String   @id @default(uuid())
+  name      String
+  /// "owner/repo", or "*" for every repo.
+  repo      String   @default("*")
+  /// Ciphertext.
+  value     String
+  /// Newline-separated; subdomains are included.
+  hosts     String   @default("")
+  exposed   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([repo, name])
+}
+
+/// A repo's files outside git, mounted at /files in every run. Whatever the
+/// agent leaves there is saved back for the next run.
+model RepoFile {
+  repo      String
+  path      String
+  content   Bytes
+  size      Int
+  sha256    String
+  updatedAt DateTime @updatedAt
+  @@id([repo, path])
+}
+
+/// A session's app, started from its branch and kept running so the user can
+/// open it, or watch it on the sandbox's desktop.
+model Preview {
+  id          String   @id @default(uuid())
+  threadId    String
+  userId      String
+  /// requested | starting | running | stopping | stopped | failed
+  status      String   @default("requested")
+  command     String
+  port        Int
+  desktop     Boolean  @default(false)
+  workerId    String?
+  error       String?
+  log         String   @default("")
+  vncPassword String?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  thread      Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([status, createdAt])
+  @@index([threadId, createdAt])
 }
 
 // Instance configuration entered in the browser (model keys, the GitHub App's
@@ -105,6 +206,12 @@ model Run {
   prUrl      String?
   error      String?
   threadId   String?
+  /// From the turn's patch, for comparing agents.
+  filesChanged Int?
+  additions  Int?
+  deletions  Int?
+  /// The turn's virtual display (VNC) password, when the session has a desktop.
+  desktopPassword String?
   events     RunEvent[]
   user       User?    @relation(fields: [userId],references: [id],onDelete: Cascade)
   thread     Thread?  @relation(fields: [threadId],references: [id],onDelete: Cascade)

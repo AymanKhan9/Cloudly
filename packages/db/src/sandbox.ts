@@ -53,7 +53,21 @@ export const SANDBOX_PRESETS: SandboxPreset[] = [
     tool: "Ruby",
     snippet: "apt-get install -y --no-install-recommends ruby-full",
   },
+  {
+    id: "desktop",
+    label: "Desktop and browser",
+    tool: "a virtual desktop with Chromium (for sessions that turn it on)",
+    snippet: [
+      "apt-get install -y --no-install-recommends xvfb x11vnc fluxbox xdotool imagemagick chromium fonts-dejavu-core fonts-liberation",
+    ].join("\n"),
+    note: "The desktop and Chromium add about 600 MB, and a desktop session needs about 300 MB more memory while it runs.",
+  },
 ];
+
+/** Whether the setup script installs the virtual desktop (see the "desktop" preset). */
+export function hasDesktop(script: string): boolean {
+  return hasPreset(script, "desktop");
+}
 
 const presetStart = (id: string) => `# cloudly:${id}`;
 const presetEnd = (id: string) => `# end cloudly:${id}`;

@@ -4,6 +4,10 @@ export { prisma, Prisma }
 export * from "./secrets"
 export * from "./github-credentials"
 export * from "./sandbox"
+export * from "./mcp"
+export * from "./env-secrets"
+export * from "./repo-files"
+export * from "./relay"
 
 export function currentMonth(now = new Date()): string {
   return now.toISOString().slice(0, 7)
