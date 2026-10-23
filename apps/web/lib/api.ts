@@ -185,3 +185,43 @@ export function bytes(n: number): string {
   return `${(n / 1048576).toFixed(1)} MB`;
 }
 
+
+export interface CouncilSummary {
+  id: string;
+  question: string;
+  members: string[];
+  status: "running" | "done" | "stopped" | "failed" | "cancelled";
+  round: number;
+  rounds: number;
+  repo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CouncilTurn {
+  id: string;
+  harness: string;
+  round: number;
+  role: "member" | "chair";
+  status: RunStatus;
+  cancelRequested: boolean;
+  costUsd: number | null;
+  onPlan: boolean;
+  output: string | null;
+  error: string | null;
+  createdAt: string;
+  durationMs: number | null;
+}
+
+export interface CouncilView {
+  council: CouncilSummary & {
+    chair: string;
+    baseBranch: string | null;
+    budgetUsd: number | null;
+    guidance: { text: string; round: number; at: string }[];
+    report: string | null;
+    error: string | null;
+  };
+  turns: CouncilTurn[];
+  spentUsd: number;
+}

@@ -24,6 +24,7 @@ model User {
   arenas      Arena[]
   previews    Preview[]
   tokens      AccessToken[]
+  councils    Council[]
   budget      Budget?
 }
 
@@ -213,9 +214,19 @@ model Run {
   deletions  Int?
   /// The turn's virtual display (VNC) password, when the session has a desktop.
   desktopPassword String?
+  /// Set on a council member's or chair's turn (see Council).
+  councilId    String?
+  /// 1..rounds for members; rounds + 1 is the chair's report.
+  councilRound Int?
+  /// member | chair
+  councilRole  String?
+  /// What a council turn wrote as its answer.
+  output       String?
   events     RunEvent[]
   user       User?    @relation(fields: [userId],references: [id],onDelete: Cascade)
   thread     Thread?  @relation(fields: [threadId],references: [id],onDelete: Cascade)
+  council    Council? @relation(fields: [councilId],references: [id],onDelete: Cascade)
+  @@unique([councilId, councilRound, councilRole, harness])
   @@index([status,createdAt])
   @@index([userId])
   @@index([threadId, createdAt])
@@ -304,4 +315,35 @@ model AccessToken {
   createdAt  DateTime  @default(now())
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
+}
+
+/// Several agents on one question, in rounds: they research independently,
+/// review each other's findings, state final positions, and a chair writes the
+/// report. Each agent's turn in a round is a Run. With no repo it's a research
+/// council: open web, no repo, no secrets.
+model Council {
+  id         String   @id @default(uuid())
+  userId     String
+  question   String
+  repo       String?
+  baseBranch String?
+  /// Harness ids, in the order shown.
+  members    String[]
+  chair      String
+  rounds     Int      @default(3)
+  /// The round under way; rounds + 1 is the chair's report.
+  round      Int      @default(1)
+  /// running | done | stopped | failed | cancelled
+  status     String   @default("running")
+  /// Spending cap for the whole council; null is no cap beyond the monthly limit.
+  budgetUsd  Decimal?
+  /// Notes the user added between rounds: [{ text, round, at }].
+  guidance   Json     @default("[]")
+  report     String?
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs       Run[]
+  @@index([userId, createdAt])
 }

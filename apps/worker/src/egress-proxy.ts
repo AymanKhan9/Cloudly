@@ -3,6 +3,7 @@
 // HTTPS only: clients send CONNECT host:443 and this pipes the encrypted stream
 // through when the host is allowed. It never sees request contents.
 import net from "node:net";
+import { lookup } from "node:dns/promises";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -143,7 +144,67 @@ function interceptPort(host: string): number | null {
   return server.port ?? null;
 }
 
-export function startProxy(port = PORT, isAllowed = allowed, intercept: (host: string) => number | null = interceptPort, host?: string): net.Server {
+// --- Open web, for research councils ----------------------------------------------
+// A research council has no repo and no secrets, so its turns may reach any public
+// HTTPS site. Each such turn gets a credential for this proxy (the worker writes
+// the live ones to a file); without one, the allowlist applies as always, so a
+// repo's run can't opt itself out. Private, loopback and link-local addresses
+// (the VM's own services, a cloud's metadata endpoint) are never reachable.
+
+const OPEN_TOKENS_FILE = process.env.OPEN_TOKENS_FILE ?? "/keys/open-tokens.json";
+
+function openToken(token: string | null): boolean {
+  if (!token) return false;
+  try {
+    return (JSON.parse(readFileSync(OPEN_TOKENS_FILE, "utf8")) as string[]).includes(token);
+  } catch {
+    return false;
+  }
+}
+
+/** The password from a `council:<token>` Proxy-Authorization header, if there is one. */
+export function proxyToken(head: string): string | null {
+  const m = /^proxy-authorization:\s*basic\s+(\S+)\s*$/im.exec(head);
+  if (!m) return null;
+  const [user, ...rest] = Buffer.from(m[1]!, "base64").toString("utf8").split(":");
+  return user === "council" && rest.length ? rest.join(":") : null;
+}
+
+function v4Private(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number) as [number, number];
+  return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
+}
+
+export function isPublicAddress(ip: string): boolean {
+  const kind = net.isIP(ip);
+  if (kind === 4) return !v4Private(ip);
+  if (kind !== 6) return false;
+  const v = ip.toLowerCase();
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v);
+  if (mapped) return !v4Private(mapped[1]!);
+  return !(v === "::" || v === "::1" || /^f[cd]/.test(v) || /^fe[89ab]/.test(v) || /^ff/.test(v) || v.startsWith("64:ff9b:"));
+}
+
+/** A public address for `host`, or null if it has none or any of its addresses is private. */
+export async function publicAddress(host: string, resolve = (h: string) => lookup(h, { all: true })): Promise<string | null> {
+  if (net.isIP(host)) return isPublicAddress(host) ? host : null;
+  try {
+    const addrs = (await resolve(host)).map((a) => a.address);
+    return addrs.length && addrs.every(isPublicAddress) ? addrs[0]! : null;
+  } catch {
+    return null;
+  }
+}
+
+export function startProxy(
+  port = PORT,
+  isAllowed = allowed,
+  intercept: (host: string) => number | null = interceptPort,
+  host?: string,
+  isOpen: (token: string | null) => boolean = openToken,
+  resolvePublic: (host: string) => Promise<string | null> = publicAddress,
+): net.Server {
   const server = net.createServer((client) => {
     let head = "";
     const onData = (chunk: Buffer) => {
@@ -159,7 +220,8 @@ export function startProxy(port = PORT, isAllowed = allowed, intercept: (host: s
         client.end("HTTP/1.1 405 Method Not Allowed\r\nContent-Type: text/plain\r\n\r\nOnly HTTPS (CONNECT) goes through Cloudly's egress proxy.\n");
         return;
       }
-      if (target.port !== 443 || !isAllowed(target.host)) {
+      const open = isOpen(proxyToken(head));
+      if (target.port !== 443 || !(open || isAllowed(target.host))) {
         console.log(`deny  ${target.host}:${target.port}`);
         client.end(
           `HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\n${target.host} isn't on this Cloudly instance's allowed list. Add it under Settings > Sandbox tools > Network.\n`,
@@ -172,9 +234,29 @@ export function startProxy(port = PORT, isAllowed = allowed, intercept: (host: s
       // trusts, and it adds the real token. Anything else sees a bad certificate.
       const viaGateway = target.host.toLowerCase() === "chatgpt.com";
       const secretPort = viaGateway ? null : intercept(target.host);
-      console.log(viaGateway ? `allow ${target.host} (via the credential gateway)` : secretPort ? `allow ${target.host} (fills secrets)` : `allow ${target.host}`);
+      const mustBePublic = open && !isAllowed(target.host);
+      // Open-web connections are logged once their address has been checked.
+      if (!mustBePublic || viaGateway || secretPort !== null) {
+        console.log(viaGateway ? `allow ${target.host} (via the credential gateway)` : secretPort ? `allow ${target.host} (fills secrets)` : `allow ${target.host}`);
+      }
+      void connectUpstream(target, end, viaGateway, secretPort, mustBePublic);
+    };
+    const connectUpstream = async (target: { host: string; port: number }, end: number, viaGateway: boolean, secretPort: number | null, mustBePublic: boolean) => {
       const local = viaGateway || secretPort !== null;
-      const upstream = net.connect(viaGateway ? GATEWAY_PORT + 1 : (secretPort ?? target.port), local ? "127.0.0.1" : target.host, () => {
+      // Off the allowlist (open web): connect to the address checked here, not
+      // the name again, so a second DNS answer can't point it somewhere private.
+      let address = target.host;
+      if (mustBePublic && !local) {
+        const checked = await resolvePublic(target.host);
+        if (!checked) {
+          console.log(`deny  ${target.host}:443 (not a public address)`);
+          client.end(`HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\n${target.host} doesn't resolve to a public address.\n`);
+          return;
+        }
+        address = checked;
+        console.log(`allow ${target.host} (open web)`);
+      }
+      const upstream = net.connect(viaGateway ? GATEWAY_PORT + 1 : (secretPort ?? target.port), local ? "127.0.0.1" : address, () => {
         if (secretPort !== null && upstream.localPort) {
           const localPort = upstream.localPort;
           tunnelTargets.set(localPort, target.host);
@@ -446,7 +528,8 @@ export function startGateway(port = GATEWAY_PORT, credentials = readCredentials,
 }
 
 if (import.meta.main) {
-  startProxy();
+  // IPv4: run containers reach it over the Docker network, and some hosts have no IPv6 at all.
+  startProxy(PORT, allowed, interceptPort, "0.0.0.0");
   startGateway();
   // HTTPS twin, for Codex's ChatGPT backend (which refuses plain HTTP).
   try {

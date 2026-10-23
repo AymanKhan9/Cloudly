@@ -4382,3 +4382,150 @@ button.pill[aria-pressed="true"] .pill-text {
   top: 4px;
   right: 4px;
 }
+
+/* ---------- Council ---------- */
+.council-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.council-head > span,
+.council-members > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.council-members {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.council-report {
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--border));
+  border-radius: var(--r-box);
+  background: var(--surface);
+  padding: 16px 20px 20px;
+  margin-bottom: 24px;
+}
+
+.council-report > header,
+.council-turn > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.council-report > header h2 {
+  font-size: 15px;
+}
+
+.council-report .reply {
+  margin-top: 8px;
+  font-size: 14.5px;
+}
+
+.council-note {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 760px;
+}
+
+.council-guidance {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13.5px;
+}
+
+.council-round {
+  margin-bottom: 28px;
+}
+
+.council-round > header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.council-round > header h2 {
+  font-size: 15px;
+}
+
+.council-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .council-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.council-turn {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.council-turn h3 {
+  font-size: 14px;
+}
+
+.council-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.council-live {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.council-output summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.council-output summary::-webkit-details-marker {
+  display: none;
+}
+
+.council-output[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.council-output .reply {
+  margin-top: 8px;
+  font-size: 13.5px;
+  max-height: 520px;
+  overflow: auto;
+}

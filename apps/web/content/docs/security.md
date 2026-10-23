@@ -16,6 +16,10 @@ The agent can still make model calls on your account while its turn runs, throug
 
 [Editor tokens](/docs/shared-context) reach the shared-context MCP endpoint and nothing else; only their SHA-256 is stored, and they can be revoked in Settings. Notes an agent adds come back from the sandbox the way the patch does (a regular file, never a symlink, with size and count caps), and are stored as plain text. They are text later agents read, so a misled agent could leave a misleading note: each entry names who added it, and you can remove it.
 
+## Research councils
+
+A [council](/docs/council) without a repository may reach any public HTTPS site, so its agents can read their sources. Its turns get no repository, no secrets and no kept files, so there's nothing in the sandbox to leak beyond what the agent writes itself. Each turn gets its own credential for the egress proxy, revoked when the turn ends; without one the allowlist applies, so a repository's run can't switch itself to the open web. Even with one, the proxy resolves the name itself, refuses it if any of its addresses is private, loopback or link-local (the VM's own services, a cloud's metadata endpoint), and connects to the address it checked.
+
 ## Desktops and previews
 
 These are the one deliberate way in to a sandbox. The browser never connects to a container: it gets a short-lived token from the API, signed for one container and one purpose, and Cloudly's relay checks it before connecting to that container's VNC port (desktop) or preview port (app). The relay has no other routes. A desktop's VNC server also has its own password per turn, so other containers on the sandbox network can't watch it.

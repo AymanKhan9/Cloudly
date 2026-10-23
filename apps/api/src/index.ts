@@ -16,6 +16,7 @@ import { envSecrets, repoFiles } from './workspace-routes';
 import { arenas } from './arena-routes';
 import { live } from './live-routes';
 import { context, tokens, mcpEndpoint } from './context-routes';
+import { councils } from './council-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -31,7 +32,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*']) {
+for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -65,6 +66,7 @@ app.route('/settings/env', envSecrets)
 app.route('/files', repoFiles)
 app.route('/arenas', arenas)
 app.route('/context', context)
+app.route('/councils', councils)
 app.route('/settings/tokens', tokens)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
 app.route('/mcp', mcpEndpoint)

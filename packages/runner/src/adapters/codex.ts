@@ -53,7 +53,7 @@ export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
 export class CodexAdapter implements RunAdapter {
     private controller?: AbortController;
 
-    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = []) {}
+    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = [], private research = false) {}
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
         this.controller = new AbortController();
@@ -69,6 +69,8 @@ export class CodexAdapter implements RunAdapter {
             sandboxMode: "danger-full-access" as const,
             model: this.model,
             modelReasoningEffort: this.effort as ModelReasoningEffort | undefined,
+            // Research councils: Codex's own web search (run by OpenAI), which is off headless.
+            ...(this.research ? { webSearchMode: "live" as const, networkAccessEnabled: true } : {}),
         };
         const thread = resume
             ? codex.resumeThread(resume, threadOptions)

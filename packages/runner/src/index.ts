@@ -25,11 +25,13 @@ type RunConfig = {
     desktop?: { password: string };
     /** The repo's shared context is mounted at /context. */
     context?: boolean;
+    /** A research turn: turn on the agent's own web search where it's off by default (Codex). */
+    research?: boolean;
 };
 
 const adapters: Record<string,(config: RunConfig, mcp: McpSpec[])=>RunAdapter> = {
     "native-claude" : (config, mcp)=> new ClaudeAdapter(config.maxBudgetUsd, config.systemAppend, config.model, config.effort, mcp),
-    "native-codex": (config, mcp)=> new CodexAdapter(config.model, config.effort, mcp),
+    "native-codex": (config, mcp)=> new CodexAdapter(config.model, config.effort, mcp, config.research),
     "gemini-acp": (config, mcp)=> new AcpAdapter(config.model, config.effort, mcp),
 };
 
@@ -40,7 +42,7 @@ async function loadConfig(): Promise<RunConfig> {
     }
     return {
         task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend,
-        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context,
+        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context, research: raw.research,
     };
 }
 

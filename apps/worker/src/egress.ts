@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList, gatewayMcpServers, proxySecrets, refreshMcpTokens } from "@repo/db";
 
 // Run containers join an internal network: no route out and no outside DNS.
@@ -146,6 +146,32 @@ async function writeSecrets(): Promise<void> {
   await writeFile(path.join(KEYS_DIR, "secrets.json"), JSON.stringify(conf), { mode: 0o600 });
 }
 
+// Turns allowed on the open web (research councils), by proxy credential. Kept in
+// memory and written whole; the proxy re-reads the file on every connection.
+const openTokens = new Set<string>();
+
+async function writeOpenTokens(): Promise<void> {
+  await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
+  await writeFile(path.join(KEYS_DIR, "open-tokens.json"), JSON.stringify([...openTokens]), { mode: 0o600 });
+}
+
+/**
+ * A proxy credential that lets one turn reach any public HTTPS site, and the
+ * environment that makes its tools use it. Revoke it when the turn ends.
+ */
+export async function grantOpenWeb(): Promise<{ token: string; env: Record<string, string> }> {
+  const token = randomBytes(18).toString("base64url");
+  openTokens.add(token);
+  await writeOpenTokens();
+  const url = `http://council:${token}@${PROXY}:3128`;
+  return { token, env: Object.fromEntries(["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"].map((v) => [v, url])) };
+}
+
+export async function revokeOpenWeb(token: string): Promise<void> {
+  openTokens.delete(token);
+  await writeOpenTokens();
+}
+
 /** Rewrites what the gateway reads; it picks the files up on its next request. */
 export async function refreshGatewayFiles(): Promise<void> {
   await writeCredentials();
@@ -197,6 +223,7 @@ export async function ensureEgress(fresh = false): Promise<void> {
   await ensureNetwork(OUT_NETWORK, false);
   await writeAllowlist();
   await writeCredentials();
+  await writeOpenTokens();
   await writeMcp();
   await ensureGatewayTls();
   await ensureCaFiles();

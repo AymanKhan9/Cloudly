@@ -5,6 +5,7 @@ import { runRecoverySweepLoop } from "./recovery";
 import { runSandboxImageLoop } from "./sandbox-image";
 import { ensureEgress, runMcpRefreshLoop } from "./egress";
 import { ensureRelay, runPreviewLoop } from "./previews";
+import { runCouncilLoop } from "./council";
 
 const workerId = process.env.WORKER_ID ?? `${hostname()}-${process.pid}`;
 // ponytail: poll and recovery each cap at this, so the true ceiling is 2x; share one counter if that matters.
@@ -30,4 +31,5 @@ await Promise.all([
   runSandboxImageLoop(controller.signal),
   runMcpRefreshLoop(controller.signal),
   runPreviewLoop(workerId, controller.signal),
+  runCouncilLoop(controller.signal),
 ]);

@@ -25,6 +25,7 @@ import { materializeRepoFiles, syncRepoFiles, destroyFilesDir, type FilesDir } f
 import { patchStats } from "./patch";
 import { ensureRelay } from "./previews";
 import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./shared-context";
+import { processCouncilTurn } from "./council";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -90,6 +91,8 @@ export async function processRun(
   ) => AsyncIterable<RunEvent> = createRunContainer,
   heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
 ): Promise<void> {
+  // A council member's or chair's turn: an answer, not a change to commit.
+  if (run.councilId) return processCouncilTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
   let cancelled = false;
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, GitBranch, GithubLogo, Lightning, Monitor, Scales } from "@phosphor-icons/react";
+import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat } from "@phosphor-icons/react";
 import { api, ApiError, type Capabilities, type Repo } from "@/lib/api";
 import { HARNESSES, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
@@ -16,6 +16,20 @@ const STARTERS = [
   "Add input validation to the API routes that are missing it",
 ];
 
+const COUNCIL_STARTERS = [
+  "What's the state of the software job market right now, and where is it heading this year?",
+  "Which managed Postgres providers are the best fit for a small team today, and why?",
+  "What changed in AI coding agents in the last three months that matters to a small team?",
+];
+
+type Mode = "session" | "compare" | "council";
+
+interface Estimate {
+  turns: number;
+  usd: number | null;
+  onPlan: string[];
+}
+
 export default function NewSessionPage() {
   const router = useRouter();
   const { budget } = useApp();
@@ -25,9 +39,17 @@ export default function NewSessionPage() {
   const [branch, setBranch] = useState("");
   const [harness, setHarness] = useState<HarnessId>("native-claude");
   const [effort, setEffort] = useState<string | null>(null);
-  // Compare mode: the same task to several agents at once (an arena).
-  const [compare, setCompare] = useState(false);
+  // Compare: the same task to several agents at once (an arena). Council: several
+  // agents answer one question together, in rounds, and a chair writes the report.
+  const [mode, setMode] = useState<Mode>("session");
+  const compare = mode === "compare";
+  const council = mode === "council";
   const [rivals, setRivals] = useState<HarnessId[]>(["native-claude", "native-codex"]);
+  const [chair, setChair] = useState<HarnessId>("native-claude");
+  const [rounds, setRounds] = useState(3);
+  const [onRepo, setOnRepo] = useState(false);
+  const [cap, setCap] = useState("5");
+  const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [desktop, setDesktop] = useState(false);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -48,8 +70,16 @@ export default function NewSessionPage() {
     api<Capabilities>("/capabilities").then(setCaps).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!council || rivals.length < 2) return setEstimate(null);
+    const q = new URLSearchParams({ members: rivals.join(","), chair, rounds: String(rounds) });
+    api<Estimate>(`/councils/estimate?${q}`).then(setEstimate).catch(() => setEstimate(null));
+  }, [council, rivals, chair, rounds]);
+
   const stopped = budget?.state === "storm";
-  const ready = !submitting && !stopped && Boolean(repo) && Boolean(branch.trim()) && Boolean(prompt.trim()) && (!compare || rivals.length >= 2);
+  const needsRepo = !council || onRepo;
+  const ready =
+    !submitting && !stopped && Boolean(prompt.trim()) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (mode === "session" || rivals.length >= 2);
   const h = HARNESSES.find((x) => x.id === harness)!;
 
   async function submit(e?: React.FormEvent) {
@@ -58,6 +88,22 @@ export default function NewSessionPage() {
     setSubmitting(true);
     setError(null);
     try {
+      if (council) {
+        const { id } = await api<{ id: string }>("/councils", {
+          method: "POST",
+          body: JSON.stringify({
+            question: prompt,
+            members: rivals,
+            chair,
+            rounds,
+            repo: onRepo ? repo : null,
+            baseBranch: onRepo ? branch : null,
+            budgetUsd: Number(cap) > 0 ? Number(cap) : null,
+          }),
+        });
+        router.push(`/app/council/${id}`);
+        return;
+      }
       if (compare) {
         const { id } = await api<{ id: string }>("/arenas", {
           method: "POST",
@@ -81,16 +127,20 @@ export default function NewSessionPage() {
     ? { tone: "danger", text: "Your monthly spend limit is reached. Raise it in Settings to start sessions." }
     : error
       ? { tone: "danger", text: error }
-      : repoError
+      : repoError && needsRepo
         ? { tone: "danger", text: `Couldn't load repositories: ${repoError}` }
-        : repos && repos.length === 0
+        : needsRepo && repos && repos.length === 0
           ? { tone: "danger", text: "The GitHub App can't see any repositories yet. Add one to its installation on GitHub." }
           : null;
 
   return (
     <div className="start">
-      <h1>What should the agent work on?</h1>
-      <p>Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward.</p>
+      <h1>{council ? "What should the council answer?" : "What should the agent work on?"}</h1>
+      <p>
+        {council
+          ? "Each agent researches on its own, then they review each other's findings and give final positions. The chair writes the report."
+          : "Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward."}
+      </p>
 
       <form onSubmit={submit}>
         <div className="composer">
@@ -110,11 +160,23 @@ export default function NewSessionPage() {
                 submit();
               }
             }}
-            placeholder="Add per-key rate limiting to POST /invoices, 60 requests a minute, and cover the 429 path with a test."
+            placeholder={
+              council
+                ? "What's the state of the job market for software engineers right now? Where is hiring growing, where is it shrinking, and what's driving it?"
+                : "Add per-key rate limiting to POST /invoices, 60 requests a minute, and cover the 429 path with a test."
+            }
             maxLength={8000}
             style={{ minHeight: 112 }}
           />
           <div className="composer-bar">
+            {council ? (
+              <button type="button" className="pill" aria-pressed={onRepo} onClick={() => setOnRepo((r) => !r)} title="Without a repo, the council researches on the open web. With one, it reads the repo and changes nothing.">
+                <GithubLogo size={14} />
+                <span className="pill-text">{onRepo ? "On a repo" : "Web research"}</span>
+              </button>
+            ) : null}
+            {needsRepo ? (
+            <>
             <Picker
               label="Repository"
               icon={<GithubLogo size={15} />}
@@ -134,8 +196,10 @@ export default function NewSessionPage() {
               <span className="visually-hidden">Base branch</span>
               <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} />
             </label>
-            {compare ? (
-              <span className="rivals" role="group" aria-label="Agents to compare">
+            </>
+            ) : null}
+            {mode !== "session" ? (
+              <span className="rivals" role="group" aria-label={council ? "Council members" : "Agents to compare"}>
                 {HARNESSES.map((x) => {
                   const on = rivals.includes(x.id);
                   return (
@@ -174,12 +238,44 @@ export default function NewSessionPage() {
               }}
             />
             )}
-            {compare ? null : <EffortControl harness={harness} value={effort} onChange={setEffort} />}
-            <button type="button" className="pill" aria-pressed={compare} onClick={() => setCompare((c) => !c)} title="Give the same task to several agents and pick the best result">
+            {mode === "session" ? <EffortControl harness={harness} value={effort} onChange={setEffort} /> : null}
+            {council ? (
+              <>
+                <Picker
+                  label="Chair"
+                  icon={<Crown size={14} />}
+                  value={chair}
+                  options={HARNESSES.map((x) => ({ value: x.id, label: `${x.name} chairs`, sub: <span className="dim">Writes the report</span> }))}
+                  onChange={(v) => setChair(v as HarnessId)}
+                />
+                <Picker
+                  label="Rounds"
+                  icon={<Repeat size={14} />}
+                  value={String(rounds)}
+                  options={[
+                    { value: "1", label: "1 round", sub: <span className="dim">Research only</span> },
+                    { value: "2", label: "2 rounds", sub: <span className="dim">Research, cross-review</span> },
+                    { value: "3", label: "3 rounds", sub: <span className="dim">Research, cross-review, final positions</span> },
+                  ]}
+                  onChange={(v) => setRounds(Number(v))}
+                />
+                <label className="pill" title="Spending cap for the whole council">
+                  <CurrencyDollar size={14} />
+                  <span className="visually-hidden">Spending cap in dollars</span>
+                  <input className="mono num" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value.replace(/[^0-9.]/g, ""))} style={{ width: "5ch" }} />
+                  <span className="dim">cap</span>
+                </label>
+              </>
+            ) : null}
+            <button type="button" className="pill" aria-pressed={compare} onClick={() => setMode(compare ? "session" : "compare")} title="Give the same task to several agents and pick the best result">
               <Scales size={14} />
               <span className="pill-text">Compare</span>
             </button>
-            {caps?.desktop ? (
+            <button type="button" className="pill" aria-pressed={council} onClick={() => setMode(council ? "session" : "council")} title="Several agents research a question together and report">
+              <UsersThree size={14} />
+              <span className="pill-text">Council</span>
+            </button>
+            {caps?.desktop && !council ? (
               <button type="button" className="pill" aria-pressed={desktop} onClick={() => setDesktop((d) => !d)} title="Give the agent a virtual desktop and browser">
                 <Monitor size={14} />
                 <span className="pill-text">Desktop</span>
@@ -195,7 +291,11 @@ export default function NewSessionPage() {
         <div className="composer-note" data-tone={note?.tone} role={note ? "alert" : undefined}>
           <span>
             {note?.text ??
-              (compare
+              (council
+                ? rivals.length < 2
+                  ? "Pick at least two agents for the council."
+                  : `${estimate ? `${estimate.turns} turns` : "Several turns"}${estimate?.usd != null ? `, about $${estimate.usd.toFixed(2)} from your recent turns` : ""}${estimate?.onPlan.length ? ` (${estimate.onPlan.join(" and ")} on your plan)` : ""}. Stops at the cap.`
+                : compare
                 ? rivals.length < 2
                   ? "Pick at least two agents to compare."
                   : `Each agent works on its own branch. Nothing opens a pull request until you pick a result. Each one's turn costs as usual.`
@@ -210,7 +310,7 @@ export default function NewSessionPage() {
       {prompt.trim() ? null : (
         <div className="starters">
           <h2>Or start from</h2>
-          {STARTERS.map((s) => (
+          {(council ? COUNCIL_STARTERS : STARTERS).map((s) => (
             <button
               key={s}
               type="button"

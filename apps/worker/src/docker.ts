@@ -34,7 +34,8 @@ interface ControlConfig{
     effort?:string,
     mcpServers?:{ name: string; url: string }[],
     desktop?:{ password: string },
-    context?:boolean
+    context?:boolean,
+    research?:boolean
 }
 
 export interface ContainerOptions {
@@ -62,6 +63,10 @@ export interface ContainerOptions {
     env?: Record<string, string>;
     /** Host dir mounted at /context: the repo's shared context, when it's on. */
     contextDir?: string;
+    /** Extra host dirs to mount: [host path, container path]. */
+    mounts?: [string, string][];
+    /** A research turn: the agent's own web search on. */
+    research?: boolean;
 }
 
 /** The gateway URL agents use for a connected MCP server. */
@@ -218,6 +223,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             mcpServers: options.mcpServers?.map((name) => ({ name, url: mcpGatewayUrl(name) })),
             desktop: options.desktopPassword ? { password: options.desktopPassword } : undefined,
             context: Boolean(options.contextDir),
+            research: options.research,
         };
 
         await writeFile(
@@ -265,6 +271,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             ...(options.filesDir ? ["-v", `${options.filesDir}:/files`] : []),
             ...(options.contextDir ? ["-v", `${options.contextDir}:/context`] : []),
+            ...(options.mounts ?? []).flatMap(([host, inside]) => ["-v", `${host}:${inside}`]),
 
             ...runEnv.flags,
             ...credentials.flags,

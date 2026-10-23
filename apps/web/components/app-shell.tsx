@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { GearSix, List, NotePencil, SignOut, Warning, X } from "@phosphor-icons/react";
-import { api, type ThreadSummary } from "@/lib/api";
+import { GearSix, List, NotePencil, SignOut, UsersThree, Warning, X } from "@phosphor-icons/react";
+import { api, type CouncilSummary, type ThreadSummary } from "@/lib/api";
 import { harnessById, relativeTime, usd } from "@/lib/harness";
 import { useApp } from "./app-context";
 import { Mark } from "./icons";
@@ -23,15 +23,21 @@ function groupOf(iso: string) {
   return "Older";
 }
 
+
 function Sessions({ pathname }: { pathname: string }) {
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
+  const [councils, setCouncils] = useState<CouncilSummary[]>([]);
 
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      api<{ threads: ThreadSummary[] }>("/threads")
+    const load = () => {
+      api<{ councils: CouncilSummary[] }>("/councils")
+        .then((r) => alive && setCouncils(r.councils))
+        .catch(() => {});
+      return api<{ threads: ThreadSummary[] }>("/threads")
         .then((r) => alive && setThreads(r.threads))
         .catch(() => {});
+    };
     load();
     const timer = window.setInterval(load, 4000);
     return () => {
@@ -49,12 +55,38 @@ function Sessions({ pathname }: { pathname: string }) {
       </div>
     );
 
-  if (threads.length === 0) return <p className="rail-empty">Your sessions show up here. Start one to hand the agent its first task.</p>;
+  if (threads.length === 0 && councils.length === 0) return <p className="rail-empty">Your sessions show up here. Start one to hand the agent its first task.</p>;
+
+  // Sessions and councils, newest first.
+  const items = [
+    ...threads.map((t) => ({ kind: "thread" as const, at: t.updatedAt, t })),
+    ...councils.map((c) => ({ kind: "council" as const, at: c.updatedAt, c })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
 
   let last = "";
   return (
     <>
-      {threads.map((t) => {
+      {items.map((item) => {
+        if (item.kind === "council") {
+          const c = item.c;
+          const group = groupOf(c.updatedAt);
+          const head = group !== last ? <div className="rail-group">{(last = group)}</div> : null;
+          const href = `/app/council/${c.id}`;
+          return (
+            <div key={c.id}>
+              {head}
+              <Link href={href} className="rail-item" aria-current={pathname === href ? "page" : undefined}>
+                {c.status === "running" ? <StatusIcon status="running" size={15} /> : <UsersThree size={15} style={{ color: c.status === "done" ? "var(--ok)" : "var(--text-3)" }} />}
+                <span className="t">{c.question}</span>
+                <span className="m">
+                  Council of {c.members.length}
+                  {c.repo ? ` · ${c.repo.split("/")[1]}` : ", web research"}, {relativeTime(c.updatedAt)}
+                </span>
+              </Link>
+            </div>
+          );
+        }
+        const t = item.t;
         const group = groupOf(t.updatedAt);
         const head = group !== last ? <div className="rail-group">{(last = group)}</div> : null;
         const href = `/app/s/${t.id}`;
