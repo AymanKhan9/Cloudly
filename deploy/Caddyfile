@@ -18,3 +18,14 @@
 	# No `encode` here: compressing would buffer the live run stream (SSE).
 	reverse_proxy 127.0.0.1:3000
 }
+
+# Previews of a session's app, on an origin of their own so the app's code can't
+# act as the Cloudly app. Same certificate; the relay checks a token per preview.
+{$SITE_ADDRESS}:8443 {
+	tls {
+		issuer acme {
+			profile {$ACME_PROFILE:classic}
+		}
+	}
+	reverse_proxy 127.0.0.1:3141
+}

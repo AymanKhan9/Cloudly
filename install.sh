@@ -180,6 +180,18 @@ else
   fi
 fi
 
+# Previews of a session's app open on an origin of their own (this host, another
+# port), so the app's code never runs as the Cloudly app. Caddy serves 8443 with
+# the same certificate on HTTPS installs; plain HTTP ones publish the relay's 3141.
+PU=$(grep '^PUBLIC_URL=' "$ENV_FILE" | cut -d= -f2- || true)
+if [ -n "${SWITCHED_TO_HTTPS:-}" ]; then $SUDO sed -i -e '/^PREVIEW_ORIGIN=/d' -e '/^PREVIEW_BIND=/d' "$ENV_FILE"; fi
+if ! grep -q '^PREVIEW_ORIGIN=' "$ENV_FILE"; then
+  case "$PU" in
+    https://*) printf 'PREVIEW_ORIGIN=%s:8443\nPREVIEW_BIND=127.0.0.1\n' "${PU%/}" ;;
+    http://*) printf 'PREVIEW_ORIGIN=%s:3141\nPREVIEW_BIND=0.0.0.0\n' "${PU%:3000}" ;;
+  esac | $SUDO tee -a "$ENV_FILE" >/dev/null
+fi
+
 # Installs from before browser setup have no master key in .env. Reuse the one the
 # worker generated, if any, so stored keys stay readable now that the API runs as
 # another user and can't see that file.
@@ -299,13 +311,14 @@ case "$STATUS" in
 esac
 printf '  Config: %s   Logs: journalctl -u cloudly-worker -f\n' "$ENV_FILE"
 case "${PUBLIC_URL:-}" in
-  http://*) warn "Open port 3000 in your cloud firewall. For HTTPS, re-run with CLOUDLY_ENABLE_HTTPS=1 (needs ports 80 and 443 open)." ;;
+  http://*) warn "Open port 3000 in your cloud firewall (and 3141 for app previews). For HTTPS, re-run with CLOUDLY_ENABLE_HTTPS=1 (needs ports 80 and 443 open)." ;;
   https://*)
     # The certificate arrives within a minute or so if ports 80/443 are reachable.
     CERT_OK=""
     for _ in $(seq 30); do curl -fsS --max-time 5 -o /dev/null "$PUBLIC_URL" 2>/dev/null && { CERT_OK=1; break; }; sleep 3; done
     if [ -n "$CERT_OK" ]; then say "HTTPS is working at $PUBLIC_URL"
-    else warn "No certificate yet. Open ports 80 and 443 in your cloud firewall; Caddy keeps retrying. Logs: sudo $COMPOSE logs caddy"; fi ;;
+    else warn "No certificate yet. Open ports 80 and 443 in your cloud firewall; Caddy keeps retrying. Logs: sudo $COMPOSE logs caddy"; fi
+    say "App previews open on port 8443: open it in your cloud firewall to use them." ;;
 esac
 if [ -n "${SWITCHED_TO_HTTPS:-}" ]; then
   warn "Your address changed to $PUBLIC_URL. On GitHub, open your Cloudly app's settings (Settings > Developer settings > GitHub Apps) and set:"

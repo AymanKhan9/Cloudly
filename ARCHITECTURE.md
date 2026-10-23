@@ -26,7 +26,10 @@ These are the decisions everything else in this document follows from.
    running container or microVM directly — the worker is the sandbox's only peer, and the API and
    worker themselves only communicate through Postgres, never directly. This is what makes worker
    crashes non-catastrophic, and what keeps the sandbox's attack surface to one controlled egress
-   path instead of an open inbound one.
+   path instead of an open inbound one. One narrow, deliberate exception: watching a turn's desktop
+   and opening a preview go through the relay (§8), which only accepts a short-lived token the API
+   signed for one container and one port. The API and worker still never talk; the token is the
+   only thing that crosses, and it carries no credential.
 4. **Docker now, Firecracker later.** Hardened Docker containers get the whole system working
    end-to-end first. A `Sandbox` interface means swapping in Firecracker microVMs (dedicated
    kernel, snapshot/restore, near-zero idle cost) later doesn't touch the worker's run-management
@@ -339,6 +342,38 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   tunnel, to the model APIs, the main package registries and GitHub (`EGRESS_DEFAULT_HOSTS`), plus
   extra hosts from Settings (`*` allows all). With credentials kept out of the container, an
   upload-capable allowed host (npm, GitHub) is no longer a way to leak them.
+
+- **MCP servers go through the gateway too.** Connected servers' tokens (OAuth, refreshed by the
+  worker before expiry, or a pasted bearer token) are written for the gateway like model keys
+  (`mcp.json` next to `credentials.json`). Agents are configured with `http://cloudly-egress:3129/mcp/<name>`
+  (Claude's `mcpServers`, Codex's `mcp_servers` config, ACP's `session/new` `mcpServers`) and the
+  gateway adds the `Authorization` header, strips the sandbox's own, and drops `WWW-Authenticate`
+  on a 401 so no agent tries to sign in to the gateway itself. The OAuth flow (RFC 9728 discovery,
+  RFC 8414 metadata, RFC 7591 registration, PKCE, RFC 8707 `resource`) runs in the API with the
+  instance's own public callback URL (`packages/db/src/mcp.ts`, `apps/api/src/mcp-routes.ts`).
+- **Secrets are placeholders until they reach their own host.** A run gets `cloudly-secret-<hmac>`
+  for each secret (unguessable per secret: an HMAC of its id under the master key). For hosts a
+  secret may go to, the egress proxy routes the CONNECT tunnel to a local TLS server with a
+  certificate the worker issues from Cloudly's CA (whose key never leaves the worker), swaps
+  placeholders in headers (Basic credentials decoded first) and the URL, and makes the request
+  itself — to the host the tunnel was opened for, looked up by the proxy's own local port, never
+  the request's `Host` header (a mismatch is a 421). Bodies are not rewritten. Run containers trust
+  the CA through `NODE_EXTRA_CA_CERTS` and, when the bundle carries the system roots, `SSL_CERT_FILE`
+  and friends. Secrets marked "exposed" skip this and go in as plain environment variables.
+- **The relay is the only way in, and it's narrow.** `cloudly-relay` (`apps/worker/src/relay.ts`)
+  sits on the sandbox network plus a network of its own for its two published ports: 3140 on
+  localhost only (the web app proxies `/relay` to it; WebSocket ↔ a container's VNC port 5900) and
+  3141 (a preview's app, behind Caddy on 8443 or published on plain HTTP). Tokens are HMACs under a
+  key derived from the master key, name `run-<id>` or `preview-<id>` and a purpose, and expire; the
+  relay connects nowhere else. Previews get their own origin so agent-written code never runs as the
+  Cloudly app: the relay strips Cloudly's cookies both ways, and the API refuses non-GET requests
+  whose `Origin` isn't the web app's (a different port is still the same *site* to a browser).
+  Each desktop's VNC server has a per-turn password, so other containers on the sandbox network
+  can't connect to it.
+- **Kept files are read like the patch.** `/files` is materialized per run from Postgres and read
+  back after the container exits: `lstat` walk that never follows symlinks, regular files only,
+  `O_NOFOLLOW | O_NONBLOCK` + `fstat`, size and count caps, and only files the run started with
+  can be deleted. Downloads are always `application/octet-stream` attachments with `nosniff`.
 
 ### Planned, not yet built
 
@@ -712,7 +747,13 @@ design, not after it:
 | Agent commands and sessions: a message starting with `/` reaches the agent untouched (Claude gets Cloudly's rules through its system prompt instead, on top of the `claude_code` preset); commands the agent announces (Claude's init `slash_commands`, ACP `available_commands_update`) are offered in the chat after `/`; Claude resumes its own session each turn (`~/.claude` kept per session), falling back to the transcript if the session file is gone | `apps/worker/src/{preamble,process-run}.ts`, `packages/runner/src/adapters/{claude,acp}.ts`, chat page | ✅ tests for passthrough, system prompt, resume and fallback; live: Gemini ran `/help` and announced 20 commands, Claude ran `/context` and announced 41; suggestions checked in a browser. Live on the user's VM with a Claude plan: `/compact` compacted a resumed session and `/model` answered. The header shows the model and a context ring from `getContextUsage({ detail: "summary" })`, which needs streaming input (a string prompt closes the query before the answer) |
 | HTTPS without a domain: Caddy gets a Let's Encrypt IP-address certificate (`shortlived` profile, about 6 days, renewed automatically); the installer offers it by default when there's no domain, `CLOUDLY_ENABLE_HTTPS=1` converts an existing HTTP install, and the web app then listens on 127.0.0.1 only | `deploy/Caddyfile`, `install.sh` | 🚧 Caddyfile verified with `caddy adapt` on Caddy 2.11.7 (IP → acme/shortlived, domain → acme/classic); installer paths tested in isolation. A real certificate needs a public VM; not yet issued |
 | Long runs | worker, gateway, API | ✅ a 30-minute Codex turn (ChatGPT plan, a 30-minute shell command) through the real worker: lease renewed throughout, one SSE connection stayed open and got all 15 events, the turn succeeded and committed. Multi-hour runs not yet tried |
-| Environments (recipes, cached images, MCP config, model gateway) | — | 🚧 planned |
+| MCP servers: OAuth with the instance's own callback, tokens refreshed by the worker, every agent reaches them through the gateway (`/mcp/<name>`) | `packages/db/src/mcp.ts`, `apps/api/src/mcp-routes.ts`, `apps/worker/src/egress*.ts`, `packages/runner/src/mcp.ts` | ✅ unit tests for discovery (401 → resource metadata → AS metadata, pre-9728 defaults), registration, PKCE exchange, refresh and failed refresh; gateway test with a real upstream (token added, sandbox's dropped, challenge stripped). Not yet signed in to a real hosted server |
+| Secrets for runs: placeholders, filled in by the proxy only for each secret's hosts | `packages/db/src/env-secrets.ts`, `apps/worker/src/egress-proxy.ts` | ✅ unit tests; an end-to-end test through the real proxy and TLS server (CONNECT, TLS, placeholders filled in headers and URL; a spoofed `Host` gets a 421 and nothing is sent) |
+| Repo files at `/files`, kept between sessions | `packages/db/src/repo-files.ts`, `apps/worker/src/repo-files.ts`, `apps/api/src/workspace-routes.ts` | ✅ tests: symlinks to host files and FIFOs left by the agent are skipped, changed files saved, deletions limited to what the run saw, a full `processRun` saving what the stub agent wrote |
+| Arena: one task, several agents, each on its own branch with no PR until one is picked; per-turn diff stats | `apps/api/src/arena-routes.ts`, `apps/worker/src/process-run.ts`, `apps/web/app/app/arena` | ✅ API and worker tests; compare page checked in a browser with seeded runs. Not yet run with three live agents |
+| Desktop: Xvfb, x11vnc and Chromium (sandbox preset), a computer-use MCP server for every agent, live view and take-over through the relay | `packages/runner/src/desktop*.ts`, `apps/worker/src/relay.ts`, `apps/web/components/desktop-viewer.tsx` | 🚧 Tested on a real Xvfb + x11vnc + Chromium (on the build machine, not yet inside the sandbox image, whose Debian mirror wasn't reachable there): the MCP server opened a page, took a screenshot and clicked a button the page registered; the session page's viewer connected through the web app's `/relay` rewrite, the relay and the VNC password, and scaled the screen to fit. Separately, the relay bridged to a VNC-speaking process inside a real container by container name. Not yet driven by a live agent |
+| Previews: a session's branch with the user's command in its own container, opened on a separate origin or on the desktop | `apps/worker/src/previews.ts`, `packages/runner/src/preview.ts`, `apps/api/src/live-routes.ts` | ✅ live: the worker started a real preview container from a branch, the app (listening on localhost only) answered through the relay's published port with Cloudly's cookie stripped, no token got a 401, Stop removed the container |
+| Environments (recipes, cached images) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |
 

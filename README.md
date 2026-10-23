@@ -10,6 +10,10 @@ Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
 - **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
 - **Plug-and-play agents.** Claude (via the Claude Agent SDK) and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
+- **Compare agents.** Hand one task to two or three agents at once, compare cost, time, diff size and each agent's summary side by side, and open the best result as the pull request.
+- **MCP servers without the localhost dance.** Connect Linear, Notion, Sentry or your own server once in Settings. Cloudly does the OAuth sign-in on its own public URL and keeps the tokens; every agent gets the tools, and none of them ever holds a token.
+- **Secrets the agent never holds.** Tokens your tests need reach the sandbox as placeholders; the egress proxy fills in the real value only on HTTPS requests to the hosts you name. Each repo also gets a `/files` folder outside git that persists between sessions.
+- **A desktop you can watch.** Turn on a virtual desktop with a browser and every agent gets computer-use tools; watch it live or take control. Previews run a session's branch so you can try the app before merging.
 - **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Agent turns stop at 25% over the limit and keep the work they finished on the branch. Claude Agent reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
 - **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys are stored encrypted on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
@@ -44,7 +48,7 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the design: the Postgres job queue w
 apps/web       Next.js UI (landing, sign-in, runs, live run view, settings)
 apps/api       Hono API: GitHub OAuth sessions, runs, SSE stream, budget
 apps/worker    Claims runs, drives sandboxes, finalizes, pushes, opens PRs, enforces the limit
-packages/runner  In-sandbox runner with the Claude, Codex and ACP adapters
+packages/runner  In-sandbox runner with the Claude, Codex and ACP adapters, the desktop and its MCP tools
 packages/db    Prisma schema and migrations
 packages/shared  Zod contracts shared across the stack
 infra/images/base  The sandbox image
