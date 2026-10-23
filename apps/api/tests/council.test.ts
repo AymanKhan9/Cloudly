@@ -64,3 +64,18 @@ test("a research council starts with one research turn per member; notes and sto
   expect(dl.headers.get("content-disposition")).toContain("council-report.md");
   expect(await dl.text()).toBe("# Report");
 });
+
+test("a round's turns come back in the order the members were picked, whatever order the database returns", async () => {
+  const council = await prisma.council.create({
+    data: { userId, question: "Q?", members: ["native-claude", "native-codex", "gemini-acp"], chair: "native-claude" },
+  });
+  // Same timestamp, inserted backwards: the database's own order says nothing.
+  const at = new Date();
+  for (const harness of ["gemini-acp", "native-codex", "native-claude"]) {
+    await prisma.run.create({
+      data: { repo: "", baseBranch: "", prompt: "x", harness, status: "queued", userId, councilId: council.id, councilRound: 1, councilRole: "member", createdAt: at },
+    });
+  }
+  const view = await (await call(`/councils/${council.id}`)).json();
+  expect(view.turns.map((t: { harness: string }) => t.harness)).toEqual(["native-claude", "native-codex", "gemini-acp"]);
+});

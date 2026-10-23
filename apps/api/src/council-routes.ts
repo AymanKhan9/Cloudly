@@ -136,6 +136,9 @@ councils.get("/:id", async (c) => {
       };
     }),
   );
+  // A round's turns are created together, with the same timestamp: order them the way the members were picked.
+  const place = (h: string) => council.members.indexOf(h);
+  turns.sort((a, b) => (a.round ?? 0) - (b.round ?? 0) || place(a.harness) - place(b.harness));
   const { runs: _r, ...meta } = council;
   return c.json({
     council: { ...meta, budgetUsd: meta.budgetUsd?.toNumber() ?? null },
