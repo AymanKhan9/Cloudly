@@ -149,10 +149,12 @@ async function writeSecrets(): Promise<void> {
 // Turns allowed on the open web (research councils), by proxy credential. Kept in
 // memory and written whole; the proxy re-reads the file on every connection.
 const openTokens = new Set<string>();
+/** The live credentials, as the proxy reads them. */
+export const OPEN_TOKENS_FILE = path.join(KEYS_DIR, "open-tokens.json");
 
 async function writeOpenTokens(): Promise<void> {
   await mkdir(KEYS_DIR, { recursive: true, mode: 0o700 });
-  await writeFile(path.join(KEYS_DIR, "open-tokens.json"), JSON.stringify([...openTokens]), { mode: 0o600 });
+  await writeFile(OPEN_TOKENS_FILE, JSON.stringify([...openTokens]), { mode: 0o600 });
 }
 
 /**

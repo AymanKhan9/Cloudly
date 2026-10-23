@@ -6,9 +6,10 @@ import { prisma } from "@repo/db";
 import { claimRun } from "../src/claim";
 import { processRun } from "../src/process-run";
 import { advanceCouncil, roundPrompt } from "../src/council";
+import { OPEN_TOKENS_FILE } from "../src/egress";
 import { type ContainerOptions } from "../src/docker";
 
-type Seen = { harness: string; round: number; role: string; task: string; system?: string; files: string[]; env?: Record<string, string>; research?: boolean };
+type Seen = { harness: string; round: number; role: string; task: string; system?: string; files: string[]; env?: Record<string, string>; research?: boolean; liveTokens: string[] };
 
 /** Runs every queued turn with a stand-in agent until the queue is empty. */
 async function drain(agent: (s: Seen, dir: string) => Promise<void>, seen: Seen[]) {
@@ -24,7 +25,8 @@ async function drain(agent: (s: Seen, dir: string) => Promise<void>, seen: Seen[
       const dir = options.mounts![0]![0];
       const files: string[] = [];
       for (const d of await readdir(dir)) if (d.startsWith("round-")) for (const f of await readdir(path.join(dir, d))) files.push(`${d}/${f}`);
-      const s: Seen = { harness, round: run!.councilRound!, role: run!.councilRole!, task, system: options.systemAppend, files: files.sort(), env: options.env, research: options.research };
+      const liveTokens = JSON.parse(await readFile(OPEN_TOKENS_FILE, "utf8")) as string[];
+      const s: Seen = { harness, round: run!.councilRound!, role: run!.councilRole!, task, system: options.systemAppend, files: files.sort(), env: options.env, research: options.research, liveTokens };
       seen.push(s);
       await agent(s, dir);
       yield { seq: 0, ts: Date.now(), kind: "text" as const, data: "chat text that isn't the answer" };
@@ -79,9 +81,10 @@ test("a research council runs its rounds, passes answers between them, and ends 
     expect(g("gemini-acp", 1).env!.HTTPS_PROXY).toMatch(/^http:\/\/council:[\w-]+@cloudly-egress:3128$/);
     expect(g("native-claude", 1).system).toContain("search the web");
     expect(g("gemini-acp", 1).task).toContain("search the web");
-    // The credential is gone once the turn ends.
-    const tokens = JSON.parse(await readFile(path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(process.env.HOME!, ".cloudly"), "egress-keys", "open-tokens.json"), "utf8"));
-    expect(tokens).toEqual([]);
+    // The credential is live for the proxy while the turn runs, and gone once it ends.
+    const token = /^http:\/\/council:([\w-]+)@/.exec(g("gemini-acp", 1).env!.HTTPS_PROXY!)![1]!;
+    expect(g("gemini-acp", 1).liveTokens).toEqual([token]);
+    expect(JSON.parse(await readFile(OPEN_TOKENS_FILE, "utf8"))).toEqual([]);
   } finally {
     await prisma.user.delete({ where: { id: u.id } });
   }
