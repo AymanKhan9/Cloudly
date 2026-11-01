@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { harnessAvailable, listProviders } from '@repo/db';
+import { agentReadiness, harnessAvailable, listProviders, type AgentReadiness } from '@repo/db';
 import { isProviderHarness, providerDisplayName } from '@repo/shared/providers';
 
 export const HARNESSES = [
@@ -30,12 +30,16 @@ export interface HarnessInfo {
   icon?: string | null;
   /** Added agents: a key it can't run without isn't set yet. */
   missing?: string[];
+  /** Signed in (and for an added agent, on and installed), so a turn can start now. */
+  ready: boolean;
+  /** Why not, when it isn't. */
+  reason?: string;
 }
 
 /** Built-in agents, then the added ones that are turned on. */
 export async function listHarnesses(): Promise<HarnessInfo[]> {
   const added = (await listProviders()).filter((p) => p.enabled);
-  return [
+  const list: Omit<HarnessInfo, 'ready'>[] = [
     ...HARNESSES.map((h) => ({ ...h })),
     ...added.map((p) => ({
       id: p.id,
@@ -45,6 +49,15 @@ export async function listHarnesses(): Promise<HarnessInfo[]> {
       missing: p.missing,
     })),
   ];
+  return Promise.all(list.map(async (h) => {
+    const r = await agentReadiness(h.id);
+    return { ...h, ready: r.ready, ...(r.reason ? { reason: r.reason } : {}) };
+  }));
+}
+
+/** Readiness for any agents by id, including ones that aren't added. */
+export async function checkAgents(ids: string[], names: Record<string, string> = {}): Promise<AgentReadiness[]> {
+  return Promise.all([...new Set(ids)].slice(0, 30).map((id) => agentReadiness(id, names[id])));
 }
 
 export function harnessName(id: string): string {

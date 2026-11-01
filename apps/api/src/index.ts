@@ -11,7 +11,8 @@ import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { authMiddleware, userFromSessionCookie, type AuthEnv } from './middleware/auth_middleware';
 import { hashToken, SESSION_COOKIE_NAME, SESSION_TTL_MS } from './session';
 import { listInstallationRepos } from './github';
-import { HARNESSES, HarnessId, threadTitle, listHarnesses } from './harnesses';
+import { HARNESSES, HarnessId, threadTitle, listHarnesses, checkAgents } from './harnesses';
+import { knownAgentName } from '@repo/shared/agent-names';
 import { mcp } from './mcp-routes';
 import { envSecrets, repoFiles } from './workspace-routes';
 import { arenas } from './arena-routes';
@@ -77,7 +78,13 @@ app.route('/', live)
 
 app.get('/health', (c) => c.json({ ok: true }))
 
-app.get('/harnesses', async (c) => c.json({ harnesses: await listHarnesses() }))
+app.get('/harnesses', async (c) => {
+  // ?check=acp-pi,acp-muse: whether those can run, added or not (the composer's check
+  // when a message names agents).
+  const check = (c.req.query('check') ?? '').split(',').map((s) => s.trim()).filter((s) => /^[a-z0-9-]{1,80}$/.test(s));
+  const names = Object.fromEntries(check.map((id) => [id, knownAgentName(id) ?? id]));
+  return c.json({ harnesses: await listHarnesses(), ...(check.length ? { checked: await checkAgents(check, names) } : {}) });
+})
 
 app.get('/runs', async (c) => {
   const runs = await prisma.run.findMany({

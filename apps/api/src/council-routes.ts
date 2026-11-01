@@ -3,12 +3,15 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma, budgetStatus, harnessUsesPlan, Prisma } from "@repo/db";
 import type { AuthEnv } from "./middleware/auth_middleware";
-import { HarnessId, harnessName, isHarness } from "./harnesses";
+import { harnessName, isHarness, checkAgents } from "./harnesses";
+import { knownAgentName } from "@repo/shared/agent-names";
 
 // A council: several agents answer one question in rounds (research, then
 // cross-review, then final positions) and a chair writes the report. The worker
 // runs the rounds; this creates the council with its first round, shows it, and
 // takes the user's notes between rounds.
+
+const AgentId = z.string().regex(/^[a-z0-9-]{1,80}$/, "an agent id");
 
 export const councils = new Hono<AuthEnv>();
 
@@ -17,8 +20,10 @@ const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const CouncilSchema = z
   .object({
     question: z.string().trim().min(1).max(8000),
-    members: z.array(HarnessId).min(2).max(3).refine((m) => new Set(m).size === m.length, "Pick each agent once."),
-    chair: HarnessId,
+    // As many agents as the user has set up, each once.
+    // Agent ids; whether each can run is checked below, with a reason for each that can't.
+    members: z.array(AgentId).min(2).max(30).refine((m) => new Set(m).size === m.length, "Pick each agent once."),
+    chair: AgentId,
     rounds: z.number().int().min(1).max(3).default(3),
     repo: z.string().regex(SLUG, "expected owner/repo").nullable().optional(),
     baseBranch: z.string().min(1).max(255).nullable().optional(),
@@ -70,6 +75,11 @@ councils.post("/", zValidator("json", CouncilSchema), async (c) => {
     const paid = [];
     for (const h of new Set([...body.members, body.chair])) if (!(await harnessUsesPlan(h))) paid.push(harnessName(h));
     if (paid.length) return c.json({ message: `Monthly spend limit reached, so ${paid.join(" and ")} can't run. Raise it in Settings.`, budget }, 402);
+  }
+  // Every member and the chair must be able to run, or the council stalls a round in.
+  const notReady = (await checkAgents([...body.members, body.chair], Object.fromEntries([...body.members, body.chair].map((id) => [id, knownAgentName(id) ?? id])))).filter((r) => !r.ready);
+  if (notReady.length) {
+    return c.json({ message: notReady.map((r) => r.reason).join(" "), notReady }, 400);
   }
   const council = await prisma.council.create({
     data: {

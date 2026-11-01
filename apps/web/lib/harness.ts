@@ -12,6 +12,10 @@ export interface Harness {
   icon?: string | null;
   /** Keys an added agent can't run without that aren't set yet. */
   missing?: string[];
+  /** Signed in (and for an added agent, on and installed): a turn can start now. */
+  ready?: boolean;
+  /** Why not, when it isn't. */
+  reason?: string;
 }
 
 export const HARNESSES: Harness[] = [

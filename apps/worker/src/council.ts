@@ -26,6 +26,8 @@ import { sandboxImage } from "./sandbox-image";
 
 const NAMES: Record<string, string> = { "native-claude": "Claude", "native-codex": "Codex (GPT)", "gemini-acp": "Gemini" };
 const SLUGS: Record<string, string> = { "native-claude": "claude", "native-codex": "codex", "gemini-acp": "gemini" };
+/** "A, B and C", for councils of any size. */
+const list = (names: string[]) => new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(names);
 export const memberName = (h: string) => NAMES[h] ?? (isProviderHarness(h) ? providerDisplayName(h) : h);
 const slug = (h: string) => SLUGS[h] ?? h.replace(/[^a-z0-9-]/gi, "-");
 
@@ -57,7 +59,7 @@ export function councilRules(c: CouncilLike, harness: string): string {
   const others = c.members.filter((m) => m !== harness).map(memberName);
   const notes = (Array.isArray(c.guidance) ? c.guidance : []) as { text: string; round: number }[];
   return [
-    `You're ${memberName(harness)}${c.members.includes(harness) ? `, one of ${c.members.length} members of a council in Cloudly, with ${others.join(" and ")}` : `, chairing a council in Cloudly of ${c.members.map(memberName).join(", ")}`}. The council answers one question in rounds; then ${memberName(c.chair)} writes its report.`,
+    `You're ${memberName(harness)}${c.members.includes(harness) ? `, one of ${c.members.length} members of a council in Cloudly, with ${list(others)}` : `, chairing a council in Cloudly of ${list(c.members.map(memberName))}`}. The council answers one question in rounds; then ${memberName(c.chair)} writes its report.`,
     c.repo
       ? `- The repository ${c.repo} is checked out at /workspace. Read it as you need to. Don't change it: nothing you change is kept, and there's no pull request.`
       : "- You can search the web and open any public web page. Prefer primary and recent sources, and give each source with its date. There's no repository; /workspace is a scratch folder.",
