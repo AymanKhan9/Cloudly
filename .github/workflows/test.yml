@@ -35,6 +35,7 @@ jobs:
       - name: Build the sandbox image
         run: docker build -q -t cloud-agents-base infra/images/base
       - run: cd packages/db && bun test
+      - run: cd packages/shared && bun test
       - run: cd packages/runner && bun test
       - run: cd apps/web && bun test lib
       - run: cd apps/api && bun test
