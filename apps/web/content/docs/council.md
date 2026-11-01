@@ -6,9 +6,19 @@ Use it for questions where one model's answer isn't enough: "what's the state of
 
 ## Start a council
 
-On the new-session page, click **Council**, then:
+The quickest way is to name the agents in your question, after a word like "use" or "ask":
 
-1. **Pick the members**: two or three agents, built in or [added](/docs/agents#add-more-agents).
+```text
+Use claude, chatgpt, opencode, gemini and pi for this research work: what changed in AI coding agents in the last three months?
+```
+
+The new-session page turns that into a council of those agents as you type: it switches to **Council** and picks them as members. Agents go by the names you'd use: "chatgpt", "codex" and "gpt" are Codex, "claude" is Claude Agent, and agents you added are also known by the names you gave them. Names that aren't a request for agents ("use the openai and anthropic SDKs") are left alone.
+
+Before anything starts, Cloudly checks that each named agent can run. One that can't is listed under the question, with the reason (it needs a key, its plan sign-in isn't set, it isn't added under **Settings → Agents**, or it's still being installed), and the council goes ahead with the ones that can, if there are at least two. You can change the members and chair before you press **Enter**.
+
+You can also set it up by hand. On the new-session page, click **Council**, then:
+
+1. **Pick the members**: two or more agents, built in or [added](/docs/agents#add-more-agents), each once. There's no limit beyond the agents you've set up; an agent that can't run yet is greyed out, with the reason when you point at it.
 2. **Pick the chair**, who writes the report. Claude Agent by default; the chair can also be a member.
 3. **Pick the rounds** (three by default):
    - **1 round**: research only, then the report.
@@ -17,7 +27,7 @@ On the new-session page, click **Council**, then:
 4. **Set a spending cap** for the whole council ($5 by default).
 5. Choose **Web research** (the default) or **On a repo**, write the question and press **Enter**.
 
-Before it starts, Cloudly shows how many agent turns the council will take, and roughly what they'll cost based on your own recent turns.
+Before it starts, Cloudly shows how many agent turns the council will take, and roughly what they'll cost based on your own recent turns. Each member takes a turn per round, so five members over three rounds is 16 turns with the report. Turns run one at a time unless the worker runs several (`WORKER_CONCURRENCY`), so a large council takes a while; the spending cap stops it either way.
 
 ## The rounds
 

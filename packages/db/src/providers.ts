@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import {
+  catalogEntry,
   isProviderHarness,
   providerInstallBlock,
   validProviderId,
@@ -284,4 +285,55 @@ export async function providerInstallScript(): Promise<string> {
 /** Whether a harness id names an agent sessions may use: built in, or added and on. */
 export async function harnessAvailable(id: string, builtin: readonly string[]): Promise<boolean> {
   return builtin.includes(id) || Boolean(await enabledProvider(id));
+}
+
+// --- Whether an agent can run now -------------------------------------------------
+
+/** What each built-in agent signs in with, any one of them. */
+const BUILTIN_SIGN_IN: Record<string, { name: string; keys: string[]; need: string }> = {
+  "native-claude": { name: "Claude Agent", keys: ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"], need: "an Anthropic API key or a Claude plan token under Settings → Keys and connections" },
+  "native-codex": { name: "Codex", keys: ["OPENAI_API_KEY", "CODEX_AUTH_JSON"], need: "an OpenAI API key or a ChatGPT sign-in under Settings → Keys and connections" },
+  "gemini-acp": { name: "Gemini CLI", keys: ["GEMINI_API_KEY"], need: "a Gemini API key under Settings → Keys and connections" },
+};
+
+export interface AgentReadiness {
+  id: string;
+  name: string;
+  ready: boolean;
+  /** Why not, in a sentence the user can act on. */
+  reason?: string;
+}
+
+/** An added agent is installed once an image built after it was added is ready. */
+export function providerInstalled(createdAt: Date, image: { status: string; image: string; updatedAt: Date } | null): boolean {
+  return Boolean(image && image.status === "ready" && image.image !== "cloud-agents-base" && image.updatedAt >= createdAt);
+}
+
+/**
+ * Whether an agent can take a turn now: signed in (a key or plan sign-in), and
+ * for an added agent, turned on and installed. `name` is used for agents
+ * Cloudly doesn't have at all.
+ */
+export async function agentReadiness(id: string, name?: string): Promise<AgentReadiness> {
+  const builtin = BUILTIN_SIGN_IN[id];
+  if (builtin) {
+    for (const key of builtin.keys) if (await config(key)) return { id, name: builtin.name, ready: true };
+    return { id, name: builtin.name, ready: false, reason: `${builtin.name} needs ${builtin.need}.` };
+  }
+  const p = isProviderHarness(id) ? await getProvider(id) : null;
+  const label = p?.name ?? name ?? id;
+  if (!p) {
+    const unavailable = catalogEntry(id)?.unavailable;
+    return { id, name: label, ready: false, reason: unavailable ? `${label} can't run in Cloudly: ${unavailable}` : `${label} isn't added. Add it under Settings → Agents.` };
+  }
+  if (!p.enabled) return { id, name: label, ready: false, reason: `${label} is turned off under Settings → Agents.` };
+  if (p.missing.length) {
+    const labels = p.credentials.filter((c) => p.missing.includes(c.env)).map((c) => `a ${c.label}`);
+    return { id, name: label, ready: false, reason: `${label} needs ${labels.join(" and ")} under Settings → Agents.` };
+  }
+  const image = await prisma.sandboxImage.findUnique({ where: { id: 1 } });
+  if (!providerInstalled(p.createdAt, image)) {
+    return { id, name: label, ready: false, reason: image?.status === "failed" ? `${label} isn't installed: the sandbox image didn't build (see Settings → Sandbox tools).` : `${label} is still being installed into the sandbox image.` };
+  }
+  return { id, name: label, ready: true };
 }

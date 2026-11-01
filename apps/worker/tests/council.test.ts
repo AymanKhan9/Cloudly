@@ -127,3 +127,30 @@ test("round instructions", () => {
   expect(roundPrompt(c, 2, ["round-1/claude.md"], ["Gemini has no answer for round 1"])).toContain("/workspace/.cloudly-council/round-1/claude.md");
   expect(roundPrompt(c, 3, [], [])).toContain("You chair the council");
 });
+
+test("a council of five, added agents among them, runs every round and names everyone", async () => {
+  const u = await user();
+  const seen: Seen[] = [];
+  const five = ["native-claude", "native-codex", "acp-opencode", "gemini-acp", "acp-pi"];
+  try {
+    const c = await council(u.id, five);
+    await drain(async (s, dir) => {
+      await writeFile(path.join(dir, "answer.md"), s.role === "chair" ? "# Report" : `${s.harness} round ${s.round}`);
+    }, seen);
+
+    const done = await prisma.council.findUniqueOrThrow({ where: { id: c.id }, include: { runs: true } });
+    expect(done.status).toBe("done");
+    expect(done.runs).toHaveLength(16); // 5 members x 3 rounds + the chair
+
+    // Round 2: each member reads all five round-1 answers.
+    const pi2 = seen.find((s) => s.harness === "acp-pi" && s.round === 2)!;
+    expect(pi2.files).toHaveLength(5);
+    expect(pi2.files).toContain("round-1/acp-opencode.md");
+    // Told who else is on it, as a list, by name.
+    expect(seen.find((s) => s.harness === "acp-pi" && s.round === 1)!.task).toContain("one of 5 members of a council in Cloudly, with Claude, Codex (GPT), OpenCode, and Gemini");
+    expect(seen.find((s) => s.role === "chair")!.files).toHaveLength(15);
+  } finally {
+    await prisma.council.deleteMany({ where: { userId: u.id } });
+    await prisma.user.delete({ where: { id: u.id } });
+  }
+});

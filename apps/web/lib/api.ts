@@ -251,6 +251,16 @@ export interface HarnessInfo {
   icon?: string | null;
   /** Keys an added agent can't run without that aren't set yet. */
   missing?: string[];
+  ready?: boolean;
+  reason?: string;
+}
+
+/** Whether an agent can run now, and why not (GET /harnesses?check=). */
+export interface AgentReadiness {
+  id: string;
+  name: string;
+  ready: boolean;
+  reason?: string;
 }
 
 export interface AgentKey {

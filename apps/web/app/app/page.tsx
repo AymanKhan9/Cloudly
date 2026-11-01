@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat } from "@phosphor-icons/react";
-import { api, ApiError, type Capabilities, type Repo } from "@/lib/api";
+import { api, ApiError, type AgentReadiness, type Capabilities, type Repo } from "@/lib/api";
+import { agentsAskedFor } from "@repo/shared/agent-names";
+import { isProviderHarness } from "@repo/shared/providers";
 import { costLabel } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
@@ -56,6 +58,10 @@ export default function NewSessionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  // A message that names agents ("use claude, chatgpt and pi for this") makes a
+  // council of them; this is what it asked for, and which of them can't run.
+  const [asked, setAsked] = useState<{ ids: string[]; checked: AgentReadiness[] } | null>(null);
+  const applied = useRef("");
 
   useEffect(() => {
     // "New session on <repo>" from a session's menu comes with ?repo= and ?branch=.
@@ -72,6 +78,30 @@ export default function NewSessionPage() {
       .catch((e: Error) => setRepoError(e.message));
     api<Capabilities>("/capabilities").then(setCaps).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const ids = agentsAskedFor(prompt, harnesses.filter((h) => isProviderHarness(h.id)).map((h) => ({ id: h.id, name: h.name })));
+    const key = ids.join(",");
+    if (key === applied.current) return;
+    if (ids.length < 2) {
+      applied.current = "";
+      setAsked(null);
+      return;
+    }
+    // After a pause in typing: check who can run, then set the council up with them.
+    const timer = window.setTimeout(async () => {
+      const checked = (await api<{ checked?: AgentReadiness[] }>(`/harnesses?check=${encodeURIComponent(key)}`).catch(() => null))?.checked;
+      if (!checked) return;
+      applied.current = key;
+      const can = checked.filter((r) => r.ready).map((r) => r.id);
+      setAsked({ ids, checked });
+      // An arena takes up to three; more than that is a council.
+      setMode((m) => (m === "compare" && can.length <= 3 ? m : "council"));
+      setRivals(can);
+      setChair((c) => (can.includes(c) ? c : can.includes("native-claude") ? "native-claude" : can[0] ?? c));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [prompt, harnesses]);
 
   useEffect(() => {
     if (!council || rivals.length < 2) return setEstimate(null);
@@ -205,12 +235,15 @@ export default function NewSessionPage() {
               <span className="rivals" role="group" aria-label={council ? "Council members" : "Agents to compare"}>
                 {harnesses.map((x) => {
                   const on = rivals.includes(x.id);
+                  const off = x.ready === false && !on;
                   return (
                     <button
                       key={x.id}
                       type="button"
                       className="pill"
                       aria-pressed={on}
+                      disabled={off}
+                      title={off ? x.reason : undefined}
                       onClick={() => setRivals((r) => (on ? r.filter((id) => id !== x.id) : [...r, x.id]))}
                     >
                       {on ? <Check size={13} weight="bold" /> : <AgentLogo harness={x.id} size={14} />}
@@ -290,6 +323,35 @@ export default function NewSessionPage() {
             </button>
           </div>
         </div>
+
+        {asked && mode !== "session" ? (
+          <div className="council-asked" role="status">
+            {(() => {
+              const ok = asked.checked.filter((r) => r.ready);
+              const no = asked.checked.filter((r) => !r.ready);
+              const names = (list: AgentReadiness[]) => new Intl.ListFormat("en", { type: "conjunction" }).format(list.map((r) => r.name));
+              return (
+                <>
+                  <p>
+                    <UsersThree size={14} />
+                    {no.length === 0
+                      ? `From your message: a ${compare ? "comparison" : "council"} of ${names(ok)}.`
+                      : ok.length >= 2
+                        ? `From your message: ${names(ok)} will take part. ${no.length === 1 ? "One agent you named can't" : `${no.length} agents you named can't`} run yet:`
+                        : `From your message: only ${ok.length ? names(ok) : "none of them"} can run, and it takes two. The others:`}
+                  </p>
+                  {no.length ? (
+                    <ul>
+                      {no.map((r) => (
+                        <li key={r.id}>{r.reason}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              );
+            })()}
+          </div>
+        ) : null}
 
         <div className="composer-note" data-tone={note?.tone} role={note ? "alert" : undefined}>
           <span>

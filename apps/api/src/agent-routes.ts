@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   prisma, listProviders, getProvider, addProvider, updateProvider, deleteProvider, setProviderCredentials,
-  removeProviderCredential,
+  removeProviderCredential, providerInstalled,
 } from "@repo/db";
 import {
   ACP_REGISTRY_URL, BUILTIN_AGENTS, PROVIDER_CATALOG, catalogEntry, catalogLaunch, launchFromRegistry,
@@ -67,9 +67,8 @@ agents.get("/", async (c) => {
   const image = await prisma.sandboxImage.findUnique({ where: { id: 1 } });
   // Installed once an image finished building after the agent was added. (An agent
   // whose own install failed inside a good build says so when a turn starts.)
-  const builtAt = image?.status === "ready" && image.image !== "cloud-agents-base" ? image.updatedAt : null;
   return c.json({
-    agents: (await listProviders()).map((a) => ({ ...a, installed: Boolean(builtAt && builtAt >= a.createdAt) })),
+    agents: (await listProviders()).map((a) => ({ ...a, installed: providerInstalled(a.createdAt, image) })),
     catalog: PROVIDER_CATALOG.map((e) => ({ ...e, icon: e.unavailable ? null : catalogIcon(e.id) })),
     builtin: BUILTIN_AGENTS,
     image: image ? { status: image.status, updatedAt: image.updatedAt } : null,
