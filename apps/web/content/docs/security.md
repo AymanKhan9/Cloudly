@@ -8,9 +8,15 @@ Your API keys and plan tokens never enter a run container. The agent gets a plac
 
 The agent can still make model calls on your account while its turn runs, through the gateway. It just can't take the credential with it.
 
+Agents you [add under Settings](/docs/agents#add-more-agents) follow the same rule by a different route. Their keys are encrypted with your other settings, and a run gets a placeholder for each. The egress proxy swaps in the real key only on HTTPS requests to that key's hosts. Agents that only sign in through a browser or a subscription login can't be added, because that sign-in would have to live inside the sandbox.
+
 ## MCP tokens and secrets
 
 [MCP servers](/docs/mcp) work like model keys: a run sees each server as an address on the key gateway, and the gateway adds the token. [Secrets for runs](/docs/secrets-and-files) reach the sandbox as placeholders. For the hosts a secret may go to, the egress proxy terminates TLS with a certificate from Cloudly's own CA, puts the real value into the request's headers and URL, and sends it on. It sends the request only to the host the tunnel was opened for, whatever the request's `Host` header says, so a placeholder can't be turned into the value for any other host. The CA's private key stays in the worker's data directory and is never mounted into a container.
+
+## Sessions that talk to each other
+
+A session's agent sees your other sessions only as files the worker writes into its sandbox before the turn: titles, branches and recent conversations, limited to the same repository unless you choose **All your sessions**. Messages it sends are written to a file the worker reads back after the turn, the same careful way it reads the patch, and checked again against the session's setting before they become turns. Nothing in the sandbox reaches the API or the database. See [Sessions that talk to each other](/docs/sessions#sessions-that-talk-to-each-other).
 
 ## Shared context
 
@@ -58,6 +64,7 @@ Everything the agent wrote is treated as untrusted. Its changes are exported in 
 - **A preview shares your instance's host name.** Browsers keep cookies per host, not per port, and the relay strips Cloudly's own ones, but a preview's app can still set and read cookies of its own on that host.
 - **Docker is the isolation boundary.** It's weaker than a virtual machine, so only connect repositories you'd be comfortable running on the VM. A microVM backend is planned.
 - **A container escape lands as the worker's user,** who can run Docker.
+- **Cursor holds a session token while it runs.** Its API key stays out of the sandbox, but Cursor trades it for a short-lived session token, and that token is inside the sandbox for the turn.
 - **Plain HTTP is possible.** If you decline HTTPS at install time, the session cookie and anything typed into Settings cross the network unencrypted.
 
 ## Reporting a vulnerability

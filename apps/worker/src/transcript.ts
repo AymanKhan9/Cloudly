@@ -1,4 +1,5 @@
 import { prisma } from "@repo/db";
+import { isAcpHarness } from "@repo/shared/providers";
 
 export interface PriorTurn {
   prompt: string;
@@ -48,11 +49,13 @@ export async function promptWithHistory(
     select: { prompt: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
   });
 
-  // Gemini streams a reply in fragments that join with nothing between them.
-  const joiner = harness === "gemini-acp" ? "" : "\n\n";
-  const prior = runs.map((r) => ({
-    prompt: r.prompt,
-    reply: r.events.map((e) => (typeof e.data === "string" ? e.data : "")).join(joiner).trim(),
-  }));
+  const prior = runs.map((r) => ({ prompt: r.prompt, reply: replyText(r.events, harness) }));
   return formatTranscript(prior, prompt);
+}
+
+/** A turn's written reply, from its text events. */
+export function replyText(events: { data: unknown }[], harness: string): string {
+  // ACP agents (Gemini and the added ones) stream a reply in fragments that join with nothing between them.
+  const joiner = isAcpHarness(harness) ? "" : "\n\n";
+  return events.map((e) => (typeof e.data === "string" ? e.data : "")).join(joiner).trim();
 }

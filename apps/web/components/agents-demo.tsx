@@ -20,7 +20,7 @@ export function AgentsDemo() {
     <div className="agents">
       <div className="segmented" role="group" aria-label="Agent">
         {HARNESSES.map((h) => (
-          <button key={h.id} type="button" aria-pressed={h.id === id} onClick={() => setId(h.id)}>
+          <button key={h.id} type="button" aria-pressed={h.id === id} onClick={() => setId(h.id as HarnessId)}>
             {h.name}
           </button>
         ))}

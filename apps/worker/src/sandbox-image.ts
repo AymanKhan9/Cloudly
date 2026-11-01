@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
-import { prisma, config } from "@repo/db";
+import { prisma, config, providerInstallScript } from "@repo/db";
 
 export const BASE_IMAGE = "cloud-agents-base";
 const LOG_CHARS = 8000;
@@ -42,14 +42,19 @@ export async function setupScript(): Promise<string> {
 
 let building = false;
 
+/** What the image build runs: the setup script, then each added agent's install. */
+export async function buildScript(): Promise<string> {
+  return [await setupScript(), await providerInstallScript()].filter(Boolean).join("\n\n");
+}
+
 /**
- * Builds the sandbox image when the setup script (or the base image under it)
- * has changed. A failed build isn't retried until the script changes or the
+ * Builds the sandbox image when the setup script, the added agents (or the base
+ * image under them) have changed. A failed build isn't retried until the script changes or the
  * user asks for a rebuild (status "pending"), so a broken script can't loop.
  */
 export async function syncSandboxImage(): Promise<void> {
   if (building) return;
-  const script = await setupScript();
+  const script = await buildScript();
   const current = await row();
 
   if (!script) {

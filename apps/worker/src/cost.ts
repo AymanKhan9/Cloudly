@@ -1,4 +1,5 @@
 import type { RunEvent } from "@repo/shared/run-event";
+import { isProviderHarness } from "@repo/shared/providers";
 
 export interface RunCost {
   usd: number;
@@ -57,7 +58,16 @@ export function costFromDoneEvent(harness: string, event: Pick<RunEvent, "kind" 
       };
     }
 
-    default:
-      return null;
+    default: {
+      // Added agents report ACP's standard token usage, but their prices vary
+      // (free models, subscriptions, any vendor), so they're priced only when
+      // set: PRICE_ACP_CURSOR_INPUT_PER_MTOK and _OUTPUT_PER_MTOK, say.
+      if (!isProviderHarness(harness)) return null;
+      const usage = data.usage;
+      if (!usage) return null;
+      const prefix = `PRICE_${harness.toUpperCase().replace(/-/g, "_")}`;
+      const usd = tokensToUsd(num(usage.inputTokens), num(usage.outputTokens), prefix, 0, 0);
+      return usd > 0 ? { usd, estimated: true } : null;
+    }
   }
 }

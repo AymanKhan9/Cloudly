@@ -1,6 +1,6 @@
 # MCP servers
 
-Connect MCP servers once, in **Settings → MCP servers**, and every agent can use their tools: Claude Agent, Codex and Gemini CLI alike. Linear, Notion, Sentry, a server on your own network, anything that speaks MCP over HTTP.
+Connect MCP servers once, in **Settings → MCP servers**, and every agent can use their tools: Claude Agent, Codex, Gemini CLI and the agents you add alike. Linear, Notion, Sentry, a server on your own network, anything that speaks MCP over HTTP.
 
 ## Add a server
 

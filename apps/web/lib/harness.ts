@@ -1,9 +1,17 @@
+import { isProviderHarness, providerDisplayName } from "@repo/shared/providers";
+
+/** The built-in agents. Added ones (Settings > Agents) have ids starting "acp-". */
 export type HarnessId = "native-claude" | "native-codex" | "gemini-acp";
 
 export interface Harness {
-  id: HarnessId;
+  id: string;
   name: string;
-  cost: "exact" | "estimated";
+  /** "none": an added agent whose turns record no cost (no prices set for it). */
+  cost: "exact" | "estimated" | "none";
+  /** An added agent's mark. */
+  icon?: string | null;
+  /** Keys an added agent can't run without that aren't set yet. */
+  missing?: string[];
 }
 
 export const HARNESSES: Harness[] = [
@@ -11,6 +19,17 @@ export const HARNESSES: Harness[] = [
   { id: "native-codex", name: "Codex", cost: "estimated" },
   { id: "gemini-acp", name: "Gemini CLI", cost: "estimated" },
 ];
+
+// The instance's agents, built in and added, once the app has loaded them.
+let known: Harness[] = HARNESSES;
+
+export function setKnownHarnesses(list: Harness[]) {
+  known = list.length ? list : HARNESSES;
+}
+
+export function costLabel(cost: Harness["cost"]): string {
+  return cost === "exact" ? "Exact cost" : cost === "none" ? "Cost not tracked" : "Estimated cost";
+}
 
 /**
  * Models offered by the /model menu. The agents accept any model ID their
@@ -36,10 +55,12 @@ export const MODELS: Record<HarnessId, { value: string; label: string; hint?: st
 
 export function harnessById(id: string): Harness {
   return (
+    known.find((h) => h.id === id) ??
     HARNESSES.find((h) => h.id === id) ?? {
-      id: id as HarnessId,
-      name: id,
-      cost: "estimated",
+      id,
+      // An added agent that's since been removed or turned off still names its sessions.
+      name: isProviderHarness(id) ? providerDisplayName(id) : id,
+      cost: isProviderHarness(id) ? "none" : "estimated",
     }
   );
 }

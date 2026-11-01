@@ -13,6 +13,8 @@ import {
   FolderSimple,
   Monitor,
   AppWindow,
+  ChatsCircle,
+  ArrowBendUpLeft,
   Scales,
   Notebook,
   GitBranch,
@@ -36,6 +38,7 @@ import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
 import { EffortControl } from "@/components/effort-control";
+import { PEER_SCOPES, PEER_SCOPE_LABEL, type PeerScope } from "@repo/shared/sessions";
 import { FilesPanel } from "@/components/files-panel";
 import { PreviewPanel } from "@/components/preview-panel";
 import { DesktopViewer } from "@/components/desktop-viewer";
@@ -188,10 +191,22 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
   const blocks = useMemo(() => buildBlocks(events, harness), [events, harness]);
   const active = ACTIVE.includes(turn.status);
   const status = turn.cancelRequested && active ? "Cancelling" : turn.status === "succeeded" && !turn.prUrl ? "Done" : STATUS_LABEL[turn.status];
+  // Messages this turn's agent sent other sessions.
+  const sent = useMemo(() => {
+    const e = events.find((x) => x.kind === "status" && (x.data as { type?: string } | null)?.type === "sessions.sent");
+    return ((e?.data as { to?: { id: string; title: string; replyWanted: boolean }[] } | undefined)?.to ?? []).filter((t) => typeof t?.id === "string");
+  }, [events]);
 
   return (
     <article className="turn">
       <div className="msg-user">
+        {turn.from ? (
+          <Link className="msg-from" href={`/app/s/${turn.from.threadId}`}>
+            <ChatsCircle size={14} />
+            From session {turn.from.title ? `"${turn.from.title}"` : "(removed)"}
+            {turn.replyToThreadId ? ", which asked for a reply" : ""}
+          </Link>
+        ) : null}
         <div>{turn.prompt}</div>
       </div>
 
@@ -230,6 +245,12 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
               <span className="add">+{turn.additions ?? 0}</span> <span className="del">−{turn.deletions ?? 0}</span>
             </span>
           ) : null}
+          {sent.map((t) => (
+            <Link key={t.id} href={`/app/s/${t.id}`} className="pr-chip" title={t.replyWanted ? "Its answer comes back here as a new turn" : "No reply asked for"}>
+              {t.replyWanted ? <ArrowBendUpLeft size={13} weight="bold" /> : <ChatsCircle size={13} />}
+              Sent to {t.title}
+            </Link>
+          ))}
           {turn.prUrl ? (
             <a href={turn.prUrl} target="_blank" rel="noreferrer" className="pr-chip">
               <GitPullRequest size={14} weight="bold" />
@@ -328,20 +349,28 @@ export default function SessionPage() {
 
   // Model and context fill from the latest turn: Claude reports both at the end
   // of each turn, and its start-of-turn message names the model.
+  // Added agents list the models they offer at the start of each turn.
   const context = useMemo(() => {
     let model: string | undefined;
     let usage: { tokens: number; max: number; percentage: number } | undefined;
+    let offered: { value: string; label: string }[] = [];
     for (const list of Object.values(events)) {
       for (const e of list) {
         const d = e.data as Record<string, unknown> | null;
         if (!d || typeof d !== "object") continue;
         if (typeof d.model === "string" && (d.subtype === "init" || d.type === "context")) model = d.model;
+        if (d.type === "models" && Array.isArray(d.options)) {
+          if (typeof d.current === "string") model = d.current;
+          offered = (d.options as { value?: unknown; label?: unknown }[])
+            .filter((o) => typeof o?.value === "string")
+            .map((o) => ({ value: String(o.value), label: typeof o.label === "string" ? o.label : String(o.value) }));
+        }
         if (d.type === "context" && typeof d.tokens === "number" && typeof d.max === "number") {
           usage = { tokens: d.tokens, max: d.max, percentage: Number(d.percentage) || 0 };
         }
       }
     }
-    return { model, usage };
+    return { model, usage, offered };
   }, [events]);
 
   // Follow new output only while the reader is already at the bottom.
@@ -363,6 +392,19 @@ export default function SessionPage() {
   const typing = /^\/([\w:.-]*)$/.exec(draft);
   const suggestions = typing ? commands.filter((c) => c.startsWith(typing[1]!) && c !== typing[1]).slice(0, 10) : [];
   useEffect(() => setPick(0), [suggestions.length]);
+
+  // Looking at a session reads it: when it opens, and when a turn ends while it's in view.
+  const lastTurn = view?.turns.at(-1);
+  const seenKey = view ? `${lastTurn?.id ?? ""}:${lastTurn?.status ?? ""}` : "";
+  useEffect(() => {
+    if (!seenKey) return;
+    const mark = () => {
+      if (document.visibilityState === "visible") api(`/threads/${id}`, { method: "PATCH", body: JSON.stringify({ seen: true }) }).catch(() => {});
+    };
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [id, seenKey]);
 
   if (loadError) {
     return (
@@ -441,7 +483,7 @@ export default function SessionPage() {
 
   // Saved on the session, not sent as a message: the next turn picks it up.
   // Saved on the session, not sent as a message: the next turn picks it up.
-  async function saveSetting(field: "model" | "effort" | "desktop", value: string | boolean | null) {
+  async function saveSetting(field: "model" | "effort" | "desktop" | "peers", value: string | boolean | null) {
     const before = view!.thread[field] ?? null;
     setView((v) => (v ? { ...v, thread: { ...v.thread, [field]: value } } : v));
     setActionError(null);
@@ -567,6 +609,14 @@ export default function SessionPage() {
       </div>
 
       <form className="dock" onSubmit={send}>
+        {thread.needsInput && !busy ? (
+          <div className="notice needs-you" data-tone="warn" role="status">
+            <ChatsCircle size={16} weight="bold" />
+            <span>
+              <strong>The agent needs your answer:</strong> {thread.needsInput}
+            </span>
+          </div>
+        ) : null}
         <div className="composer">
           {suggestions.length > 0 ? (
             <div className="suggest" role="listbox" id="commands" aria-label="Agent commands">
@@ -630,7 +680,7 @@ export default function SessionPage() {
               placeholder={context.model ?? "Default"}
               options={[
                 { value: "default", label: "Default", hint: !thread.model ? context.model : undefined, sub: by("Chosen by the agent") },
-                ...(MODELS[thread.harness as HarnessId] ?? []).map((m) => ({ value: m.value, label: m.label, sub: by(m.hint) })),
+                ...(MODELS[thread.harness as HarnessId] ?? context.offered).map((m: { value: string; label: string; hint?: string }) => ({ value: m.value, label: m.label, sub: by(m.hint) })),
               ]}
               custom={(q) => `Use ${q}`}
               note={busy ? "A new model applies from the next turn." : undefined}
@@ -645,6 +695,23 @@ export default function SessionPage() {
               up
               note={busy ? "A new effort applies from the next turn." : undefined}
               onChange={(effort) => saveSetting("effort", effort)}
+            />
+            <Picker
+              label="Other sessions"
+              icon={<ChatsCircle size={14} />}
+              up
+              value={thread.peers ?? "repo"}
+              options={PEER_SCOPES.map((s: PeerScope) => ({
+                value: s,
+                label: PEER_SCOPE_LABEL[s],
+                sub: (
+                  <span className="dim">
+                    {s === "repo" ? "Its agent can read and message them" : s === "all" ? "Every repo's, so it can bring their work here" : "It can't see or message any"}
+                  </span>
+                ),
+              }))}
+              note="Which of your sessions this one's agent may read and send messages to. Applies from the next turn."
+              onChange={(v) => saveSetting("peers", v)}
             />
             {caps?.desktop || thread.desktop ? (
               <button

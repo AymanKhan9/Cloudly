@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { modelCommand } from '@repo/shared/model-command'
+import { PEER_SCOPES } from '@repo/shared/sessions'
 import { effortLevels } from '@repo/shared/effort'
 import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, recoverSettings, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
 import { setup } from './setup';
@@ -10,13 +11,14 @@ import { setCookie, getCookie, deleteCookie } from 'hono/cookie';
 import { authMiddleware, userFromSessionCookie, type AuthEnv } from './middleware/auth_middleware';
 import { hashToken, SESSION_COOKIE_NAME, SESSION_TTL_MS } from './session';
 import { listInstallationRepos } from './github';
-import { HARNESSES, HarnessId, threadTitle } from './harnesses';
+import { HARNESSES, HarnessId, threadTitle, listHarnesses } from './harnesses';
 import { mcp } from './mcp-routes';
 import { envSecrets, repoFiles } from './workspace-routes';
 import { arenas } from './arena-routes';
 import { live } from './live-routes';
 import { context, tokens, mcpEndpoint } from './context-routes';
 import { councils } from './council-routes';
+import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -32,7 +34,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -68,13 +70,14 @@ app.route('/arenas', arenas)
 app.route('/context', context)
 app.route('/councils', councils)
 app.route('/settings/tokens', tokens)
+app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
 app.route('/mcp', mcpEndpoint)
 app.route('/', live)
 
 app.get('/health', (c) => c.json({ ok: true }))
 
-app.get('/harnesses', (c) => c.json({ harnesses: HARNESSES }))
+app.get('/harnesses', async (c) => c.json({ harnesses: await listHarnesses() }))
 
 app.get('/runs', async (c) => {
   const runs = await prisma.run.findMany({
@@ -186,7 +189,7 @@ const ACTIVE_STATUSES = ['queued', 'running', 'finalizing'];
 const TURN_FIELDS = {
   id: true, prompt: true, status: true, createdAt: true, costUsd: true, onPlan: true,
   prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
-  desktopPassword: true,
+  desktopPassword: true, fromThreadId: true, replyToThreadId: true, hops: true,
 } as const;
 
 async function threadView(threadId: string, userId: string) {
@@ -196,10 +199,20 @@ async function threadView(threadId: string, userId: string) {
   });
   if (!thread) return null;
   const { runs, ...meta } = thread;
+  // Turns other sessions asked for name where they came from, if the user still has it.
+  const fromIds = [...new Set(runs.map((r) => r.fromThreadId).filter((x): x is string => Boolean(x)))];
+  const titles = new Map(
+    (await prisma.thread.findMany({ where: { id: { in: fromIds }, userId }, select: { id: true, title: true } })).map((t) => [t.id, t.title]),
+  );
   return {
     thread: { ...meta, agentSessionId: undefined },
     // The password itself only goes out alongside a relay token (live-routes).
-    turns: runs.map(({ desktopPassword, ...r }) => ({ ...r, desktop: Boolean(desktopPassword), costUsd: r.costUsd?.toNumber() ?? null })),
+    turns: runs.map(({ desktopPassword, fromThreadId, ...r }) => ({
+      ...r,
+      desktop: Boolean(desktopPassword),
+      costUsd: r.costUsd?.toNumber() ?? null,
+      from: fromThreadId ? { threadId: fromThreadId, title: titles.get(fromThreadId) ?? null } : null,
+    })),
   };
 }
 
@@ -207,11 +220,24 @@ app.get('/threads', async (c) => {
   const threads = await prisma.thread.findMany({
     where: { userId: c.get('user').id },
     orderBy: { updatedAt: 'desc' },
-    take: 100,
-    include: { runs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } },
+    take: 200,
+    include: { runs: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, updatedAt: true } } },
   });
+  const now = new Date();
   return c.json({
-    threads: threads.map(({ runs, agentSessionId: _a, ...t }) => ({ ...t, lastStatus: runs[0]?.status ?? 'queued' })),
+    threads: threads.map(({ runs, agentSessionId: _a, ...t }) => {
+      const last = runs[0];
+      const woke = t.snoozedUntil && t.snoozedUntil <= now ? t.snoozedUntil : null;
+      return {
+        ...t,
+        lastStatus: last?.status ?? 'queued',
+        // A turn ended since the user last looked, or a snooze ran out.
+        unread: Boolean(
+          (last && TERMINAL_STATUSES.includes(last.status) && (!t.seenAt || last.updatedAt > t.seenAt)) || (woke && (!t.seenAt || t.seenAt < woke)),
+        ),
+        snoozed: Boolean(t.snoozedUntil && t.snoozedUntil > now),
+      };
+    }),
   });
 })
 
@@ -252,12 +278,23 @@ const ThreadSettingsSchema = z.object({
   model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').nullable().optional(),
   effort: z.string().nullable().optional(),
   desktop: z.boolean().optional(),
+  peers: z.enum(PEER_SCOPES).optional(),
+  // Sidebar state, as in T3 Code's thread menu.
+  title: z.string().trim().min(1).max(120).optional(),
+  pinned: z.boolean().optional(),
+  settled: z.boolean().optional(),
+  archived: z.boolean().optional(),
+  /** Hide until then; null wakes it now. */
+  snoozeUntil: z.iso.datetime().nullable().optional(),
+  /** true: read now; false: mark unread. */
+  seen: z.boolean().optional(),
 });
 
 app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) => {
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
   if (!thread) return c.json({ message: 'Session not found' }, 404);
-  const { model, effort, desktop } = c.req.valid('json');
+  const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen } = c.req.valid('json');
+  const now = new Date();
   if (effort && !effortLevels(thread.harness).includes(effort)) {
     return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
   }
@@ -267,9 +304,26 @@ app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) =>
       ...(model !== undefined ? { model } : {}),
       ...(effort !== undefined ? { effort } : {}),
       ...(desktop !== undefined ? { desktop } : {}),
+      ...(peers !== undefined ? { peers } : {}),
+      ...(title !== undefined ? { title } : {}),
+      ...(pinned !== undefined ? { pinnedAt: pinned ? now : null } : {}),
+      ...(settled !== undefined ? { settledAt: settled ? now : null } : {}),
+      ...(archived !== undefined ? { archivedAt: archived ? now : null } : {}),
+      ...(snoozeUntil !== undefined ? { snoozedUntil: snoozeUntil ? new Date(snoozeUntil) : null } : {}),
+      ...(seen !== undefined ? { seenAt: seen ? now : null } : {}),
     },
   });
   return c.json({ ok: true });
+})
+
+// Deletes a session and its turns. Its branch and pull request stay on GitHub.
+app.delete('/threads/:id', async (c) => {
+  const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
+  if (!thread) return c.json({ message: 'Session not found' }, 404);
+  const active = await prisma.run.count({ where: { threadId: thread.id, status: { in: ACTIVE_STATUSES as any } } });
+  if (active > 0) return c.json({ message: 'A turn is still running. Cancel it, then delete the session.' }, 409);
+  await prisma.thread.delete({ where: { id: thread.id } });
+  return c.body(null, 204);
 })
 
 app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) => {
@@ -294,7 +348,11 @@ app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) =
   });
   // "/model <name>" sticks for the rest of the session (see modelCommand).
   const chosen = modelCommand(prompt);
-  await prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date(), ...(chosen !== undefined ? { model: chosen } : {}) } });
+  // New work: back in the sidebar's main list, and the agent's question is answered.
+  await prisma.thread.update({
+    where: { id: thread.id },
+    data: { updatedAt: new Date(), settledAt: null, snoozedUntil: null, archivedAt: null, needsInput: null, ...(chosen !== undefined ? { model: chosen } : {}) },
+  });
   return c.json({ id: run.id }, 201);
 })
 

@@ -29,6 +29,7 @@ Run containers have no direct route to the internet and no outside DNS. They can
 - the main package registries,
 - GitHub,
 - the hosts your [secrets](/docs/secrets-and-files) may be sent to,
+- the hosts the [agents you add](/docs/agents#add-more-agents) send their keys to, and any others they need,
 - and any hosts you add.
 
 This means a malicious repository can't make the agent send data, or your key, anywhere else.

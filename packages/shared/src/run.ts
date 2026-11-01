@@ -45,6 +45,10 @@ export const RunSchema = z.object({
   patchHash: z.string().nullable(),
   prUrl: z.string().nullable(),
   error: z.string().nullable(),
+  /** A turn another session asked for (see ./sessions). */
+  fromThreadId: z.string().nullable().optional(),
+  hops: z.number().optional(),
+  replyToThreadId: z.string().nullable().optional(),
 });
 
 export type Run = z.infer<typeof RunSchema>;

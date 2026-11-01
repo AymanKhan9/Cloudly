@@ -77,6 +77,19 @@ export interface ThreadSummary {
   arenaId?: string | null;
   /** Turns get a virtual desktop. */
   desktop?: boolean;
+  /** Which other sessions its agent may read and message: "repo", "all" or "off". */
+  peers?: string;
+  /** Sidebar state, as in T3 Code's thread menu. */
+  pinnedAt?: string | null;
+  settledAt?: string | null;
+  snoozedUntil?: string | null;
+  archivedAt?: string | null;
+  /** The question the agent asked with ask_user, until the user answers. */
+  needsInput?: string | null;
+  /** A turn ended (or a snooze ran out) since the user last looked. */
+  unread?: boolean;
+  /** Hidden until snoozedUntil. */
+  snoozed?: boolean;
 }
 
 export interface Turn {
@@ -95,6 +108,10 @@ export interface Turn {
   deletions?: number | null;
   /** The turn ran with a virtual desktop. */
   desktop?: boolean;
+  /** Another session's agent asked for this turn (a message, or a reply to one). */
+  from?: { threadId: string; title: string | null } | null;
+  /** Its answer goes back to this session. */
+  replyToThreadId?: string | null;
 }
 
 export interface ThreadView {
@@ -224,4 +241,75 @@ export interface CouncilView {
   };
   turns: CouncilTurn[];
   spentUsd: number;
+}
+
+/** An agent sessions can use: built in, or added under Settings > Agents. */
+export interface HarnessInfo {
+  id: string;
+  name: string;
+  cost: "exact" | "estimated" | "none";
+  icon?: string | null;
+  /** Keys an added agent can't run without that aren't set yet. */
+  missing?: string[];
+}
+
+export interface AgentKey {
+  env: string;
+  label: string;
+  hosts: string[];
+  optional?: boolean;
+  reuse?: string;
+  set: boolean;
+  preview: string | null;
+  reused: boolean;
+}
+
+/** An added agent, as Settings > Agents lists it. Keys show only their last four characters. */
+export interface AgentRow {
+  id: string;
+  name: string;
+  source: "catalog" | "registry" | "custom";
+  sourceId: string | null;
+  version: string | null;
+  icon: string | null;
+  enabled: boolean;
+  spec: {
+    launch: { install: { kind: string; packages?: string[]; cmd?: string; package?: string }; args: string[] };
+    hosts: string[];
+  };
+  credentials: AgentKey[];
+  missing: string[];
+  /** A sandbox image with it in has finished building. */
+  installed: boolean;
+  createdAt: string;
+}
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  blurb: string;
+  registryId?: string;
+  icon: string | null;
+  note?: string;
+  unavailable?: string;
+  credentials: { env: string; label: string; hosts: string[]; optional?: boolean; reuse?: string }[];
+}
+
+export interface RegistryItem {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  website: string | null;
+  icon: string | null;
+  installable: boolean;
+  added: boolean;
+  catalogId: string | null;
+}
+
+export interface AgentsSettings {
+  agents: AgentRow[];
+  catalog: CatalogItem[];
+  builtin: { id: string; name: string; blurb: string }[];
+  image: { status: "pending" | "building" | "ready" | "failed"; updatedAt: string } | null;
 }

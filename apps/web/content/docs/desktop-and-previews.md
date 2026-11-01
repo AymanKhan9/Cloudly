@@ -11,7 +11,7 @@ Then, in a session, click **Desktop** in the chat box (or on the new-session pag
 - a virtual display (1280 × 800) with Chromium, and
 - desktop tools: `screenshot`, `click`, `type`, `key`, `scroll`, `open_url` and `wait`.
 
-The tools are an MCP server inside the sandbox, so Claude Agent, Codex and Gemini CLI all get the same ones. Ask for them directly: "start the dev server, open it in the desktop's browser and check the checkout page at mobile width".
+The tools are an MCP server inside the sandbox, so every agent, built in or added, gets the same ones. Ask for them directly: "start the dev server, open it in the desktop's browser and check the checkout page at mobile width".
 
 ## Watch it
 

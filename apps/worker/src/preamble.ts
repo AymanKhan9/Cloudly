@@ -26,6 +26,10 @@ export interface RunExtras {
   desktop?: boolean;
   /** The repo's shared context, as Markdown, when the repo has it on. */
   context?: string;
+  /** The user's other sessions this one may read and message. */
+  sessions?: { count: number; scope: string; canSend: boolean };
+  /** The ask_user tool is there (a session's turn). */
+  ask?: boolean;
 }
 
 /** Lines for what this run has beyond the basics: kept files, secrets, MCP servers, a desktop. */
@@ -43,6 +47,18 @@ export function runExtras(extras: RunExtras): string[] {
   if (extras.mcp?.length) lines.push(`- MCP servers connected by the user: ${extras.mcp.join(", ")}. Use their tools when they fit the task.`);
   if (extras.desktop) {
     lines.push("- A virtual desktop is running (DISPLAY=:99), with a browser. Use the desktop tools (screenshot, click, type, key, scroll, open_url) to see and use web apps you start, and check UI changes visually. The user may be watching it live.");
+  }
+  if (extras.ask) {
+    lines.push("- Nobody watches a turn as it runs, and you have permission to run commands, edit files and install packages here. If you can't go on without the user (a decision that's theirs, or information you can't find), call ask_user with one clear question, then finish the turn with where things stand. Their answer comes as the next message.");
+  }
+  if (extras.sessions) {
+    const where = extras.sessions.scope === "all" ? "the user's other Cloudly sessions" : "the user's other Cloudly sessions on this repo";
+    lines.push(
+      `- Your sessions tools reach ${where} (${extras.sessions.count} now): list_sessions, and read_session for what each was asked and answered and which branch holds its work. If the user pastes a session's link, id or a copied reference, pass it to these tools as it is.` +
+        (extras.sessions.canSend
+          ? " send_to_session hands one a message, which runs there as its next turn after this one ends; ask for a reply and its answer comes back here as a new turn. Use them when the user refers to another session, or when work there matters to this task."
+          : " This turn can't send messages: it's already deep in a chain of messages between sessions."),
+    );
   }
   if (extras.context) {
     lines.push(

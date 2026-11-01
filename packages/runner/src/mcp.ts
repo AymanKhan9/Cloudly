@@ -20,6 +20,20 @@ export const CONTEXT_MCP: McpSpec = {
     args: [new URL("./context-mcp.ts", import.meta.url).pathname],
 };
 
+/** The user's other sessions, when this session may see them. */
+export const SESSIONS_MCP: McpSpec = {
+    name: "sessions",
+    command: "bun",
+    args: [new URL("./sessions-mcp.ts", import.meta.url).pathname],
+};
+
+/** ask_user, for a session's turns: flags the session as needing the user. */
+export const ASK_MCP: McpSpec = {
+    name: "ask",
+    command: "bun",
+    args: [new URL("./ask-mcp.ts", import.meta.url).pathname],
+};
+
 /** Claude Agent SDK's mcpServers option. */
 export function claudeMcpServers(specs: McpSpec[]) {
     return Object.fromEntries(

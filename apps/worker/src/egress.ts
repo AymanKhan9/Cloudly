@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createHash, randomBytes } from "node:crypto";
-import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList, gatewayMcpServers, proxySecrets, refreshMcpTokens } from "@repo/db";
+import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList, gatewayMcpServers, proxySecrets, refreshMcpTokens, providerProxySecrets, providerHosts } from "@repo/db";
 
 // Run containers join an internal network: no route out and no outside DNS.
 // The proxy container sits on it and on the normal network, and is the only
@@ -65,10 +65,21 @@ async function docker(args: string[]): Promise<{ ok: boolean; out: string }> {
   return { ok: code === 0, out: (out + err).trim() };
 }
 
+/** Secrets for runs and added agents' keys: what the proxy may fill in, and for which hosts. */
+async function allProxySecrets(): Promise<{ placeholder: string; value: string; hosts: string[] }[]> {
+  return [...(await proxySecrets()), ...(await providerProxySecrets())];
+}
+
 export async function allowedHosts(): Promise<string[]> {
   // A secret's hosts are where it's meant to go, so they're reachable too.
-  const secretHosts = (await proxySecrets()).flatMap((s) => s.hosts);
-  return [...new Set([...EGRESS_DEFAULT_HOSTS, ...parseHostList((await config("SANDBOX_EGRESS_HOSTS")) ?? ""), ...secretHosts])];
+  const secretHosts = (await allProxySecrets()).flatMap((s) => s.hosts);
+  return [...new Set([
+    ...EGRESS_DEFAULT_HOSTS,
+    ...parseHostList((await config("SANDBOX_EGRESS_HOSTS")) ?? ""),
+    ...secretHosts,
+    // What added agents need beyond their keys' hosts (sign-in, model lists).
+    ...(await providerHosts()),
+  ])];
 }
 
 /** Writes the allowlist the proxy reads on every connection. */
@@ -141,7 +152,7 @@ async function interceptCertificate(hosts: string[]): Promise<{ cert: string; ke
 
 /** Secret placeholders, real values and allowed hosts, plus the certificate the proxy needs for those hosts. */
 async function writeSecrets(): Promise<void> {
-  const secrets = await proxySecrets();
+  const secrets = await allProxySecrets();
   const conf = secrets.length ? { ...(await interceptCertificate(secrets.flatMap((s) => s.hosts))), secrets } : {};
   await writeFile(path.join(KEYS_DIR, "secrets.json"), JSON.stringify(conf), { mode: 0o600 });
 }

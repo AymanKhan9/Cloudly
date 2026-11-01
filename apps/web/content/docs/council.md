@@ -8,7 +8,7 @@ Use it for questions where one model's answer isn't enough: "what's the state of
 
 On the new-session page, click **Council**, then:
 
-1. **Pick the members**: two or three of Claude Agent, Codex and Gemini CLI.
+1. **Pick the members**: two or three agents, built in or [added](/docs/agents#add-more-agents).
 2. **Pick the chair**, who writes the report. Claude Agent by default; the chair can also be a member.
 3. **Pick the rounds** (three by default):
    - **1 round**: research only, then the report.

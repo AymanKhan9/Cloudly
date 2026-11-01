@@ -3,109 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { GearSix, List, NotePencil, SignOut, UsersThree, Warning, X } from "@phosphor-icons/react";
-import { api, type CouncilSummary, type ThreadSummary } from "@/lib/api";
-import { harnessById, relativeTime, usd } from "@/lib/harness";
+import { GearSix, List, NotePencil, SignOut, Warning, X } from "@phosphor-icons/react";
+import { api } from "@/lib/api";
+import { usd } from "@/lib/harness";
 import { useApp } from "./app-context";
 import { Mark } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
-import { SpendBar, StatusIcon } from "./status";
-
-const DAY = 86_400_000;
-
-function groupOf(iso: string) {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const t = new Date(iso).getTime();
-  if (t >= start.getTime()) return "Today";
-  if (t >= start.getTime() - DAY) return "Yesterday";
-  if (t >= start.getTime() - 7 * DAY) return "Previous 7 days";
-  return "Older";
-}
-
-
-function Sessions({ pathname }: { pathname: string }) {
-  const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
-  const [councils, setCouncils] = useState<CouncilSummary[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      api<{ councils: CouncilSummary[] }>("/councils")
-        .then((r) => alive && setCouncils(r.councils))
-        .catch(() => {});
-      return api<{ threads: ThreadSummary[] }>("/threads")
-        .then((r) => alive && setThreads(r.threads))
-        .catch(() => {});
-    };
-    load();
-    const timer = window.setInterval(load, 4000);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  if (threads === null)
-    return (
-      <div style={{ display: "grid", gap: 14, padding: "18px 10px" }} aria-busy="true">
-        {[70, 55, 80, 60].map((w) => (
-          <div key={w} className="skeleton" style={{ width: `${w}%` }} />
-        ))}
-      </div>
-    );
-
-  if (threads.length === 0 && councils.length === 0) return <p className="rail-empty">Your sessions show up here. Start one to hand the agent its first task.</p>;
-
-  // Sessions and councils, newest first.
-  const items = [
-    ...threads.map((t) => ({ kind: "thread" as const, at: t.updatedAt, t })),
-    ...councils.map((c) => ({ kind: "council" as const, at: c.updatedAt, c })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
-
-  let last = "";
-  return (
-    <>
-      {items.map((item) => {
-        if (item.kind === "council") {
-          const c = item.c;
-          const group = groupOf(c.updatedAt);
-          const head = group !== last ? <div className="rail-group">{(last = group)}</div> : null;
-          const href = `/app/council/${c.id}`;
-          return (
-            <div key={c.id}>
-              {head}
-              <Link href={href} className="rail-item" aria-current={pathname === href ? "page" : undefined}>
-                {c.status === "running" ? <StatusIcon status="running" size={15} /> : <UsersThree size={15} style={{ color: c.status === "done" ? "var(--ok)" : "var(--text-3)" }} />}
-                <span className="t">{c.question}</span>
-                <span className="m">
-                  Council of {c.members.length}
-                  {c.repo ? ` · ${c.repo.split("/")[1]}` : ", web research"}, {relativeTime(c.updatedAt)}
-                </span>
-              </Link>
-            </div>
-          );
-        }
-        const t = item.t;
-        const group = groupOf(t.updatedAt);
-        const head = group !== last ? <div className="rail-group">{(last = group)}</div> : null;
-        const href = `/app/s/${t.id}`;
-        return (
-          <div key={t.id}>
-            {head}
-            <Link href={href} className="rail-item" aria-current={pathname === href ? "page" : undefined}>
-              <StatusIcon status={t.lastStatus} pr={Boolean(t.prUrl)} size={15} />
-              <span className="t">{t.title}</span>
-              <span className="m">
-                {t.repo.split("/")[1]} · {harnessById(t.harness).name}{t.arenaId ? " in an arena" : ""}, {relativeTime(t.updatedAt)}
-              </span>
-            </Link>
-          </div>
-        );
-      })}
-    </>
-  );
-}
+import { SpendBar } from "./status";
+import { SessionList } from "./session-list";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -155,7 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
 
         <nav className="rail-list" aria-label="Sessions">
-          <Sessions pathname={pathname} />
+          <SessionList pathname={pathname} />
         </nav>
 
         <div className="rail-foot">
