@@ -53,6 +53,21 @@ model Thread {
   autoPr         Boolean  @default(true)
   /// Turns get a virtual display the agent can use and the user can watch.
   desktop        Boolean  @default(false)
+  /// Which other sessions its agent may read and message (see @repo/shared/sessions):
+  /// "repo" (this repo's), "all" (every one of the user's), or "off".
+  peers          String   @default("repo")
+  /// Sidebar state, like T3 Code's threads. Pinned sessions sit at the top.
+  pinnedAt       DateTime?
+  /// Done for now: folded into the sidebar's Settled section until there's new activity.
+  settledAt      DateTime?
+  /// Hidden from the sidebar until this time, then back as unread.
+  snoozedUntil   DateTime?
+  /// Out of the sidebar and out of other sessions' reach, until unarchived.
+  archivedAt     DateTime?
+  /// When the user last looked at it; a turn that ended after this is unread. Null is never.
+  seenAt         DateTime?
+  /// The question the agent asked with ask_user, until the user answers.
+  needsInput     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -94,6 +109,30 @@ model McpServer {
   status    String   @default("needs_auth")
   error     String?
   secret    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// An agent added under Settings > Agents, beyond the three built in: from
+/// Cloudly's catalog, the ACP registry, or a command the user entered (see
+/// @repo/shared/providers). The sandbox image installs it and turns run it over
+/// the Agent Client Protocol. Its keys reach the sandbox only as placeholders.
+model Provider {
+  /// Its harness id: "acp-" and a slug.
+  id        String   @id
+  name      String
+  /// catalog | registry | custom
+  source    String
+  /// The catalog or registry id it came from.
+  sourceId  String?
+  /// The registry version it was added at.
+  version   String?
+  icon      String?
+  /// How the image installs it, how the runner starts it, its keys and hosts (ProviderSpec).
+  spec      Json
+  /// AES-256-GCM ciphertext of { ENV_NAME: value }.
+  secret    String?
+  enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -222,11 +261,22 @@ model Run {
   councilRole  String?
   /// What a council turn wrote as its answer.
   output       String?
+  /// A turn another session's agent asked for (send_to_session): the session and turn it came from.
+  fromThreadId String?
+  fromRunId    String?
+  /// How many messages deep this turn is in a chain between sessions; capped so agents can't loop.
+  hops         Int      @default(0)
+  /// When it finishes, its reply goes back to this session as a new turn.
+  replyToThreadId String?
+  /// Its last change; once it has ended, when it ended. Unread sessions compare against it.
+  updatedAt  DateTime @default(now()) @updatedAt
   events     RunEvent[]
   user       User?    @relation(fields: [userId],references: [id],onDelete: Cascade)
   thread     Thread?  @relation(fields: [threadId],references: [id],onDelete: Cascade)
   council    Council? @relation(fields: [councilId],references: [id],onDelete: Cascade)
   @@unique([councilId, councilRound, councilRole, harness])
+  /// One message per turn to each session, so a retried turn can't send it twice.
+  @@unique([fromRunId, threadId])
   @@index([status,createdAt])
   @@index([userId])
   @@index([threadId, createdAt])

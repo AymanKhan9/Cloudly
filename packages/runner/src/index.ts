@@ -1,8 +1,8 @@
 import type { RunAdapter } from "./adapter";
 import { ClaudeAdapter } from "./adapters/claude";
 import { CodexAdapter } from "./adapters/codex";
-import { AcpAdapter } from "./adapters/acp";
-import { CONTEXT_MCP, DESKTOP_MCP, type McpSpec } from "./mcp";
+import { AcpAdapter, type AcpLaunch } from "./adapters/acp";
+import { ASK_MCP, CONTEXT_MCP, DESKTOP_MCP, SESSIONS_MCP, type McpSpec } from "./mcp";
 import { startDesktop } from "./desktop";
 
 const CONFIG_PATH = process.env.CONTROL_CONFIG_PATH ?? "/control/config.json";
@@ -27,6 +27,12 @@ type RunConfig = {
     context?: boolean;
     /** A research turn: turn on the agent's own web search where it's off by default (Codex). */
     research?: boolean;
+    /** An agent added under Settings > Agents, run over ACP. */
+    acp?: AcpLaunch;
+    /** The user's other sessions are mounted at /sessions. */
+    sessions?: boolean;
+    /** A session's turn: ask_user writes to /ask. */
+    ask?: boolean;
 };
 
 const adapters: Record<string,(config: RunConfig, mcp: McpSpec[])=>RunAdapter> = {
@@ -42,7 +48,7 @@ async function loadConfig(): Promise<RunConfig> {
     }
     return {
         task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend,
-        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context, research: raw.research,
+        model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context, research: raw.research, acp: raw.acp, sessions: raw.sessions, ask: raw.ask,
     };
 }
 
@@ -50,11 +56,14 @@ let lastSeq = -1;
 
 async function main() {
     const config = await loadConfig();
-    const makeAdapter = adapters[config.harness];
+    // Added agents all speak ACP; the worker says how to start each one.
+    const makeAdapter = config.acp
+        ? (c: RunConfig, mcp: McpSpec[]) => new AcpAdapter(c.model, c.effort, mcp, c.acp)
+        : adapters[config.harness];
     if(!makeAdapter){
         throw new Error(`unknown harness: ${config.harness}`);
     }
-    const mcp: McpSpec[] = [...(config.mcpServers ?? []), ...(config.context ? [CONTEXT_MCP] : [])];
+    const mcp: McpSpec[] = [...(config.mcpServers ?? []), ...(config.context ? [CONTEXT_MCP] : []), ...(config.sessions ? [SESSIONS_MCP] : []), ...(config.ask ? [ASK_MCP] : [])];
     if (config.desktop) {
         if (await startDesktop(config.desktop.password)) {
             mcp.push(DESKTOP_MCP);

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat } from "@phosphor-icons/react";
 import { api, ApiError, type Capabilities, type Repo } from "@/lib/api";
-import { HARNESSES, type HarnessId } from "@/lib/harness";
+import { costLabel } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
@@ -32,20 +32,20 @@ interface Estimate {
 
 export default function NewSessionPage() {
   const router = useRouter();
-  const { budget } = useApp();
+  const { budget, harnesses } = useApp();
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [repoError, setRepoError] = useState<string | null>(null);
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
-  const [harness, setHarness] = useState<HarnessId>("native-claude");
+  const [harness, setHarness] = useState<string>("native-claude");
   const [effort, setEffort] = useState<string | null>(null);
   // Compare: the same task to several agents at once (an arena). Council: several
   // agents answer one question together, in rounds, and a chair writes the report.
   const [mode, setMode] = useState<Mode>("session");
   const compare = mode === "compare";
   const council = mode === "council";
-  const [rivals, setRivals] = useState<HarnessId[]>(["native-claude", "native-codex"]);
-  const [chair, setChair] = useState<HarnessId>("native-claude");
+  const [rivals, setRivals] = useState<string[]>(["native-claude", "native-codex"]);
+  const [chair, setChair] = useState<string>("native-claude");
   const [rounds, setRounds] = useState(3);
   const [onRepo, setOnRepo] = useState(false);
   const [cap, setCap] = useState("5");
@@ -58,12 +58,15 @@ export default function NewSessionPage() {
   const input = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    // "New session on <repo>" from a session's menu comes with ?repo= and ?branch=.
+    const asked = new URLSearchParams(window.location.search);
     api<{ repos: Repo[] }>("/repos")
       .then(({ repos }) => {
         setRepos(repos);
-        if (repos[0]) {
-          setRepo(repos[0].fullName);
-          setBranch(repos[0].defaultBranch);
+        const pick = repos.find((r) => r.fullName === asked.get("repo")) ?? repos[0];
+        if (pick) {
+          setRepo(pick.fullName);
+          setBranch(pick.fullName === asked.get("repo") ? asked.get("branch") || pick.defaultBranch : pick.defaultBranch);
         }
       })
       .catch((e: Error) => setRepoError(e.message));
@@ -80,7 +83,7 @@ export default function NewSessionPage() {
   const needsRepo = !council || onRepo;
   const ready =
     !submitting && !stopped && Boolean(prompt.trim()) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (mode === "session" || rivals.length >= 2);
-  const h = HARNESSES.find((x) => x.id === harness)!;
+  const h = harnesses.find((x) => x.id === harness) ?? harnesses[0]!;
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -200,7 +203,7 @@ export default function NewSessionPage() {
             ) : null}
             {mode !== "session" ? (
               <span className="rivals" role="group" aria-label={council ? "Council members" : "Agents to compare"}>
-                {HARNESSES.map((x) => {
+                {harnesses.map((x) => {
                   const on = rivals.includes(x.id);
                   return (
                     <button
@@ -221,19 +224,19 @@ export default function NewSessionPage() {
               label="Agent"
               icon={<AgentLogo harness={harness} size={15} />}
               value={harness}
-              options={HARNESSES.map((x) => ({
+              options={harnesses.map((x) => ({
                 value: x.id,
                 label: x.name,
                 sub: (
                   <>
-                    <AgentLogo harness={x.id} size={13} />
-                    {providerOf(x.id)}
-                    <span className="dim">{x.cost === "exact" ? "Exact cost" : "Estimated cost"}</span>
+                    <AgentLogo harness={x.id} icon={x.icon} size={13} />
+                    {x.missing?.length ? `Needs ${x.missing.join(" and ")}` : providerOf(x.id)}
+                    <span className="dim">{costLabel(x.cost)}</span>
                   </>
                 ),
               }))}
               onChange={(v) => {
-                setHarness(v as HarnessId);
+                setHarness(v);
                 setEffort(null); // levels differ per agent
               }}
             />
@@ -245,8 +248,8 @@ export default function NewSessionPage() {
                   label="Chair"
                   icon={<Crown size={14} />}
                   value={chair}
-                  options={HARNESSES.map((x) => ({ value: x.id, label: `${x.name} chairs`, sub: <span className="dim">Writes the report</span> }))}
-                  onChange={(v) => setChair(v as HarnessId)}
+                  options={harnesses.map((x) => ({ value: x.id, label: `${x.name} chairs`, sub: <span className="dim">Writes the report</span> }))}
+                  onChange={(v) => setChair(v)}
                 />
                 <Picker
                   label="Rounds"
@@ -299,7 +302,11 @@ export default function NewSessionPage() {
                 ? rivals.length < 2
                   ? "Pick at least two agents to compare."
                   : `Each agent works on its own branch. Nothing opens a pull request until you pick a result. Each one's turn costs as usual.`
-                : `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`)}
+                : h.missing?.length
+                  ? `${h.name} needs ${h.missing.join(" and ")}. Add it under Settings > Agents.`
+                  : h.cost === "none"
+                    ? `${h.name}'s turns record no cost. It's installed in the sandbox image and uses the keys under Settings > Agents.`
+                    : `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`)}
           </span>
           <span>
             <kbd>Enter</kbd> to start, <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line

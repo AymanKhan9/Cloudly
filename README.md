@@ -2,18 +2,19 @@
 
 Coding agents on a server you already own.
 
-Cloudly runs Claude Agent, Codex or Gemini CLI against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
+Cloudly runs Claude Agent, Codex, Gemini CLI, or an agent you add (Cursor, Grok, OpenCode, Antigravity, Pi, or any ACP agent) against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
 
 Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
 ## What it does
 
 - **Runs agents unattended.** Pick a repo, an agent and a task. The run continues after you close the tab and ends with a branch and a pull request.
-- **Plug-and-play agents.** Claude (via the Claude Agent SDK) and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, so other ACP agents can plug in the same way. All three feed one event stream, so the run log, cancel button and spend limit work the same for each.
+- **Plug-and-play agents.** Claude (via the Claude Agent SDK) and Codex run through their official SDKs. Gemini CLI runs over the Agent Client Protocol, and so does every agent you add under Settings: Cursor, Grok, OpenCode, Antigravity and Pi by name, anything in the ACP registry, or a command of your own. All of them feed one event stream, so the run log, cancel button and pull request work the same for each. Added agents get API keys the same way the built-in ones do: as placeholders the proxy fills in.
 - **Compare agents.** Hand one task to two or three agents at once, compare cost, time, diff size and each agent's summary side by side, and open the best result as the pull request.
 - **An agent council.** Pick two or three agents and ask a question. They research on their own, cross-examine each other's findings, give final positions, and a chair writes one report with where they agree, where they don't, and each one's take. Research councils can read the open web; on a repo, they read without changing anything.
 - **MCP servers without the localhost dance.** Connect Linear, Notion, Sentry or your own server once in Settings. Cloudly does the OAuth sign-in on its own public URL and keeps the tokens; every agent gets the tools, and none of them ever holds a token.
-- **One context for every agent.** Turn on shared context for a repo and every agent working on it, Claude, Codex or Gemini here and Cursor or Claude Code on your laptop through Cloudly's MCP endpoint, starts from the same notes and sees what the others did.
+- **Sessions that talk to each other.** Like T3 Code's threads, a session's agent can read your other sessions' conversations and branches, and send one a message that runs there as its next turn, with the reply coming back as a turn of its own. Limited to the same repo unless you open it up, and capped so agents can't keep each other busy.
+- **One context for every agent.** Turn on shared context for a repo and every agent working on it, whichever agent runs it here and Cursor or Claude Code on your laptop through Cloudly's MCP endpoint, starts from the same notes and sees what the others did.
 - **Secrets the agent never holds.** Tokens your tests need reach the sandbox as placeholders; the egress proxy fills in the real value only on HTTPS requests to the hosts you name. Each repo also gets a `/files` folder outside git that persists between sessions.
 - **A desktop you can watch.** Turn on a virtual desktop with a browser and every agent gets computer-use tools; watch it live or take control. Previews run a session's branch so you can try the app before merging.
 - **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Agent turns stop at 25% over the limit and keep the work they finished on the branch. Claude Agent reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.

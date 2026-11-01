@@ -4,13 +4,14 @@ import { Suspense, useEffect, useState } from "react";
 import { api, ApiError, type Repo } from "@/lib/api";
 import { useApp } from "@/components/app-context";
 import { SpendBar } from "@/components/status";
-import { HARNESSES, usd } from "@/lib/harness";
+import { usd } from "@/lib/harness";
 import { SecretsPanel } from "@/components/secrets-panel";
 import { SandboxPanel } from "@/components/sandbox-panel";
 import { McpPanel } from "@/components/mcp-panel";
 import { EnvPanel } from "@/components/env-panel";
 import { FilesPanel } from "@/components/files-panel";
 import { ContextSettings } from "@/components/context-settings";
+import { AgentsPanel } from "@/components/agents-panel";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
@@ -93,7 +94,7 @@ export default function SettingsPage() {
     <div className="page">
       <div className="page-head">
         <h1>Settings</h1>
-        <p>Spend limit, keys, MCP servers, secrets, files and sandbox tools for this instance.</p>
+        <p>Spend limit, keys, agents, MCP servers, secrets, files and sandbox tools for this instance.</p>
       </div>
 
       <section className="set-sec" aria-labelledby="spend-h">
@@ -165,6 +166,8 @@ export default function SettingsPage() {
 
       <SecretsPanel />
 
+      <AgentsPanel />
+
       <Suspense fallback={null}>
         <McpPanel />
       </Suspense>
@@ -176,37 +179,6 @@ export default function SettingsPage() {
       <ContextSettings />
 
       <SandboxPanel />
-
-      <section className="set-sec" aria-labelledby="agents-h">
-        <header>
-          <h2 id="agents-h">Agents</h2>
-          <p>An agent runs only if its key or plan sign-in is set above. Turns on a plan don&apos;t count toward the limit.</p>
-        </header>
-        <div className="set-body">
-          <div className="panel">
-            <table className="agents-table">
-              <thead>
-                <tr>
-                  <th scope="col">Agent</th>
-                  <th scope="col" className="hide-sm">
-                    ID
-                  </th>
-                  <th scope="col">Cost reporting</th>
-                </tr>
-              </thead>
-              <tbody>
-                {HARNESSES.map((h) => (
-                  <tr key={h.id}>
-                    <td>{h.name}</td>
-                    <td className="mono hide-sm">{h.id}</td>
-                    <td>{h.cost === "exact" ? "Exact, from the agent" : "Estimated from tokens"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

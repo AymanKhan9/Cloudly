@@ -19,7 +19,7 @@ export default function Landing() {
             <section className="hero">
               <h1>Coding agents you own, end to end.</h1>
               <p className="sub">
-                Run Claude Agent, Codex or Gemini CLI on your GitHub repos from a VM in your own cloud. Close the
+                Run Claude Agent, Codex, Gemini CLI or any ACP agent on your GitHub repos from a VM in your own cloud. Close the
                 laptop, get a pull request.
               </p>
               <div className="hero-actions">
@@ -52,8 +52,8 @@ export default function Landing() {
             <div className="section-head">
               <h2>Switch agents with a dropdown.</h2>
               <p>
-                Each agent reports its work in its own dialect. Cloudly translates all three into one log, so cancel,
-                the spend limit and the pull request work the same whichever you pick.
+                Each agent reports its work in its own dialect. Cloudly translates them all into one log, so cancel
+                and the pull request work the same whichever you pick.
               </p>
             </div>
             <AgentsDemo />
@@ -61,7 +61,8 @@ export default function Landing() {
               Each agent keeps its own session across your follow-ups, and its commands work as typed:{" "}
               <code className="mono">/compact</code>, <code className="mono">/context</code>,{" "}
               <code className="mono">/model</code> and the skills in your repo. Gemini CLI runs over the Agent Client
-              Protocol, so other ACP agents can plug in the same way.
+              Protocol, and so do Cursor, Grok, OpenCode, Antigravity, Pi and any agent in the ACP registry, added from
+              Settings.
             </p>
           </div>
         </section>

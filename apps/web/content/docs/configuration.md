@@ -84,6 +84,12 @@ Used to estimate Codex and Gemini cost, in US dollars per million tokens. Claude
 | `PRICE_GEMINI_INPUT_PER_MTOK` | `0.30` |
 | `PRICE_GEMINI_OUTPUT_PER_MTOK` | `2.50` |
 
+Agents added under **Settings → Agents** record no cost until you set their prices. Their variables are named after the agent's id, in capitals with underscores: for `acp-cursor`, `PRICE_ACP_CURSOR_INPUT_PER_MTOK` and `PRICE_ACP_CURSOR_OUTPUT_PER_MTOK`. They use the token counts the agent reports, so they're an estimate, and only agents that report tokens can be priced.
+
+| Variable | Example |
+|---|---|
+| `ACP_REGISTRY_URL` | Where the API reads the ACP registry. Default `https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`. |
+
 ## Alerts
 
 | Variable | What it is |

@@ -7,8 +7,63 @@ import { Writable, Readable } from "node:stream";
 import { GeminiSubagents } from "./gemini-subagents";
 import { acpMcpServers, type McpSpec } from "../mcp";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+
+/** An agent added under Settings > Agents: the image installed it, the worker says how to start it. */
+export interface AcpLaunch {
+    name: string;
+    /** Its run script, /opt/cloudly/agents/<id>/run. */
+    command: string;
+    /** Sent with `authenticate` when the agent offers it (e.g. Grok's "xai.api_key"). */
+    authMethodId?: string;
+    /** Written under HOME first, e.g. a settings file choosing API-key sign-in. */
+    homeFiles?: Record<string, string>;
+    /** Where it works: the sandbox's /workspace unless a test says otherwise. */
+    cwd?: string;
+    /** Behind ordinary pipes: some agents (Antigravity) hang on the socket stdio a spawn gives them. */
+    pipes?: boolean;
+}
+
+type ConfigOption = NonNullable<acp.NewSessionResponse["configOptions"]>[number];
+
+/** A select option's choices, whether listed flat or in groups. */
+function selectValues(option: ConfigOption): { value: string; name: string }[] {
+    if (option.type !== "select") return [];
+    return (option.options as unknown[]).flatMap((o: any) =>
+        Array.isArray(o?.options) ? o.options.map((x: any) => ({ value: String(x.value), name: String(x.name ?? x.value) })) : [{ value: String(o.value), name: String(o.name ?? o.value) }],
+    );
+}
+
+/** ACP's unstable models list, which some agents (Grok) still send instead of config options. */
+interface UnstableModels {
+    currentModelId: string;
+    availableModels: { modelId: string; name?: string | null }[];
+}
+
+/** The session's model choices, from its config options or its (older) models list. */
+export function sessionModels(response: { configOptions?: acp.NewSessionResponse["configOptions"]; models?: UnstableModels | null }): { current?: string; options: { value: string; label: string }[]; configId?: string } | null {
+    const option = response.configOptions?.find((o) => o.type === "select" && (o.id === "model" || o.category === "model") && o.id !== "provider");
+    if (option && option.type === "select") {
+        return { current: String(option.currentValue), options: selectValues(option).map((v) => ({ value: v.value, label: v.name })), configId: option.id };
+    }
+    const models = response.models;
+    if (models?.availableModels?.length) {
+        return { current: models.currentModelId, options: models.availableModels.map((m) => ({ value: m.modelId, label: m.name ?? m.modelId })) };
+    }
+    return null;
+}
+
+/** Writes an added agent's settings files under HOME, never outside it. */
+export async function writeHomeFiles(files: Record<string, string> | undefined, home = process.env.HOME ?? homedir()) {
+    for (const [rel, contents] of Object.entries(files ?? {})) {
+        const file = path.resolve(home, rel);
+        if (!file.startsWith(path.resolve(home) + path.sep)) continue;
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeFile(file, contents);
+    }
+}
 
 /**
  * Gemini CLI has no ACP option for how hard it thinks, so the chat box's effort
@@ -143,20 +198,38 @@ async function startResumedSession(
     return attachSession.call(ctx, { sessionId, ...loadResponse });
 }
 
+/**
+ * Gemini CLI, or with `launch` any agent added under Settings > Agents. Only
+ * Gemini gets its own extras (effort through its settings file, subagents from
+ * its chat logs, a pinned model); the rest get the session's model, if chosen,
+ * through ACP itself.
+ */
 export class AcpAdapter implements RunAdapter {
-    /** The session's "/model" choice; otherwise GEMINI_MODEL or the pinned flash model. */
-    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = []) {}
+    /** The session's "/model" choice; for Gemini, otherwise GEMINI_MODEL or the pinned flash model. */
+    constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = [], private launch?: AcpLaunch) {}
 
     private process?: ChildProcessByStdio<Writable, Readable, null>;
     private ctx?: acp.ClientContext;
     private sessionId?: SessionId;
 
     async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
-        await writeGeminiEffort(this.effort).catch((err) => console.error("could not set Gemini effort:", err));
-        this.process = spawn("gemini", ["--acp"], {
-            cwd: "/workspace",
-            stdio: ["pipe", "pipe", "inherit"],
-        });
+        const launch = this.launch;
+        const cwd = launch?.cwd ?? "/workspace";
+        if (launch) {
+            if (!existsSync(launch.command)) {
+                throw new Error(`${launch.name} isn't installed in the sandbox image yet. Settings > Sandbox tools shows the build; it starts a few seconds after the agent is added.`);
+            }
+            await writeHomeFiles(launch.homeFiles);
+            // Each turn starts clean; the earlier conversation comes in the prompt.
+            resume = undefined;
+        } else {
+            await writeGeminiEffort(this.effort).catch((err) => console.error("could not set Gemini effort:", err));
+        }
+        this.process = launch
+            ? launch.pipes
+                ? spawn("sh", ["-c", 'cat | "$0" | cat', launch.command], { cwd, stdio: ["pipe", "pipe", "inherit"] })
+                : spawn(launch.command, [], { cwd, stdio: ["pipe", "pipe", "inherit"] })
+            : spawn("gemini", ["--acp"], { cwd, stdio: ["pipe", "pipe", "inherit"] });
 
         const input = Writable.toWeb(this.process.stdin);
         const output = Readable.toWeb(this.process.stdout) as ReadableStream<Uint8Array>;
@@ -187,22 +260,28 @@ export class AcpAdapter implements RunAdapter {
             .connectWith(stream, async (clientCtx) => {
                 this.ctx = clientCtx;
 
-                await clientCtx.request(acp.methods.agent.initialize, {
+                const init = await clientCtx.request(acp.methods.agent.initialize, {
                     protocolVersion: acp.PROTOCOL_VERSION,
                     clientCapabilities: { fs: { readTextFile: false, writeTextFile: false } },
                 });
 
+                // An API key in the environment is one of several sign-ins some agents
+                // offer; pick it, or they fall back to a browser sign-in nobody can do.
+                if (launch?.authMethodId && init.authMethods?.some((m) => m.id === launch.authMethodId)) {
+                    await clientCtx.request(acp.methods.agent.authenticate, { methodId: launch.authMethodId as acp.AuthMethodId });
+                }
+
                 const mcpServers = acpMcpServers(this.mcp) as acp.McpServer[];
                 const session = resume
-                    ? await startResumedSession(clientCtx, resume as SessionId, "/workspace", mcpServers)
-                    : await clientCtx.buildSession({ cwd: "/workspace", mcpServers }).start();
+                    ? await startResumedSession(clientCtx, resume as SessionId, cwd, mcpServers)
+                    : await clientCtx.buildSession({ cwd, mcpServers }).start();
 
-                // Subagents' own work, from their chat logs, every half second.
+                // Subagents' own work, from Gemini's chat logs, every half second.
                 const subagents = new GeminiSubagents();
                 subagents.sessionId = session.sessionId;
                 let polling = false;
                 const pollSubagents = async () => {
-                    if (polling) return;
+                    if (polling || launch) return;
                     polling = true;
                     push(await subagents.poll().catch(() => []));
                     polling = false;
@@ -213,14 +292,18 @@ export class AcpAdapter implements RunAdapter {
                     this.sessionId = session.sessionId;
                     push([{ kind: "status", data: { type: "acp.session", sessionId: session.sessionId } }]);
 
-                    // Gemini's "auto" router sends free-tier keys to models they have no
-                    // quota for (the pro models have a free limit of 0) and then retries
-                    // for minutes, so pin a fast flash model. GEMINI_MODEL=auto opts out.
-                    const model = this.model ?? process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
-                    if (model !== "auto") {
-                        await clientCtx
-                            .request("session/set_model", { sessionId: session.sessionId, modelId: model })
-                            .catch((err) => console.error("session/set_model failed:", err));
+                    if (launch) {
+                        push(await this.chooseModel(clientCtx, session));
+                    } else {
+                        // Gemini's "auto" router sends free-tier keys to models they have no
+                        // quota for (the pro models have a free limit of 0) and then retries
+                        // for minutes, so pin a fast flash model. GEMINI_MODEL=auto opts out.
+                        const model = this.model ?? process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+                        if (model !== "auto") {
+                            await clientCtx
+                                .request("session/set_model", { sessionId: session.sessionId, modelId: model })
+                                .catch((err) => console.error("session/set_model failed:", err));
+                        }
                     }
 
                     // `session/load` replays the whole earlier conversation as updates.
@@ -287,6 +370,32 @@ export class AcpAdapter implements RunAdapter {
         }
 
         await connection;
+    }
+
+    /**
+     * Switches an added agent to the session's "/model" choice, and reports the
+     * models it offers so the chat's model menu can list them.
+     */
+    private async chooseModel(ctx: acp.ClientContext, session: acp.ActiveSession): Promise<NormalizedEvent[]> {
+        const models = sessionModels(session.newSessionResponse as Parameters<typeof sessionModels>[0]);
+        let current = models?.current;
+        if (this.model && this.model !== current) {
+            try {
+                if (models?.configId) {
+                    await ctx.request("session/set_config_option", { sessionId: session.sessionId, configId: models.configId, value: this.model });
+                } else {
+                    await ctx.request("session/set_model", { sessionId: session.sessionId, modelId: this.model });
+                }
+                current = this.model;
+            } catch (err) {
+                const known = models?.options.map((o) => o.value).slice(0, 12).join(", ");
+                return [
+                    ...(models ? [{ kind: "status" as const, data: { type: "models", current, options: models.options } }] : []),
+                    { kind: "text", data: `Couldn't switch to the model "${this.model}" (${err instanceof Error ? err.message : String(err)}), so this turn uses ${current ?? "the agent's default"}.${known ? ` It offers: ${known}.` : ""}\n\n` },
+                ];
+            }
+        }
+        return models ? [{ kind: "status", data: { type: "models", current, options: models.options } }] : [];
     }
 
     async interrupt(): Promise<void> {

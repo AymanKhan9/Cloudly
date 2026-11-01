@@ -4,7 +4,8 @@ import path from "node:path";
 
 import { type Workspace } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
-import { config } from "@repo/db";
+import { isProviderHarness, launcherPath } from "@repo/shared/providers";
+import { config, enabledProvider, providerRunCredentials, providerEnvProblem } from "@repo/db";
 import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR, sandboxTrustFlags } from "./egress";
 import { placeholderCodexAuth } from "./egress-proxy";
 
@@ -35,7 +36,30 @@ interface ControlConfig{
     mcpServers?:{ name: string; url: string }[],
     desktop?:{ password: string },
     context?:boolean,
-    research?:boolean
+    research?:boolean,
+    acp?:AcpLaunchConfig,
+    sessions?:boolean,
+    ask?:boolean
+}
+
+/** How the runner starts an added agent (see @repo/shared/providers). */
+export interface AcpLaunchConfig {
+    name: string;
+    command: string;
+    authMethodId?: string;
+    /** Written under HOME before it starts. */
+    homeFiles?: Record<string, string>;
+    /** Started behind ordinary pipes. */
+    pipes?: boolean;
+}
+
+/** An added agent's launch, from Settings > Agents. */
+export async function acpLaunch(harness: string): Promise<AcpLaunchConfig | undefined> {
+    if (!isProviderHarness(harness)) return undefined;
+    const provider = await enabledProvider(harness);
+    if (!provider) throw new Error(`The agent "${harness}" isn't added in Cloudly, or is turned off. See Settings > Agents.`);
+    const { launch } = provider.spec;
+    return { name: provider.name, command: launcherPath(provider.id), authMethodId: launch.authMethodId, homeFiles: launch.homeFiles, pipes: launch.pipes };
 }
 
 export interface ContainerOptions {
@@ -67,6 +91,10 @@ export interface ContainerOptions {
     mounts?: [string, string][];
     /** A research turn: the agent's own web search on. */
     research?: boolean;
+    /** Host dir mounted at /sessions: the user's other sessions this one may see. */
+    sessionsDir?: string;
+    /** Host dir mounted at /ask, where ask_user leaves the agent's question. */
+    askDir?: string;
 }
 
 /** The gateway URL agents use for a connected MCP server. */
@@ -146,6 +174,7 @@ export async function credentialFlags(harness: string): Promise<{
     /** Host dir holding Codex's auth.json; saved back after the run. */
     codexHome?: string;
 }> {
+    if (isProviderHarness(harness)) return providerCredentialFlags(harness);
     const required = HARNESS_CREDENTIALS[harness];
     if (!required) {
         throw new Error(`unsupported harness: ${harness}`);
@@ -188,6 +217,25 @@ export async function credentialFlags(harness: string): Promise<{
     return { flags, env, codexHome };
 }
 
+/**
+ * An added agent's keys, as placeholders the egress proxy swaps for the real
+ * values on requests to each key's hosts, plus its plain settings.
+ */
+async function providerCredentialFlags(harness: string): Promise<{ flags: string[]; env: Record<string, string> }> {
+    const provider = await enabledProvider(harness);
+    if (!provider) throw new Error(`The agent "${harness}" isn't added in Cloudly, or is turned off. See Settings > Agents.`);
+    const { resolved, missing } = await providerRunCredentials(harness);
+    if (missing.length) {
+        throw new Error(`${provider.name} needs ${missing.map((c) => `a ${c.label}`).join(" and ")}. Add it under Settings > Agents.`);
+    }
+    // Settings from the registry can't take over the proxy, CA or PATH variables Cloudly sets.
+    const env: Record<string, string> = Object.fromEntries(
+        Object.entries(provider.spec.launch.env ?? {}).filter(([name]) => !providerEnvProblem(name)),
+    );
+    for (const c of resolved) env[c.env] = c.placeholder;
+    return envFlags(env);
+}
+
 /** Codex's home for ChatGPT sign-ins: its sessions, a placeholder auth.json, and its config. */
 export const CODEX_HOME = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "codex-home");
 
@@ -224,6 +272,9 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             desktop: options.desktopPassword ? { password: options.desktopPassword } : undefined,
             context: Boolean(options.contextDir),
             research: options.research,
+            acp: await acpLaunch(harness),
+            sessions: Boolean(options.sessionsDir),
+            ask: Boolean(options.askDir),
         };
 
         await writeFile(
@@ -271,6 +322,8 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
 
             ...(options.filesDir ? ["-v", `${options.filesDir}:/files`] : []),
             ...(options.contextDir ? ["-v", `${options.contextDir}:/context`] : []),
+            ...(options.sessionsDir ? ["-v", `${options.sessionsDir}:/sessions`] : []),
+            ...(options.askDir ? ["-v", `${options.askDir}:/ask`] : []),
             ...(options.mounts ?? []).flatMap(([host, inside]) => ["-v", `${host}:${inside}`]),
 
             ...runEnv.flags,

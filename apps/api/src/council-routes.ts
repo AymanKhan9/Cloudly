@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { prisma, budgetStatus, harnessUsesPlan, Prisma } from "@repo/db";
 import type { AuthEnv } from "./middleware/auth_middleware";
-import { HarnessId, harnessName } from "./harnesses";
+import { HarnessId, harnessName, isHarness } from "./harnesses";
 
 // A council: several agents answer one question in rounds (research, then
 // cross-review, then final positions) and a chair writes the report. The worker
@@ -41,8 +41,10 @@ async function typicalTurnCost(userId: string, harness: string): Promise<number 
 
 /** How many turns a council takes, and roughly what they cost, from the user's history. */
 councils.get("/estimate", async (c) => {
-  const members = (c.req.query("members") ?? "").split(",").filter((m) => HarnessId.safeParse(m).success);
-  const chair = HarnessId.safeParse(c.req.query("chair")).success ? c.req.query("chair")! : members[0];
+  const members: string[] = [];
+  for (const m of (c.req.query("members") ?? "").split(",")) if (m && (await isHarness(m))) members.push(m);
+  const asked = c.req.query("chair");
+  const chair = asked && (await isHarness(asked)) ? asked : members[0];
   const rounds = Math.min(3, Math.max(1, Number(c.req.query("rounds")) || 3));
   const turns = [...members.flatMap((m) => Array(rounds).fill(m) as string[]), ...(chair ? [chair] : [])];
   let usd = 0;

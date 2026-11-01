@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { isProviderHarness, providerDisplayName } from "@repo/shared/providers";
 import { prisma } from "./client";
 
 // Shared context for a repo (opt-in). Every agent working on the repo reads the
@@ -21,7 +22,7 @@ const HARNESS_NAMES: Record<string, string> = {
   "native-codex": "Codex",
   "gemini-acp": "Gemini CLI",
 };
-export const authorName = (author: string) => HARNESS_NAMES[author] ?? author;
+export const authorName = (author: string) => HARNESS_NAMES[author] ?? (isProviderHarness(author) ? providerDisplayName(author) : author);
 
 export async function contextEnabled(repo: string): Promise<boolean> {
   return Boolean((await prisma.repoContext.findUnique({ where: { repo } }))?.enabled);

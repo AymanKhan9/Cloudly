@@ -124,3 +124,60 @@ test("desktop and previews hand out relay links only for the owner's live contai
   expect((await prisma.preview.findUniqueOrThrow({ where: { id: preview.id } })).status).toBe("stopping");
   await prisma.run.delete({ where: { id: run.id } });
 });
+
+test("a session's scope for other sessions can be changed, and a turn shows the session it came from", async () => {
+  const mk = (title: string) =>
+    prisma.thread.create({ data: { userId, repo: "acme/peers", baseBranch: "main", harness: "native-claude", title, branch: `b-${title}` } });
+  const asker = await mk("Asker");
+  const target = await mk("Target");
+  await prisma.run.create({
+    data: { status: "queued", repo: "acme/peers", baseBranch: "main", prompt: "A message from another session", harness: "native-claude", userId, threadId: target.id, fromThreadId: asker.id, hops: 1, replyToThreadId: asker.id },
+  });
+
+  const view = await (await call(`/threads/${target.id}`)).json();
+  expect(view.thread.peers).toBe("repo");
+  expect(view.turns[0]).toMatchObject({ from: { threadId: asker.id, title: "Asker" }, replyToThreadId: asker.id, hops: 1 });
+
+  expect((await call(`/threads/${target.id}`, { method: "PATCH", json: { peers: "all" } })).status).toBe(200);
+  expect((await prisma.thread.findUnique({ where: { id: target.id } }))!.peers).toBe("all");
+  expect((await call(`/threads/${target.id}`, { method: "PATCH", json: { peers: "everyone" } })).status).toBe(400);
+});
+
+test("sidebar state: pin, settle, snooze, archive, rename, read and unread, and delete", async () => {
+  const t = await prisma.thread.create({ data: { userId, repo: "acme/sidebar", baseBranch: "main", harness: "native-claude", title: "Sidebar", branch: "b-sidebar" } });
+  const row = async () => ((await (await call("/threads")).json()).threads as any[]).find((x) => x.id === t.id);
+
+  // A turn that ended after the user last looked is unread; looking reads it.
+  const run = await prisma.run.create({ data: { status: "succeeded", repo: t.repo, baseBranch: "main", prompt: "x", harness: t.harness, userId, threadId: t.id } });
+  expect(await row()).toMatchObject({ unread: true, lastStatus: "succeeded" });
+  await call(`/threads/${t.id}`, { method: "PATCH", json: { seen: true } });
+  expect((await row()).unread).toBe(false);
+  await call(`/threads/${t.id}`, { method: "PATCH", json: { seen: false } });
+  expect((await row()).unread).toBe(true);
+
+  await call(`/threads/${t.id}`, { method: "PATCH", json: { pinned: true, settled: true, title: "Renamed", seen: true } });
+  expect(await row()).toMatchObject({ title: "Renamed", unread: false });
+  expect((await row()).pinnedAt).not.toBeNull();
+  expect((await row()).settledAt).not.toBeNull();
+
+  // Snoozed until later: hidden; once the time passes, back as unread.
+  const later = new Date(Date.now() + 3_600_000).toISOString();
+  await call(`/threads/${t.id}`, { method: "PATCH", json: { snoozeUntil: later } });
+  expect(await row()).toMatchObject({ snoozed: true, unread: false });
+  await prisma.thread.update({ where: { id: t.id }, data: { snoozedUntil: new Date(Date.now() - 1000), seenAt: new Date(Date.now() - 5000) } });
+  expect(await row()).toMatchObject({ snoozed: false, unread: true });
+
+  // A new message brings it back from settled, snoozed and archived, and answers the agent's question.
+  await call(`/threads/${t.id}`, { method: "PATCH", json: { archived: true, snoozeUntil: later } });
+  await prisma.thread.update({ where: { id: t.id }, data: { needsInput: "Which date format?" } });
+  expect((await call(`/threads/${t.id}/messages`, { method: "POST", json: { prompt: "ISO 8601" } })).status).toBe(201);
+  const after = await prisma.thread.findUnique({ where: { id: t.id } });
+  expect(after).toMatchObject({ settledAt: null, snoozedUntil: null, archivedAt: null, needsInput: null });
+
+  // Not while a turn runs; then gone, turns and all.
+  expect((await call(`/threads/${t.id}`, { method: "DELETE" })).status).toBe(409);
+  await prisma.run.updateMany({ where: { threadId: t.id }, data: { status: "cancelled" } });
+  expect((await call(`/threads/${t.id}`, { method: "DELETE" })).status).toBe(204);
+  expect(await prisma.run.findUnique({ where: { id: run.id } })).toBeNull();
+  expect((await call(`/threads/${t.id}`, { method: "DELETE" })).status).toBe(404);
+});

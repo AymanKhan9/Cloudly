@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { prisma, budgetStatus, harnessUsesPlan, gatewayMcpServers } from "@repo/db";
+import { isProviderHarness, providerDisplayName } from "@repo/shared/providers";
 import type { Run } from "@repo/shared/run";
 import type { RunEvent } from "@repo/shared/run-event";
 
@@ -25,7 +26,7 @@ import { sandboxImage } from "./sandbox-image";
 
 const NAMES: Record<string, string> = { "native-claude": "Claude", "native-codex": "Codex (GPT)", "gemini-acp": "Gemini" };
 const SLUGS: Record<string, string> = { "native-claude": "claude", "native-codex": "codex", "gemini-acp": "gemini" };
-export const memberName = (h: string) => NAMES[h] ?? h;
+export const memberName = (h: string) => NAMES[h] ?? (isProviderHarness(h) ? providerDisplayName(h) : h);
 const slug = (h: string) => SLUGS[h] ?? h.replace(/[^a-z0-9-]/gi, "-");
 
 /** Where the council's files are inside the sandbox: inside /workspace, so every agent may read them. */

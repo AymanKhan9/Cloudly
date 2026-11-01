@@ -1,4 +1,5 @@
 import type { RunEvent } from "@repo/shared/run-event";
+import { isAcpHarness } from "@repo/shared/providers";
 
 /**
  * The id each harness needs to resume a conversation, read from the events it
@@ -19,11 +20,10 @@ export function agentSessionIdFromEvent(
       return event.kind === "status" && data.type === "thread.started" && typeof data.thread_id === "string"
         ? data.thread_id
         : null;
-    case "gemini-acp":
-      return event.kind === "status" && data.type === "acp.session" && typeof data.sessionId === "string"
+    default:
+      // Every ACP agent: Gemini CLI and the ones added under Settings > Agents.
+      return isAcpHarness(harness) && event.kind === "status" && data.type === "acp.session" && typeof data.sessionId === "string"
         ? data.sessionId
         : null;
-    default:
-      return null;
   }
 }

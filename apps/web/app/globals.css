@@ -1606,7 +1606,8 @@ kbd,
 
 .rail-item {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 2px 10px;
   padding: 8px 10px;
   border-radius: var(--r-control);
@@ -1633,7 +1634,10 @@ kbd,
 }
 
 .rail-item .m {
-  grid-column: 2;
+  grid-column: 2 / span 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-3);
   white-space: nowrap;
@@ -2652,6 +2656,7 @@ button.pill:disabled {
 }
 
 .dock .composer,
+.dock .needs-you,
 .dock .composer-note {
   max-width: 760px;
   margin-left: auto;
@@ -4528,4 +4533,558 @@ button.pill[aria-pressed="true"] .pill-text {
   font-size: 13.5px;
   max-height: 520px;
   overflow: auto;
+}
+
+/* ---------- Settings: agents ---------- */
+.mask-icon {
+  display: inline-block;
+  flex: none;
+  background-color: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.agent-item + .agent-item,
+.agent-item + .panel-row {
+  border-top: 1px solid var(--border);
+}
+
+.agent-head {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 18px;
+}
+
+.agent-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.agent-meta .name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.agent-meta .state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.agent-meta .state[data-set] {
+  color: var(--ok);
+}
+
+.agent-meta .state[data-locked] {
+  color: var(--warn);
+}
+
+.agent-body {
+  display: grid;
+  gap: 16px;
+  padding: 4px 18px 18px 62px;
+}
+
+.agent-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 8px 16px;
+  align-items: start;
+}
+
+.agent-key .name {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.agent-key .state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.agent-key .state[data-set] {
+  color: var(--ok);
+}
+
+.agent-key .state[data-locked] {
+  color: var(--warn);
+}
+
+.agent-key form {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-key form .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-key .err {
+  grid-column: 1 / -1;
+}
+
+.agent-define {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.agent-hosts {
+  display: grid;
+  gap: 6px;
+}
+
+.agent-hosts-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* The add-agent dialog */
+.agent-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(820px, calc(100dvh - 32px));
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.agent-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-dialog::backdrop {
+  background: rgba(8, 10, 13, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.agent-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 12px;
+}
+
+.agent-dialog-head h2 {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 22px;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.stepper li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.stepper li[aria-current="step"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.stepper .num {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 12px;
+}
+
+.stepper li[aria-current="step"] .num,
+.stepper li[data-done] .num {
+  border-color: var(--text);
+}
+
+.agent-dialog-body {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px 22px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.agent-dialog-foot {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.agent-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease);
+}
+
+button.agent-tile:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+}
+
+.agent-tile[aria-pressed="true"] {
+  border-color: var(--text);
+  background: var(--surface);
+}
+
+.agent-tile:disabled,
+.agent-tile[data-builtin],
+.agent-tile[data-unavailable] {
+  color: var(--text-2);
+}
+
+.agent-tile:disabled {
+  cursor: default;
+}
+
+.agent-tile .tile-name {
+  flex: 1;
+}
+
+.tile-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.agent-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.agent-or::before,
+.agent-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.agent-search {
+  display: flex;
+  gap: 8px;
+}
+
+.input-icon {
+  position: relative;
+  flex: 1;
+}
+
+.input-icon svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.input-icon .input {
+  padding-left: 34px;
+}
+
+.registry-list {
+  display: grid;
+}
+
+.registry-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 2px;
+  color: var(--text);
+}
+
+.registry-row + .registry-row {
+  border-top: 1px solid var(--border);
+}
+
+.registry-meta .name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.registry-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-form {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .agent-tiles,
+  .agent-key,
+  .agent-define {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-head {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .agent-head .mcp-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .agent-body {
+    padding-left: 18px;
+  }
+  .agent-search {
+    flex-direction: column;
+  }
+}
+
+/* A turn another session asked for */
+.msg-user:has(.msg-from) {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.msg-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.msg-from:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+/* A session's right-click menu */
+.ctx-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 200px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+
+.ctx-item svg {
+  flex: none;
+  color: var(--text-2);
+}
+
+.ctx-item:hover,
+.ctx-item:focus-visible,
+.ctx-item[aria-expanded="true"] {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.ctx-item .ctx-caret {
+  margin-left: auto;
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--border);
+}
+
+.ctx-said {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 70;
+  transform: translate(-50%, 8px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+}
+
+.ctx-said[data-show] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-said {
+    transition: none;
+  }
+}
+
+.ctx-item[data-danger] {
+  color: var(--danger);
+}
+
+.ctx-item[data-danger] svg {
+  color: var(--danger);
+}
+
+/* Sidebar: unread, needs you, folded sections, repo filter, rename */
+.rail-item[data-unread] .t {
+  font-weight: 600;
+}
+
+.rail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--text);
+}
+
+.rail-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rail-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-fold-head:hover {
+  color: var(--text);
+}
+
+.rail-fold-head .num {
+  margin-left: auto;
+  padding-right: 2px;
+}
+
+.rail-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 2px 0;
+  padding: 2px 2px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.rail-filter .mono {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-filter .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.rail-rename .input {
+  grid-column: 2 / span 2;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+
+.confirm-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.confirm-dialog h2 {
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.needs-you {
+  margin-bottom: 8px;
 }

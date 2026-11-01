@@ -1,3 +1,5 @@
+import { isAcpHarness } from "@repo/shared/providers";
+
 export interface StreamEvent {
   seq: number;
   kind: "status" | "text" | "tool_call" | "tool_result" | "raw" | "error" | "done" | "pr";
@@ -52,6 +54,7 @@ export function describeEvent(e: StreamEvent): string {
       if (d.subtype === "init") return `Session started${d.model ? ` · ${d.model}` : ""}`;
       if (d.type === "thread.started") return "Thread started";
       if (d.type === "turn.started") return "Turn started";
+      if (d.type === "models") return `Model ${d.current ?? "default"}`;
       return clip(str(d));
     case "done":
       return typeof d.totalCostUsd === "number" ? "Turn complete · cost reported" : "Turn complete";
@@ -118,11 +121,11 @@ const idOf = (d: Record<string, any>) => (typeof d.toolUseId === "string" ? d.to
  * Results pair with their call by id; all three agents send one (Claude's
  * tool_use id, Codex's item id, ACP's toolCallId). A call seen again under the
  * same id (Codex reports a command when it starts and as it runs) updates its row.
- * Gemini streams its reply in fragments that join with nothing between them;
+ * ACP agents (Gemini and the added ones) stream a reply in fragments that join with nothing between them;
  * Claude and Codex emit whole messages that need a paragraph break.
  */
 export function buildBlocks(events: StreamEvent[], harness: string): Block[] {
-  const joiner = harness === "gemini-acp" ? "" : "\n\n";
+  const joiner = isAcpHarness(harness) ? "" : "\n\n";
   const root: Block[] = [];
   const subagents = new Map<string, SubagentBlock>();
   const calls = new Map<string, ToolItem>();

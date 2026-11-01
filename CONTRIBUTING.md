@@ -47,7 +47,9 @@ CI runs the same on every pull request. If you change how runs work, also try on
 
 ## Adding an agent
 
-An agent is an adapter that turns its CLI or SDK into Cloudly's event stream (`status`, `text`, `tool_call`, `tool_result`, `error`, `done`; see `packages/shared/src/run-event.ts`).
+Most agents need no code. If the agent speaks the [Agent Client Protocol](https://agentclientprotocol.com), add it under **Settings → Agents**, from the ACP registry or as a command. To offer it to everyone by name, with its keys and hosts filled in, add an entry to `PROVIDER_CATALOG` in `packages/shared/src/providers.ts`. Give its keys' hosts, the hosts it needs beyond those, and `authMethodId` if it offers several sign-ins over ACP. Then try one real turn: start it through the worker with a fake key and check the egress proxy's log (`docker logs cloudly-egress`) shows the placeholder filled on the vendor's host. An agent that ignores `HTTPS_PROXY`, or only signs in through a browser, can't run in the sandbox.
+
+A built-in agent with its own SDK is an adapter that turns its CLI or SDK into Cloudly's event stream (`status`, `text`, `tool_call`, `tool_result`, `error`, `done`; see `packages/shared/src/run-event.ts`).
 
 1. **Adapter:** implement `RunAdapter` (`packages/runner/src/adapter.ts`) in `packages/runner/src/adapters/`, with a test for the event mapping. If the agent speaks the [Agent Client Protocol](https://agentclientprotocol.com), extend the ACP adapter instead of writing a new one.
 2. **Register it** in `packages/runner/src/index.ts` and give it a harness id.

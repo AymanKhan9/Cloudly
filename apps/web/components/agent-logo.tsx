@@ -1,6 +1,6 @@
 "use client";
 
-import type { HarnessId } from "@/lib/harness";
+import { harnessById, type HarnessId } from "@/lib/harness";
 
 // Brand marks. The Claude path is from Simple Icons (CC0, simpleicons.org). Codex and
 // Gemini are their official colour marks from LobeHub's icon set (MIT,
@@ -17,13 +17,30 @@ const BRAND: Record<HarnessId, { provider: string; color?: string; path?: string
 };
 
 export function providerOf(harness: string) {
-  return BRAND[harness as HarnessId]?.provider ?? "";
+  return BRAND[harness as HarnessId]?.provider ?? (harness.startsWith("acp-") ? "Added agent" : "");
 }
 
-/** The model vendor's logo for an agent, in its brand color. */
-export function AgentLogo({ harness, size = 16 }: { harness: string; size?: number }) {
+/**
+ * A one-color mark (catalog and ACP registry icons use currentColor), drawn as a
+ * mask so it takes the text color in light and dark themes alike.
+ */
+export function MaskIcon({ src, size = 16 }: { src: string; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="mask-icon"
+      style={{ width: size, height: size, maskImage: `url("${src}")`, WebkitMaskImage: `url("${src}")` }}
+    />
+  );
+}
+
+/** The model vendor's logo for an agent, in its brand color; an added agent's own mark. */
+export function AgentLogo({ harness, size = 16, icon }: { harness: string; size?: number; icon?: string | null }) {
   const b = BRAND[harness as HarnessId];
-  if (!b) return null;
+  if (!b) {
+    const src = icon ?? harnessById(harness).icon;
+    return src ? <MaskIcon src={src} size={size} /> : null;
+  }
   // eslint-disable-next-line @next/next/no-img-element -- a 16px static mark needs no image optimisation
   if (b.src) return <img src={b.src} width={size} height={size} alt="" aria-hidden="true" style={{ flex: "none", borderRadius: 3 }} />;
   return (

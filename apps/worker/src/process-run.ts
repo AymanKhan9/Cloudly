@@ -26,6 +26,8 @@ import { patchStats } from "./patch";
 import { ensureRelay } from "./previews";
 import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./shared-context";
 import { processCouncilTurn } from "./council";
+import { prepareSessions, collectOutbox, deliverMessages, sendReply, destroySessions, type SessionsDir } from "./peer-sessions";
+import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -127,6 +129,8 @@ export async function processRun(
   let ws: Workspace | undefined;
   let files: FilesDir | undefined;
   let context: ContextDir | null = null;
+  let sessions: SessionsDir | null = null;
+  let askDir: string | undefined;
   let publishResult: PublishResult | undefined;
   // The container's stderr is usually empty; the agent's own error event isn't.
   let agentError: string | undefined;
@@ -207,7 +211,16 @@ export async function processRun(
     }
     context = await prepareContext(run.repo, thread?.id);
     if (context) containerOptions.contextDir = context.dir;
-    const extras = runExtras({ mcp, secrets, files: true, desktop: Boolean(thread?.desktop), context: context?.markdown });
+    // The user's other sessions, to read and message (see peer-sessions.ts).
+    sessions = thread ? await prepareSessions(run, thread) : null;
+    if (sessions) containerOptions.sessionsDir = sessions.dir;
+    // ask_user, so the agent can flag the session as needing the user.
+    if (thread) containerOptions.askDir = askDir = await prepareAsk();
+    const extras = runExtras({
+      mcp, secrets, files: true, desktop: Boolean(thread?.desktop), context: context?.markdown,
+      sessions: sessions ? { count: sessions.index.sessions.length, scope: sessions.index.scope, canSend: sessions.index.canSend > 0 } : undefined,
+      ask: Boolean(askDir),
+    });
 
     const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
     // A command goes to the agent as typed; history in front of it would turn it into text.
@@ -280,6 +293,22 @@ export async function processRun(
         usage = chat ? geminiContext(chat) : null;
       }
       if (usage) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "context", ...usage } }]);
+    }
+
+    // A question for the user: the session shows as needing them.
+    if (askDir && thread) {
+      const question = await recordQuestion(thread.id, askDir).catch((err) => (console.error(`run ${run.id}: couldn't save its question:`, err), null));
+      if (question) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "ask_user", question } }]);
+    }
+
+    // Messages the agent sent other sessions become their next turns.
+    if (sessions && thread) {
+      try {
+        const sent = await deliverMessages(run, thread, await collectOutbox(sessions));
+        if (sent.length) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "sessions.sent", to: sent } }]);
+      } catch (err) {
+        console.error(`run ${run.id}: couldn't deliver its messages to other sessions:`, err);
+      }
     }
 
     // The container has exited, so /files can be read without the agent changing it underneath.
@@ -380,6 +409,10 @@ export async function processRun(
     if (ws) await destroyWorkspace(ws);
     if (files) await destroyFilesDir(files);
     if (context) await destroyContext(context);
+    if (sessions) await destroySessions(sessions);
+    if (askDir) await destroyAsk(askDir);
     if (publishResult) await destroyPublish(publishResult);
+    // A turn answering another session's message: its answer goes back there.
+    if (run.replyToThreadId) await sendReply(run.id).catch((err) => console.error(`run ${run.id}: couldn't send its reply:`, err));
   }
 }
