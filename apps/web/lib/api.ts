@@ -117,7 +117,9 @@ export interface Turn {
    * review: the reviewer looked at the session's change; review_fix: the author
    * was sent the reviewer's blocking findings; audit: the whole repo was reviewed.
    */
-  kind?: "turn" | "fix" | "review" | "review_fix" | "audit";
+  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix";
+  /** What on GitHub started the turn, when something did. */
+  trigger?: { type: "issue" | "mention" | "pr_review" | "ci"; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */
   harness?: string;
   /** A review's or audit's findings, as text. */
@@ -139,6 +141,13 @@ export interface RepoCheckSettings {
     reviewer: string | null;
     reviewRounds: number;
     reviewPostToGitHub: boolean;
+    triggerHarness: string | null;
+    issueLabel: string;
+    onIssueLabel: boolean;
+    onMention: boolean;
+    onPrReview: boolean;
+    fixCi: boolean;
+    ciFixAttempts: number;
   };
   last: { checkCommand: string | null; checkStatus: string; createdAt: string } | null;
 }
@@ -161,6 +170,13 @@ export interface SessionChanges {
   findings: ReviewFinding[];
   /** The repo's reviewer, or null when it has none. */
   reviewer: string | null;
+}
+
+export interface WebhookStatus {
+  url: string;
+  secretSet: boolean;
+  appSlug: string | null;
+  deliveries: { id: string; event: string; action: string | null; status: string; note: string | null; receivedAt: string }[];
 }
 
 export interface ThreadView {

@@ -180,3 +180,78 @@ export async function postPullRequestReview(params: PullRequestReviewParams): Pr
         return { url: r.data.html_url, lineComments: 0 };
     }
 }
+
+// What the webhook handler (webhooks.ts) asks of GitHub. An interface so tests
+// can stand in for GitHub.
+
+export interface FailedCheck {
+    name: string;
+    url: string | null;
+    title: string | null;
+    summary: string | null;
+    annotations: { path: string; line: number | null; message: string }[];
+    /** The end of the job's log, for GitHub Actions. */
+    log: string | null;
+}
+
+export interface GitHubPort {
+    comment(owner: string, repo: string, issueNumber: number, body: string): Promise<void>;
+    react(owner: string, repo: string, commentId: number, content: "eyes" | "+1"): Promise<void>;
+    pullRequest(owner: string, repo: string, number: number): Promise<{ number: number; url: string; title: string; headRef: string; headRepo: string | null; baseRef: string; state: string }>;
+    reviewComments(owner: string, repo: string, number: number, reviewId: number): Promise<{ path: string; line: number | null; body: string }[]>;
+    failedChecks(owner: string, repo: string, suiteId: number): Promise<FailedCheck[]>;
+}
+
+const LOG_TAIL = 8000;
+
+export const github: GitHubPort = {
+    async comment(owner, repo, issueNumber, body) {
+        const client = await getOctokit();
+        await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { owner, repo, issue_number: issueNumber, body });
+    },
+    async react(owner, repo, commentId, content) {
+        const client = await getOctokit();
+        await client.request("POST /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions", { owner, repo, comment_id: commentId, content });
+    },
+    async pullRequest(owner, repo, number) {
+        const client = await getOctokit();
+        const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: number });
+        return {
+            number: data.number, url: data.html_url, title: data.title, state: data.state,
+            headRef: data.head.ref, headRepo: data.head.repo?.full_name ?? null, baseRef: data.base.ref,
+        };
+    },
+    async reviewComments(owner, repo, number, reviewId) {
+        const client = await getOctokit();
+        const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments", {
+            owner, repo, pull_number: number, review_id: reviewId, per_page: 100,
+        });
+        return data.map((c) => ({ path: c.path, line: (c as { line?: number | null }).line ?? null, body: c.body }));
+    },
+    async failedChecks(owner, repo, suiteId) {
+        const client = await getOctokit();
+        const { data } = await client.request("GET /repos/{owner}/{repo}/check-suites/{check_suite_id}/check-runs", {
+            owner, repo, check_suite_id: suiteId, filter: "latest", per_page: 50,
+        });
+        const failed = data.check_runs.filter((r) => r.conclusion === "failure" || r.conclusion === "timed_out");
+        const out: FailedCheck[] = [];
+        for (const r of failed.slice(0, 5)) {
+            let annotations: FailedCheck["annotations"] = [];
+            try {
+                const a = await client.request("GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations", { owner, repo, check_run_id: r.id, per_page: 30 });
+                annotations = a.data.map((x) => ({ path: x.path, line: x.start_line ?? null, message: x.message ?? "" }));
+            } catch {}
+            let log: string | null = null;
+            // A GitHub Actions check run's id is its job's id.
+            if (r.app?.slug === "github-actions") {
+                try {
+                    const l = await client.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner, repo, job_id: r.id });
+                    const text = typeof l.data === "string" ? l.data : new TextDecoder().decode(l.data as ArrayBuffer);
+                    log = text.length > LOG_TAIL ? text.slice(-LOG_TAIL) : text;
+                } catch {}
+            }
+            out.push({ name: r.name, url: r.html_url ?? null, title: r.output?.title ?? null, summary: r.output?.summary ?? null, annotations, log });
+        }
+        return out;
+    },
+};

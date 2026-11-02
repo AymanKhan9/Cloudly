@@ -25,8 +25,10 @@ export function buildManifest(suffix: string) {
     setup_url: `${api}/setup/github/installed`,
     public: false,
     request_oauth_on_install: false,
-    default_events: [] as string[],
-    default_permissions: { contents: "write", pull_requests: "write", metadata: "read" },
+    // GitHub triggers: labelled issues, @cloudly mentions, reviews and CI on Cloudly's pull requests.
+    hook_attributes: { url: `${api}/webhooks/github`, active: true },
+    default_events: ["issues", "issue_comment", "pull_request_review", "check_suite"],
+    default_permissions: { contents: "write", pull_requests: "write", metadata: "read", issues: "write", checks: "read", actions: "read" },
   };
 }
 
@@ -155,7 +157,7 @@ setup.get("/github/callback", async (c) => {
     return fail("github");
   }
   const app = (await res.json()) as Record<string, unknown>;
-  const { id, slug, client_id, client_secret, pem } = app;
+  const { id, slug, client_id, client_secret, pem, webhook_secret } = app;
   if (typeof id !== "number" || typeof slug !== "string" || typeof client_id !== "string" || typeof client_secret !== "string" || typeof pem !== "string") {
     console.error("manifest conversion response was missing fields:", Object.keys(app));
     return fail("github");
@@ -166,6 +168,7 @@ setup.get("/github/callback", async (c) => {
   await setSetting("GITHUB_CLIENT_ID", client_id);
   await setSetting("GITHUB_CLIENT_SECRET", client_secret);
   await setSetting("GITHUB_APP_PRIVATE_KEY", pem);
+  if (typeof webhook_secret === "string" && webhook_secret) await setSetting("GITHUB_WEBHOOK_SECRET", webhook_secret);
 
   // Next: GitHub's own screen to pick which repositories the app may touch.
   return c.redirect(`https://github.com/apps/${slug}/installations/new`);

@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretRight, GitDiff, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
+import { CaretRight, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import type { Turn } from "@/lib/api";
 import type { StreamEvent } from "@/lib/events";
 
@@ -67,5 +67,50 @@ export function ReviewResult({ turn, events, onOpen }: { turn: Turn; events: Str
       </div>
       {fixing ? <p className="hint">The blocking findings went back to the agent automatically.</p> : null}
     </div>
+  );
+}
+
+/** Where on GitHub a turn came from, above its message. */
+export function TriggerNote({ turn }: { turn: Turn }) {
+  const t = turn.trigger;
+  if (!t || t.type === "ci") return null;
+  const by = t.by ? `@${t.by}` : "Someone";
+  const text =
+    t.type === "issue"
+      ? `${by} labelled issue #${t.number}`
+      : t.type === "mention"
+        ? `${by} on GitHub, #${t.number}`
+        : `${by}'s review of #${t.number}${t.state === "changes_requested" ? ", changes requested" : ""}`;
+  return t.url ? (
+    <a className="msg-from" href={t.url} target="_blank" rel="noreferrer">
+      <GithubLogo size={14} />
+      {text}
+    </a>
+  ) : (
+    <span className="msg-from">
+      <GithubLogo size={14} />
+      {text}
+    </span>
+  );
+}
+
+/** A turn Cloudly started because CI failed on its pull request. */
+export function CiFixRequest({ turn, agent }: { turn: Turn; agent: string }) {
+  const attempt = /attempt (\d+) of (\d+)/.exec(turn.prompt.split("\n")[0] ?? "");
+  const checks = turn.trigger?.checks ?? [];
+  return (
+    <details className="msg-system">
+      <summary>
+        <Wrench size={14} />
+        CI failed{checks.length ? ` (${checks.join(", ")})` : ""}: Cloudly asked {agent} to fix it{attempt ? ` (attempt ${attempt[1]} of ${attempt[2]})` : ""}
+        <CaretRight size={12} weight="bold" className="chev" />
+      </summary>
+      {turn.trigger?.url ? (
+        <a href={turn.trigger.url} target="_blank" rel="noreferrer" className="hint">
+          The failing check on GitHub
+        </a>
+      ) : null}
+      <pre className="mono">{turn.prompt}</pre>
+    </details>
   );
 }

@@ -630,6 +630,29 @@ the user's focus in `task.md`, no diff, and no automatic fixes. The user ticks f
 Changes tab; `POST /threads/:id/feedback` turns them (plus line comments and a note) into one
 ordinary turn via `feedbackPrompt`.
 
+### GitHub triggers (webhooks)
+
+`POST /webhooks/github` (API, no session auth) checks `X-Hub-Signature-256` against
+`GITHUB_WEBHOOK_SECRET` with a constant-time compare, caps the body at 5 MB, and stores the
+delivery as a `WebhookDelivery` row keyed by `X-GitHub-Delivery`, so a redelivery is a no-op.
+Only `issues`, `issue_comment`, `pull_request_review` and `check_suite` are stored. It does
+nothing else, so it answers well inside GitHub's 10-second limit, and the API still never talks to
+the worker except through Postgres.
+
+The worker's webhook loop claims deliveries with `FOR UPDATE SKIP LOCKED` (a row stuck in
+`processing` for 10 minutes is reclaimed; three failures mark it `failed`) and `handleDelivery`
+(`webhooks.ts`) maps them to work. Anything a person starts (a label, a mention, a review) must come
+from a sender on `ALLOWED_GITHUB_LOGINS` whose account type isn't `Bot`; that also stops Cloudly's
+own reviews and comments from looping back. CI fixes need no sender but only apply to a thread's
+branch, only to the commit Cloudly last pushed for it, never while a turn is running, and at most
+`ciFixAttempts` since the last user turn. Every run created this way carries a unique `triggerKey`
+(the comment, review, issue delivery or commit), so a duplicate can't start a second turn even if
+two deliveries describe the same thing. Sessions on someone else's pull request use its branch and
+are refused for forks, since Cloudly can't push there. The GitHub calls (comments, 👀 reactions,
+review comments, check runs, annotations, job logs) are behind a `GitHubPort` so tests stand in for
+GitHub. New GitHub Apps get the webhook, these events, and `issues: write`, `checks: read`,
+`actions: read` from the manifest; older ones are upgraded by hand (Settings → GitHub triggers).
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

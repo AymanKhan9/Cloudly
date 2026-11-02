@@ -45,7 +45,7 @@ import { PreviewPanel } from "@/components/preview-panel";
 import { DesktopViewer } from "@/components/desktop-viewer";
 import { ContextPanel } from "@/components/context-panel";
 import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
-import { ReviewRequest, ReviewResult } from "@/components/review";
+import { ReviewRequest, ReviewResult, TriggerNote, CiFixRequest } from "@/components/review";
 import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
@@ -207,6 +207,8 @@ function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }:
     <article className="turn">
       {turn.kind === "fix" ? (
         <FixRequest turn={turn} agent={h.name} />
+      ) : turn.kind === "ci_fix" ? (
+        <CiFixRequest turn={turn} agent={h.name} />
       ) : turn.kind === "review" || turn.kind === "review_fix" ? (
         <ReviewRequest turn={turn} agent={harnessById(sessionHarness).name} reviewer={h.name} />
       ) : (
@@ -218,6 +220,7 @@ function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }:
             {turn.replyToThreadId ? ", which asked for a reply" : ""}
           </Link>
         ) : null}
+        <TriggerNote turn={turn} />
         {turn.kind === "audit" ? (
           <span className="msg-from">
             <MagnifyingGlass size={14} />

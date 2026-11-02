@@ -13,6 +13,7 @@ import { FilesPanel } from "@/components/files-panel";
 import { ContextSettings } from "@/components/context-settings";
 import { AgentsPanel } from "@/components/agents-panel";
 import { ChecksSettings } from "@/components/checks-settings";
+import { GitHubTriggers } from "@/components/github-triggers";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
@@ -176,6 +177,7 @@ export default function SettingsPage() {
       <EnvPanel />
 
       <ChecksSettings />
+      <GitHubTriggers />
 
       <RepoFilesSection />
 

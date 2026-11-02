@@ -13,6 +13,7 @@ const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const DEFAULTS = {
   checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600,
   reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
+  triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
 };
 
 function repoOf(c: { req: { param: (k: string) => string } }) {
@@ -45,13 +46,24 @@ const SettingsSchema = z
     reviewRounds: z.number().int().min(0).max(5).optional(),
     reviewPostToGitHub: z.boolean().optional(),
   })
+  .partial({ checks: true, fixAttempts: true, checkTimeoutSec: true })
+  .extend({
+    // GitHub triggers (see Settings > GitHub triggers). Left out keeps what's saved.
+    triggerHarness: z.string().regex(/^[a-z0-9-]{1,80}$/).nullable().optional(),
+    issueLabel: z.string().trim().min(1).max(50).optional(),
+    onIssueLabel: z.boolean().optional(),
+    onMention: z.boolean().optional(),
+    onPrReview: z.boolean().optional(),
+    fixCi: z.boolean().optional(),
+    ciFixAttempts: z.number().int().min(0).max(5).optional(),
+  })
   .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });
 
 repoSettings.put("/:owner/:name", zValidator("json", SettingsSchema), async (c) => {
   const repo = repoOf(c);
   if (!repo) return c.json({ message: "Expected owner/repo" }, 400);
   const body = c.req.valid("json");
-  const data = { ...body, checkCommand: body.checkCommand || null };
+  const data = { ...body, ...(body.checkCommand !== undefined || body.checks ? { checkCommand: body.checkCommand || null } : {}) };
   await prisma.repoSettings.upsert({ where: { repo }, update: data, create: { repo, ...data } });
   return c.json({ ok: true });
 });

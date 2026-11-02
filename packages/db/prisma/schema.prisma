@@ -72,6 +72,8 @@ model Thread {
   diff           String?
   /// The commit that diff starts from.
   diffBase       String?
+  /// The GitHub issue the session was started from (a label or an @cloudly mention).
+  issueNumber    Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -80,6 +82,8 @@ model Thread {
   previews       Preview[]
   findings       ReviewFinding[]
   @@index([userId, updatedAt])
+  @@index([repo, issueNumber])
+  @@index([repo, branch])
   @@index([arenaId])
 }
 
@@ -275,6 +279,10 @@ model Run {
   replyToThreadId String?
   /// turn | fix (Cloudly asked the agent to fix the checks its last change broke)
   kind         String   @default("turn")
+  /// What on GitHub started the turn: {type: issue|mention|pr_review|ci, by, url, number}.
+  trigger      Json?
+  /// One turn per GitHub event, so a redelivered webhook can't start a second.
+  triggerKey   String?  @unique
   /// The repo's checks after the turn's changes: passed | failed | error (couldn't run) | skipped.
   checkStatus  String?
   checkCommand String?
@@ -427,6 +435,18 @@ model RepoSettings {
   reviewRounds    Int      @default(2)
   /// Post the reviewer's findings to the pull request as a review.
   reviewPostToGitHub Boolean @default(true)
+  /// GitHub triggers. The agent new sessions from GitHub use; null is Claude Agent.
+  triggerHarness  String?
+  /// Labelling an issue with this starts a session for it.
+  issueLabel      String   @default("cloudly")
+  onIssueLabel    Boolean  @default(true)
+  /// "@cloudly ..." in an issue or pull request comment.
+  onMention       Boolean  @default(true)
+  /// A review on a pull request Cloudly opened becomes the session's next turn.
+  onPrReview      Boolean  @default(true)
+  /// Failing CI on a pull request Cloudly opened: the agent gets turns to fix it.
+  fixCi           Boolean  @default(true)
+  ciFixAttempts   Int      @default(2)
   updatedAt       DateTime @updatedAt
 }
 
@@ -451,4 +471,22 @@ model ReviewFinding {
   thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
   @@index([threadId, createdAt])
   @@index([runId])
+}
+
+/// A GitHub webhook delivery, stored by the API once its signature checks out and
+/// handled by the worker (see apps/worker/src/webhooks.ts).
+model WebhookDelivery {
+  /// GitHub's X-GitHub-Delivery id: a redelivery is the same row.
+  id         String   @id
+  event      String
+  action     String?
+  payload    Json
+  /// pending | processing | done | ignored | failed
+  status     String   @default("pending")
+  attempts   Int      @default(0)
+  /// What the worker did with it, or why not.
+  note       String?
+  receivedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([status, receivedAt])
 }

@@ -21,6 +21,7 @@ import { context, tokens, mcpEndpoint } from './context-routes';
 import { councils } from './council-routes';
 import { repoSettings } from './repo-settings-routes';
 import { reviewRoutes } from './review-routes';
+import { webhooks, webhookSettings } from './webhook-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -79,6 +80,8 @@ app.route('/context', context)
 app.route('/councils', councils)
 app.route('/settings/repos', repoSettings)
 app.route('/threads', reviewRoutes)
+app.route('/webhooks', webhooks)
+app.route('/settings/webhooks', webhookSettings)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
@@ -207,7 +210,7 @@ const TURN_FIELDS = {
   prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
   desktopPassword: true, fromThreadId: true, replyToThreadId: true, hops: true,
   kind: true, checkStatus: true, checkCommand: true, checkOutput: true, checkMs: true,
-  harness: true, output: true,
+  harness: true, output: true, trigger: true,
 } as const;
 
 async function threadView(threadId: string, userId: string) {

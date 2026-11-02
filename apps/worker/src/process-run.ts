@@ -422,7 +422,7 @@ export async function processRun(
           baseBranch: run.baseBranch,
           branch: publishResult.branch,
           title: prTitle(thread?.title ?? run.prompt),
-          body: `Opened by Cloudly for run \`${run.id}\` (${run.harness}).\n\n**Task**\n\n${run.prompt}${checkLine(check)}`,
+          body: `Opened by Cloudly for run \`${run.id}\` (${run.harness}).\n\n**Task**\n\n${run.prompt}${checkLine(check)}${thread?.issueNumber ? `\n\nCloses #${thread.issueNumber}` : ""}`,
         });
         prUrl = pr.url;
         if (thread) await prisma.thread.update({ where: { id: thread.id }, data: { prUrl: pr.url } });
