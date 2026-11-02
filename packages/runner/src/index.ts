@@ -10,6 +10,8 @@ const CONFIG_PATH = process.env.CONTROL_CONFIG_PATH ?? "/control/config.json";
 type RunConfig = {
     task: string;
     resume?: string;
+    /** The task with the earlier conversation in it, for an added agent that can't resume after all. */
+    fallbackTask?: string;
     harness:string;
     /** What's left of the monthly limit; only Claude can enforce it mid-run. */
     maxBudgetUsd?: number;
@@ -47,7 +49,7 @@ async function loadConfig(): Promise<RunConfig> {
         throw new Error(`invalid config at ${CONFIG_PATH}: missing "task"`);
     }
     return {
-        task: raw.task, resume: raw.resume, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend,
+        task: raw.task, resume: raw.resume, fallbackTask: raw.fallbackTask, harness:raw.harness, maxBudgetUsd: raw.maxBudgetUsd, systemAppend: raw.systemAppend,
         model: raw.model, effort: raw.effort, mcpServers: raw.mcpServers, desktop: raw.desktop, context: raw.context, research: raw.research, acp: raw.acp, sessions: raw.sessions, ask: raw.ask,
     };
 }
@@ -83,7 +85,7 @@ async function main() {
 
     // Adapters number their own events from 0; anything the runner said first comes before them.
     const offset = lastSeq + 1;
-    for await (const event of adapter.start(config.task, config.resume)) {
+    for await (const event of adapter.start(config.task, config.resume, config.fallbackTask)) {
         lastSeq = event.seq + offset;
         console.log(JSON.stringify({ ...event, seq: lastSeq }));
     }

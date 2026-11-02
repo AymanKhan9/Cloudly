@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { type Workspace, workspaceMounts } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
-import { isProviderHarness, launcherPath } from "@repo/shared/providers";
+import { isProviderHarness, launcherPath, agentFeatures } from "@repo/shared/providers";
 import { config, enabledProvider, providerRunCredentials, providerEnvProblem } from "@repo/db";
 import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR, sandboxTrustFlags } from "./egress";
 import { placeholderCodexAuth } from "./egress-proxy";
@@ -29,6 +29,7 @@ interface ControlConfig{
     task:string,
     harness:string,
     resume?:string,
+    fallbackTask?:string,
     maxBudgetUsd?:number,
     systemAppend?:string,
     model?:string,
@@ -51,6 +52,10 @@ export interface AcpLaunchConfig {
     homeFiles?: Record<string, string>;
     /** Started behind ordinary pipes. */
     pipes?: boolean;
+    /** Resumes its own session across turns. */
+    resume?: boolean;
+    /** Where the runner reads its turn's cost, beyond ACP usage updates. */
+    cost?: "pi-session";
 }
 
 /** An added agent's launch, from Settings > Agents. */
@@ -59,12 +64,19 @@ export async function acpLaunch(harness: string): Promise<AcpLaunchConfig | unde
     const provider = await enabledProvider(harness);
     if (!provider) throw new Error(`The agent "${harness}" isn't added in Cloudly, or is turned off. See Settings > Agents.`);
     const { launch } = provider.spec;
-    return { name: provider.name, command: launcherPath(provider.id), authMethodId: launch.authMethodId, homeFiles: launch.homeFiles, pipes: launch.pipes };
+    // From the catalog at run time, so agents added before these existed get them too.
+    const features = agentFeatures(harness);
+    return {
+        name: provider.name, command: launcherPath(provider.id), authMethodId: launch.authMethodId, homeFiles: launch.homeFiles, pipes: launch.pipes,
+        resume: features.resume, cost: features.cost === "pi-session" ? "pi-session" : undefined,
+    };
 }
 
 export interface ContainerOptions {
     /** The agent's own session id from an earlier turn. */
     resume?: string;
+    /** With resume: the task with the earlier conversation in it, if the session can't be loaded after all. */
+    fallbackTask?: string;
     /** Host dir mounted as the sandbox HOME so ~/.claude, ~/.codex and ~/.gemini persist. */
     homeDir?: string;
     /** Remaining monthly budget; Claude stops itself there. */
@@ -264,6 +276,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             task,
             harness,
             resume: options.resume,
+            fallbackTask: options.fallbackTask,
             maxBudgetUsd: options.maxBudgetUsd,
             systemAppend: options.systemAppend,
             model: options.model,

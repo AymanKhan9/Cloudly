@@ -77,7 +77,7 @@ test("an added agent signs in with its key, gets the session's model, and stream
   expect(sent.find((r) => r.method === "session/set_config_option")?.params).toEqual({ sessionId: "s-1", configId: "model", value: "large" });
   expect(sent.find((r) => r.method === "session/new")?.params.cwd).toBe(dir);
 
-  expect(events.find((e) => e.kind === "status" && (e.data as any).type === "acp.session")?.data).toEqual({ type: "acp.session", sessionId: "s-1" });
+  expect(events.find((e) => e.kind === "status" && (e.data as any).type === "acp.session")?.data).toEqual({ type: "acp.session", sessionId: "s-1", resumed: false });
   // The model menu gets every choice, grouped or not, and not the "provider" option.
   expect(events.find((e) => (e.data as any)?.type === "models")?.data).toEqual({
     type: "models",

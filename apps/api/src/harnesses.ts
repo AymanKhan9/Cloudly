@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { agentReadiness, harnessAvailable, listProviders, type AgentReadiness } from '@repo/db';
-import { isProviderHarness, providerDisplayName } from '@repo/shared/providers';
+import { isProviderHarness, providerDisplayName, agentFeatures } from '@repo/shared/providers';
 
 export const HARNESSES = [
   { id: 'native-claude', name: 'Claude Agent', cost: 'exact' },
@@ -44,7 +44,10 @@ export async function listHarnesses(): Promise<HarnessInfo[]> {
     ...added.map((p) => ({
       id: p.id,
       name: p.name,
-      cost: process.env[`PRICE_${p.id.toUpperCase().replace(/-/g, '_')}_INPUT_PER_MTOK`] ? ('estimated' as const) : ('none' as const),
+      // Pi and OpenCode report what their turns cost; others only with prices set.
+      cost: agentFeatures(p.id).cost
+        ? ('exact' as const)
+        : process.env[`PRICE_${p.id.toUpperCase().replace(/-/g, '_')}_INPUT_PER_MTOK`] ? ('estimated' as const) : ('none' as const),
       icon: p.icon,
       missing: p.missing,
     })),

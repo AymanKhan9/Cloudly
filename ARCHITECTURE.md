@@ -710,6 +710,25 @@ the instance key and must match the Discord or Slack webhook URL patterns both w
 before each send (redirects refused), so they can't point the worker at other hosts. Bot messages
 set `allowed_mentions: { parse: [] }`.
 
+### Added agents: native resume, cost and effort
+
+What an added agent can do beyond plain ACP comes from its catalog entry's `features` at run time
+(so agents added earlier get it too), checked against each agent's source: Pi (pi-acp) and
+OpenCode both implement `session/load`, and so resume their own session every turn
+(`Thread.agentSessionId` from the runner's `acp.session` event). The worker also passes a
+`fallbackTask` with the conversation written in; if `session/load` fails, the runner starts a new
+session with it and reports `resumed: false`.
+
+Cost: OpenCode's `usage_update` carries the session's running total in USD, so a turn costs the
+total minus `Thread.agentSessionCost` (zero when the session is new). Pi's doesn't, but Pi writes
+each reply's `usage.cost.total` to its session JSONL, which pi-acp maps from the ACP session id in
+`~/.pi/pi-acp/session-map.json`; the runner sums the replies since the prompt went out. Either way
+the turn records an exact cost, so these agents count toward the spend limit. Every
+`usage_update` also becomes the chat's context event. Effort goes through the agent's
+`thought_level` config option (Pi's thinking levels, OpenCode's model variants); the levels it
+offers are reported so the effort menu can list them, and the API accepts any short level name for
+added agents because the levels depend on the model.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

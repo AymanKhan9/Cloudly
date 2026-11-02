@@ -24,6 +24,10 @@ export interface AcpLaunch {
     cwd?: string;
     /** Behind ordinary pipes: some agents (Antigravity) hang on the socket stdio a spawn gives them. */
     pipes?: boolean;
+    /** It can resume its own session with `session/load` (Pi, OpenCode), so turns keep its context. */
+    resume?: boolean;
+    /** Where its turn's cost is: "pi-session" reads Pi's session file. Otherwise only `usage_update`'s cost. */
+    cost?: "pi-session";
 }
 
 type ConfigOption = NonNullable<acp.NewSessionResponse["configOptions"]>[number];
@@ -150,6 +154,20 @@ export function mapAcpUpdate(update: SessionUpdate): NormalizedEvent[] {
         case "user_message_chunk":
             return [];
 
+        case "usage_update": {
+            // How full the context window is (the chat's ring), and, from agents that
+            // track it (OpenCode), what the session has cost so far.
+            const u = update as { used?: unknown; size?: unknown; cost?: { amount?: unknown; currency?: unknown } | null };
+            const events: NormalizedEvent[] = [];
+            if (typeof u.used === "number" && typeof u.size === "number" && u.size > 0) {
+                events.push({ kind: "status", data: { type: "context", tokens: u.used, max: u.size, percentage: Math.min(100, Math.round((u.used / u.size) * 100)) } });
+            }
+            if (typeof u.cost?.amount === "number" && Number.isFinite(u.cost.amount) && (u.cost.currency ?? "USD") === "USD") {
+                events.push({ kind: "status", data: { type: "acp.cost", sessionUsd: u.cost.amount } });
+            }
+            return events;
+        }
+
         default:
             return [{ kind: "raw", data: update }];
     }
@@ -176,6 +194,7 @@ async function startResumedSession(
     sessionId: SessionId,
     cwd: string,
     mcpServers: acp.McpServer[] = [],
+    authMethodId: string | null = "gemini-api-key",
 ): Promise<acp.ActiveSession> {
     // Each run spawns a fresh `gemini --acp` subprocess (see `start()` below),
     // so this connection has no prior auth state even though the session
@@ -185,7 +204,7 @@ async function startResumedSession(
     // the one credential path this harness supports (`GEMINI_API_KEY`, see
     // `HARNESS_CREDENTIALS` in apps/worker/src/docker.ts) — not a guess among
     // the oauth-personal/vertex-ai/gateway alternatives `initialize` lists.
-    await ctx.request(acp.methods.agent.authenticate, { methodId: "gemini-api-key" as acp.AuthMethodId });
+    if (authMethodId) await ctx.request(acp.methods.agent.authenticate, { methodId: authMethodId as acp.AuthMethodId });
 
     const loadResponse = await ctx.request(acp.methods.agent.session.load, {
         sessionId,
@@ -212,7 +231,11 @@ export class AcpAdapter implements RunAdapter {
     private ctx?: acp.ClientContext;
     private sessionId?: SessionId;
 
-    async *start(task: string, resume?: string): AsyncIterable<RunEvent> {
+    /**
+     * `fallbackTask` is the task with the earlier conversation written in, for
+     * when the agent's own session can't be resumed after all.
+     */
+    async *start(task: string, resume?: string, fallbackTask?: string): AsyncIterable<RunEvent> {
         const launch = this.launch;
         const cwd = launch?.cwd ?? "/workspace";
         if (launch) {
@@ -220,8 +243,9 @@ export class AcpAdapter implements RunAdapter {
                 throw new Error(`${launch.name} isn't installed in the sandbox image yet. Settings > Sandbox tools shows the build; it starts a few seconds after the agent is added.`);
             }
             await writeHomeFiles(launch.homeFiles);
-            // Each turn starts clean; the earlier conversation comes in the prompt.
-            resume = undefined;
+            // Agents that can't resume their own session start each turn clean, with
+            // the earlier conversation in the prompt.
+            if (!launch.resume) resume = undefined;
         } else {
             await writeGeminiEffort(this.effort).catch((err) => console.error("could not set Gemini effort:", err));
         }
@@ -272,9 +296,25 @@ export class AcpAdapter implements RunAdapter {
                 }
 
                 const mcpServers = acpMcpServers(this.mcp) as acp.McpServer[];
-                const session = resume
-                    ? await startResumedSession(clientCtx, resume as SessionId, cwd, mcpServers)
-                    : await clientCtx.buildSession({ cwd, mcpServers }).start();
+                let session: acp.ActiveSession;
+                let resumed = false;
+                if (resume && launch) {
+                    // An added agent's session file can be gone (a cleaned data dir, an
+                    // upgrade): start over, with the conversation in the prompt instead.
+                    try {
+                        session = await startResumedSession(clientCtx, resume as SessionId, cwd, mcpServers, null);
+                        resumed = true;
+                    } catch (err) {
+                        push([{ kind: "status", data: { type: "acp.resume_failed", message: err instanceof Error ? err.message : String(err) } }]);
+                        session = await clientCtx.buildSession({ cwd, mcpServers }).start();
+                        if (fallbackTask) task = fallbackTask;
+                    }
+                } else if (resume) {
+                    session = await startResumedSession(clientCtx, resume as SessionId, cwd, mcpServers);
+                    resumed = true;
+                } else {
+                    session = await clientCtx.buildSession({ cwd, mcpServers }).start();
+                }
 
                 // Subagents' own work, from Gemini's chat logs, every half second.
                 const subagents = new GeminiSubagents();
@@ -290,10 +330,11 @@ export class AcpAdapter implements RunAdapter {
 
                 try {
                     this.sessionId = session.sessionId;
-                    push([{ kind: "status", data: { type: "acp.session", sessionId: session.sessionId } }]);
+                    push([{ kind: "status", data: { type: "acp.session", sessionId: session.sessionId, resumed } }]);
 
                     if (launch) {
                         push(await this.chooseModel(clientCtx, session));
+                        push(await this.chooseEffort(clientCtx, session));
                     } else {
                         // Gemini's "auto" router sends free-tier keys to models they have no
                         // quota for (the pro models have a free limit of 0) and then retries
@@ -310,7 +351,7 @@ export class AcpAdapter implements RunAdapter {
                     // Those already belong to earlier turns, so wait for the replay burst
                     // to go quiet and drop it before this turn's prompt goes out.
                     let first: ReturnType<typeof session.nextUpdate> | undefined;
-                    if (resume) {
+                    if (resumed) {
                         const idle = Symbol("idle");
                         first = session.nextUpdate();
                         for (;;) {
@@ -319,6 +360,7 @@ export class AcpAdapter implements RunAdapter {
                             first = session.nextUpdate();
                         }
                     }
+                    const turnStarted = Date.now();
                     session.prompt(task);
 
                     for (;;) {
@@ -328,6 +370,10 @@ export class AcpAdapter implements RunAdapter {
                             clearInterval(timer);
                             while (polling) await Bun.sleep(20);
                             await pollSubagents();
+                            if (launch?.cost === "pi-session") {
+                                const usd = await piTurnCost(session.sessionId, turnStarted).catch(() => null);
+                                if (usd !== null) push([{ kind: "status", data: { type: "acp.cost", turnUsd: usd } }]);
+                            }
                             push([{ kind: "done", data: message.response }]);
                             return message.response;
                         }
@@ -398,6 +444,34 @@ export class AcpAdapter implements RunAdapter {
         return models ? [{ kind: "status", data: { type: "models", current, options: models.options } }] : [];
     }
 
+    /**
+     * Applies the session's effort through the agent's thinking option (Pi's
+     * "Thinking", OpenCode's "Effort"), and reports the levels it offers so the
+     * chat's effort menu can list them.
+     */
+    private async chooseEffort(ctx: acp.ClientContext, session: acp.ActiveSession): Promise<NormalizedEvent[]> {
+        const options = (session.newSessionResponse as { configOptions?: ConfigOption[] | null }).configOptions ?? [];
+        const option = options.find((o) => o.type === "select" && (o.category === "thought_level" || o.id === "thought_level" || o.id === "effort"));
+        if (!option || option.type !== "select") return [];
+        const levels = selectValues(option);
+        let current = typeof option.currentValue === "string" ? option.currentValue : undefined;
+        const events: NormalizedEvent[] = [];
+        if (this.effort && this.effort !== current) {
+            if (levels.some((l) => l.value === this.effort)) {
+                try {
+                    await ctx.request("session/set_config_option", { sessionId: session.sessionId, configId: option.id, value: this.effort });
+                    current = this.effort;
+                } catch (err) {
+                    events.push({ kind: "text", data: `Couldn't set the effort to "${this.effort}" (${err instanceof Error ? err.message : String(err)}).\n\n` });
+                }
+            } else {
+                events.push({ kind: "text", data: `This model has no "${this.effort}" effort, so this turn uses ${current ?? "the agent's default"}. It offers: ${levels.map((l) => l.value).join(", ")}.\n\n` });
+            }
+        }
+        events.unshift({ kind: "status", data: { type: "efforts", current, options: levels.map((l) => ({ value: l.value, label: l.name })) } });
+        return events;
+    }
+
     async interrupt(): Promise<void> {
         if (this.ctx && this.sessionId) {
             await this.ctx.notify(acp.methods.agent.session.cancel, { sessionId: this.sessionId });
@@ -405,4 +479,34 @@ export class AcpAdapter implements RunAdapter {
         }
         this.process?.kill("SIGINT");
     }
+}
+const PI_FILE_MAX = 64 * 1024 * 1024;
+
+/**
+ * What Pi's turn cost: Pi records each reply's cost in its session file
+ * (usage.cost.total, in dollars), and pi-acp maps the ACP session to that file
+ * in ~/.pi/pi-acp/session-map.json. Sums the replies since the turn started.
+ */
+export async function piTurnCost(sessionId: string, since: number, home = process.env.HOME ?? "/home/node"): Promise<number | null> {
+    const map = await Bun.file(`${home}/.pi/pi-acp/session-map.json`).json().catch(() => null) as { sessions?: Record<string, { sessionFile?: unknown }> } | null;
+    const file = map?.sessions?.[sessionId]?.sessionFile;
+    if (typeof file !== "string" || !file.startsWith("/")) return null;
+    const f = Bun.file(file);
+    if (!(await f.exists()) || f.size > PI_FILE_MAX) return null;
+    let total = 0;
+    let seen = false;
+    for (const line of (await f.text()).split("\n")) {
+        if (!line.includes('"assistant"')) continue;
+        try {
+            const entry = JSON.parse(line);
+            const m = entry?.message;
+            if (entry?.type !== "message" || m?.role !== "assistant" || typeof m.timestamp !== "number" || m.timestamp < since) continue;
+            const usd = m.usage?.cost?.total;
+            if (typeof usd === "number" && Number.isFinite(usd) && usd >= 0) {
+                total += usd;
+                seen = true;
+            }
+        } catch {}
+    }
+    return seen ? total : null;
 }

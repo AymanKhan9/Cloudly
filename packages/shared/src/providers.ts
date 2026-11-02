@@ -97,6 +97,12 @@ export interface CatalogEntry {
   authMethodId?: string;
   homeFiles?: Record<string, string>;
   pipes?: boolean;
+  /**
+   * What it can do beyond plain ACP, checked against its source: resume its own
+   * session across turns (session/load), and report what its turns cost
+   * ("usage": ACP usage_update with a cost; "pi-session": Pi's session file).
+   */
+  features?: { resume?: boolean; cost?: "usage" | "pi-session" };
   credentials: ProviderCredential[];
   hosts: string[];
   /** Shown in place of "Add" when Cloudly can't run it safely. */
@@ -137,6 +143,8 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
     name: "OpenCode",
     blurb: "The open-source coding agent. Its free models need no key.",
     registryId: "opencode",
+    // opencode acp (1.19): loadSession, and usage_update with the session's cost in USD.
+    features: { resume: true, cost: "usage" },
     credentials: [ANTHROPIC, OPENAI, OPENROUTER],
     hosts: ["opencode.ai", "models.dev"],
     note: "Runs OpenCode's free hosted models with no key. Add a key to use that vendor's models; the Anthropic and OpenAI keys from Settings are used when you leave them empty.",
@@ -169,6 +177,8 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
     install: { kind: "npm", packages: ["pi-acp", "@earendil-works/pi-coding-agent"] },
     // Without it every reply starts with Pi's version, skills and context banner.
     homeFiles: { ".pi/agent/settings.json": JSON.stringify({ quietStartup: true }) + "\n" },
+    // pi-acp: loadSession via ~/.pi/pi-acp/session-map.json; each reply's cost is in Pi's session file.
+    features: { resume: true, cost: "pi-session" },
     credentials: [ANTHROPIC, OPENAI, { env: "GEMINI_API_KEY", label: "Gemini API key", hosts: ["generativelanguage.googleapis.com"], optional: true, reuse: "GEMINI_API_KEY" }, OPENROUTER],
     // Its update check.
     hosts: ["pi.dev"],
@@ -204,6 +214,11 @@ export const BUILTIN_AGENTS = [
 
 export function catalogEntry(id: string): CatalogEntry | undefined {
   return PROVIDER_CATALOG.find((e) => e.id === id);
+}
+
+/** What an added agent can do beyond plain ACP; nothing for one added by command. */
+export function agentFeatures(id: string): NonNullable<CatalogEntry["features"]> {
+  return catalogEntry(id)?.features ?? {};
 }
 
 /** A name for an added agent where only its id is at hand (councils, the shared context). */

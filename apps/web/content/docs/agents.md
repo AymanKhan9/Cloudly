@@ -7,6 +7,7 @@ Cloudly runs three coding agents out of the box, and you can add more under **Se
 | Claude Agent | The Claude Agent SDK | Exact, reported by the agent |
 | Codex | The Codex SDK | Estimated from token counts |
 | Gemini CLI | The Agent Client Protocol (ACP) | Estimated from token counts |
+| Pi, OpenCode (added) | ACP | Exact, reported by the agent |
 
 Because Gemini CLI runs over ACP, other ACP agents can be added the same way. See [Add more agents](#add-more-agents).
 
@@ -52,10 +53,26 @@ Some agents only offer a browser sign-in or a subscription login. Cloudly can't 
 
 ### What added agents do differently
 
+Pi and OpenCode work like the built-in agents:
+
+| | Pi | OpenCode |
+|---|---|---|
+| **Sessions** | Resumes its own session every turn, so it keeps its context and its own compaction. | The same. |
+| **Cost** | Exact, from what Pi records for each reply. | Exact, from the session total OpenCode reports. |
+| **Spend limit** | Counts, like any agent with a cost. | Counts. OpenCode's free models cost nothing. |
+| **Effort** | Pi's thinking levels, in the chat's effort menu. | The model's variants (like high or max), in the effort menu. |
+| **Context** | The ring in the chat box shows how full its context window is. | The same. |
+
+If an agent's own session can't be resumed (its files were cleaned up, say), the turn starts a new session with the recent conversation in the prompt, so nothing is lost.
+
+The effort menu lists the levels the agent reported on its last turn, since they depend on the model. Pick one the current model doesn't have and the turn says so and goes on at the model's level.
+
+Other added agents:
+
 - **Model:** the chat's model menu lists the models the agent reported on its last turn. `/model <name>` is passed to the agent through ACP.
-- **Effort:** not available. Set it through the model, if the agent offers variants.
+- **Effort:** the menu appears when the agent offers a thinking or effort option.
 - **Sessions:** each turn starts clean with the recent conversation in its prompt, the same way Gemini CLI does.
-- **Cost:** turns record no cost, so they don't count toward the spend limit, unless you set prices for the agent. See [Configuration](/docs/configuration#prices).
+- **Cost:** recorded when the agent reports it the way OpenCode does. Otherwise turns record no cost, and don't count toward the spend limit, unless you set prices for the agent. See [Configuration](/docs/configuration#prices).
 
 ## Choose a model
 

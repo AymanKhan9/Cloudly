@@ -1,3 +1,4 @@
+import { isProviderHarness } from '@repo/shared/providers';
 import { Hono } from 'hono'
 import { modelCommand } from '@repo/shared/model-command'
 import { PEER_SCOPES } from '@repo/shared/sessions'
@@ -215,6 +216,16 @@ app.get('/runs/:id/events', async (c) => {
 
 const ACTIVE_STATUSES = ['queued', 'running', 'finalizing'];
 
+/**
+ * A built-in agent's effort is one of its known levels. An added agent's levels
+ * depend on the model (Pi's thinking levels, OpenCode's variants), so any short
+ * name is kept, and the runner says if the model doesn't have it.
+ */
+function effortAllowed(harness: string, effort: string): boolean {
+  if (isProviderHarness(harness)) return /^[A-Za-z0-9_.-]{1,40}$/.test(effort);
+  return effortLevels(harness).includes(effort);
+}
+
 const TURN_FIELDS = {
   id: true, prompt: true, status: true, createdAt: true, costUsd: true, onPlan: true,
   prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
@@ -280,7 +291,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   }
   const { repo, baseBranch, prompt, harness, effort, desktop, mode, autoMerge } = c.req.valid('json');
   const audit = mode === 'audit';
-  if (effort && !effortLevels(harness).includes(effort)) {
+  if (effort && !effortAllowed(harness, effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
   }
   const id = crypto.randomUUID();
@@ -330,7 +341,7 @@ app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) =>
   if (!thread) return c.json({ message: 'Session not found' }, 404);
   const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen, autoMerge } = c.req.valid('json');
   const now = new Date();
-  if (effort && !effortLevels(thread.harness).includes(effort)) {
+  if (effort && !effortAllowed(thread.harness, effort)) {
     return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
   }
   await prisma.thread.update({

@@ -379,6 +379,7 @@ export default function SessionPage() {
     let model: string | undefined;
     let usage: { tokens: number; max: number; percentage: number } | undefined;
     let offered: { value: string; label: string }[] = [];
+    let efforts: { current?: string; options: { value: string; label: string }[] } | null = null;
     for (const list of Object.values(events)) {
       for (const e of list) {
         const d = e.data as Record<string, unknown> | null;
@@ -390,12 +391,20 @@ export default function SessionPage() {
             .filter((o) => typeof o?.value === "string")
             .map((o) => ({ value: String(o.value), label: typeof o.label === "string" ? o.label : String(o.value) }));
         }
+        if (d.type === "efforts" && Array.isArray(d.options)) {
+          efforts = {
+            current: typeof d.current === "string" ? d.current : undefined,
+            options: (d.options as { value?: unknown; label?: unknown }[])
+              .filter((o) => typeof o?.value === "string")
+              .map((o) => ({ value: String(o.value), label: typeof o.label === "string" ? o.label : String(o.value) })),
+          };
+        }
         if (d.type === "context" && typeof d.tokens === "number" && typeof d.max === "number") {
           usage = { tokens: d.tokens, max: d.max, percentage: Number(d.percentage) || 0 };
         }
       }
     }
-    return { model, usage, offered };
+    return { model, usage, offered, efforts };
   }, [events]);
 
   // Follow new output only while the reader is already at the bottom.
@@ -750,6 +759,7 @@ export default function SessionPage() {
             <EffortControl
               harness={thread.harness}
               value={thread.effort ?? null}
+              offered={context.efforts}
               up
               note={busy ? "A new effort applies from the next turn." : undefined}
               onChange={(effort) => saveSetting("effort", effort)}

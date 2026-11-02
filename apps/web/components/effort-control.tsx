@@ -22,15 +22,19 @@ export function EffortControl({
   onChange,
   up = false,
   note,
+  offered,
 }: {
   harness: string;
   value: string | null;
   onChange: (effort: string | null) => void;
   up?: boolean;
   note?: string;
+  /** An added agent's levels, as it reported them on its last turn (they depend on the model). */
+  offered?: { current?: string; options: { value: string; label: string }[] } | null;
 }) {
-  const levels = effortLevels(harness);
-  const fallback = DEFAULT_EFFORT[harness as keyof typeof DEFAULT_EFFORT];
+  const levels = offered?.options.length ? offered.options.map((o) => o.value) : effortLevels(harness);
+  const fallback = offered?.current ?? DEFAULT_EFFORT[harness as keyof typeof DEFAULT_EFFORT];
+  const labelOf = (l: string | undefined): string => (l ? offered?.options.find((o) => o.value === l)?.label ?? EFFORT_LABEL[l] ?? l : "");
   const shown = value ?? fallback;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(shown);
@@ -67,12 +71,12 @@ export function EffortControl({
         className="pill"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Effort: ${EFFORT_LABEL[shown] ?? shown}${value ? "" : ", the default"}`}
+        aria-label={`Effort: ${labelOf(shown)}${value ? "" : ", the default"}`}
         title="How hard the agent thinks"
         onClick={() => setOpen((o) => !o)}
       >
         <Gauge size={15} />
-        <span className="pill-text">{EFFORT_LABEL[shown] ?? shown}</span>
+        <span className="pill-text">{labelOf(shown)}</span>
       </button>
 
       {open ? (
@@ -90,7 +94,7 @@ export function EffortControl({
         >
           <div className="effort-head">
             <span>Effort</span>
-            <strong>{EFFORT_LABEL[draft] ?? draft}</strong>
+            <strong>{labelOf(draft)}</strong>
           </div>
           <input
             type="range"
@@ -101,20 +105,20 @@ export function EffortControl({
             value={index}
             autoFocus
             aria-label="Effort"
-            aria-valuetext={EFFORT_LABEL[draft] ?? draft}
+            aria-valuetext={labelOf(draft)}
             onChange={(e) => pick(levels[Number(e.target.value)]!)}
             style={{ "--pct": `${(index / Math.max(1, levels.length - 1)) * 100}%` } as React.CSSProperties}
           />
           <div className="effort-marks" aria-hidden="true">
             {levels.map((l) => (
               <button key={l} type="button" tabIndex={-1} data-on={l === draft || undefined} onClick={() => pick(l)}>
-                {EFFORT_LABEL[l] ?? l}
+                {labelOf(l)}
               </button>
             ))}
           </div>
           <p className="effort-hint">{HINT[draft] ?? ""}</p>
           <div className="effort-foot">
-            <span>{value ? "Saved for this session" : `Default for this agent: ${EFFORT_LABEL[fallback ?? ""] ?? fallback}`}</span>
+            <span>{value ? "Saved for this session" : `Default for this agent: ${labelOf(fallback)}`}</span>
             {value ? (
               <button type="button" className="link-btn" onClick={() => onChange(null)}>
                 Use default

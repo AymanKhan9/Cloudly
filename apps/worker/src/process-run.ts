@@ -40,6 +40,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { enforceBudget } from "./budget";
+import { agentFeatures, isProviderHarness } from "@repo/shared/providers";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 
@@ -63,6 +64,9 @@ function sessionExists(harness: string, home: string, sessionId: string): boolea
     return existsSync(path.join(home, ".claude", "projects", "-workspace", `${sessionId}.jsonl`));
   }
   if (harness === "native-codex") return findCodexRollout([CODEX_HOME, path.join(home, ".codex")], sessionId) !== null;
+  // Pi and OpenCode keep their sessions in their own formats; the runner tries
+  // session/load and, if it fails, starts over with the conversation in the prompt.
+  if (agentFeatures(harness).resume) return true;
   return false;
 }
 
@@ -169,7 +173,7 @@ export async function processRun(
       baseBranch: run.baseBranch,
     });
 
-    const nativeResume = Boolean(thread) && NATIVE_RESUME.has(run.harness) && run.harness !== "gemini-acp";
+    const nativeResume = Boolean(thread) && ((NATIVE_RESUME.has(run.harness) && run.harness !== "gemini-acp") || Boolean(agentFeatures(run.harness).resume));
     const containerOptions: ContainerOptions = {};
     // Whether this turn continues the agent's own session, or starts clean and
     // gets the earlier conversation written into its prompt.
@@ -246,12 +250,25 @@ export async function processRun(
       task = prompt.trim();
     } else {
       task = withPreamble(prompt, tools, extras);
+      // An added agent resuming its own session gets, as a fallback, the task with
+      // the conversation written in, in case its session can't be loaded after all.
+      if (resumed && thread && isProviderHarness(run.harness) && !isCommand(run.prompt)) {
+        containerOptions.fallbackTask = withPreamble(await promptWithHistory(thread.id, run.id, run.harness, run.prompt), tools, extras);
+      }
     }
 
     let lastSeq = -1;
     let sessionId = containerOptions.resume;
     // The agent's last reply: its own summary of the turn, for the shared context.
     let lastText: string | undefined;
+    // What an added agent reports of its cost: Pi a turn's, OpenCode the session's so far.
+    const acp = { resumed: false, sessionUsd: null as number | null, turnUsd: null as number | null };
+    const acpCost = () => {
+      if (acp.turnUsd !== null) return { usd: acp.turnUsd, estimated: false };
+      if (acp.sessionUsd === null) return null;
+      const before = acp.resumed ? thread?.agentSessionCost ?? 0 : 0;
+      return { usd: Math.max(0, acp.sessionUsd - before), estimated: false };
+    };
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, containerOptions)) {
         await insertEvents(run.id, [event]);
@@ -273,9 +290,20 @@ export async function processRun(
           await prisma.thread.update({ where: { id: thread.id }, data: { agentSessionId: agentSession } });
         }
 
+        if (event.kind === "status" && isProviderHarness(run.harness)) {
+          const d = event.data as { type?: string; resumed?: unknown; sessionUsd?: unknown; turnUsd?: unknown } | null;
+          if (d?.type === "acp.session") acp.resumed = d.resumed === true;
+          if (d?.type === "acp.cost" && typeof d.sessionUsd === "number") acp.sessionUsd = d.sessionUsd;
+          if (d?.type === "acp.cost" && typeof d.turnUsd === "number") acp.turnUsd = d.turnUsd;
+        }
+
         // Record cost the moment the harness reports it, before finalize, so
         // spend counts even if the push or PR step later fails.
-        const cost = onPlan ? null : costFromDoneEvent(run.harness, event);
+        const reported = event.kind === "done" && isProviderHarness(run.harness) ? acpCost() : null;
+        const cost = onPlan ? null : reported ?? costFromDoneEvent(run.harness, event);
+        if (event.kind === "done" && thread && acp.sessionUsd !== null) {
+          await prisma.thread.update({ where: { id: thread.id }, data: { agentSessionCost: acp.sessionUsd } });
+        }
         if (cost) {
           await prisma.run.updateMany({
             where: { id: run.id, workerId, leaseGen: run.leaseGen },
