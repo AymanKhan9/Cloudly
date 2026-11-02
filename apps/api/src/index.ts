@@ -27,6 +27,7 @@ import { schedules } from './schedule-routes';
 import { discord, discordSettings } from './discord-routes';
 import { slack, slackSettings } from './slack-routes';
 import { agents } from './agent-routes';
+import { checkpoints } from './checkpoint-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -86,6 +87,7 @@ app.route('/context', context)
 app.route('/councils', councils)
 app.route('/settings/repos', repoSettings)
 app.route('/threads', reviewRoutes)
+app.route('/threads', checkpoints)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
@@ -232,7 +234,16 @@ const TURN_FIELDS = {
   desktopPassword: true, fromThreadId: true, replyToThreadId: true, hops: true,
   kind: true, checkStatus: true, checkCommand: true, checkOutput: true, checkMs: true,
   harness: true, output: true, trigger: true,
+  commitSha: true, rewoundAt: true, targetRunId: true,
 } as const;
+
+/** Where a fork came from: the session (if the user still has it) and the turn. */
+async function forkOf(threadId: string | null, runId: string | null, userId: string) {
+  if (!threadId) return null;
+  const parent = await prisma.thread.findFirst({ where: { id: threadId, userId }, select: { id: true, title: true } });
+  const runs = parent ? await prisma.run.findMany({ where: { threadId, kind: { notIn: ['rewind', 'fork'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } }) : [];
+  return { threadId, title: parent?.title ?? null, turn: runId ? runs.findIndex((r) => r.id === runId) + 1 || null : null };
+}
 
 async function threadView(threadId: string, userId: string) {
   const thread = await prisma.thread.findFirst({
@@ -247,7 +258,7 @@ async function threadView(threadId: string, userId: string) {
     (await prisma.thread.findMany({ where: { id: { in: fromIds }, userId }, select: { id: true, title: true } })).map((t) => [t.id, t.title]),
   );
   return {
-    thread: { ...meta, agentSessionId: undefined },
+    thread: { ...meta, agentSessionId: undefined, forkOf: await forkOf(meta.forkOfThreadId, meta.forkAtRunId, userId) },
     // The password itself only goes out alongside a relay token (live-routes).
     turns: runs.map(({ desktopPassword, fromThreadId, ...r }) => ({
       ...r,

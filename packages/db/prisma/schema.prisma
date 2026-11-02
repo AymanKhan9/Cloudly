@@ -99,6 +99,9 @@ model Thread {
   slackThreadTs    String?
   /// An added agent's session total in USD after the last turn (OpenCode reports totals), so a resumed turn's cost is the difference.
   agentSessionCost Float?
+  /// A fork: the session it came from, and the turn it was forked after.
+  forkOfThreadId   String?
+  forkAtRunId      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -323,6 +326,10 @@ model Run {
   trigger      Json?
   /// One turn per GitHub event, so a redelivered webhook can't start a second.
   triggerKey   String?  @unique
+  /// Undone by a rewind: left out of the agent's history, and shown as rewound.
+  rewoundAt    DateTime?
+  /// A rewind or fork turn: the turn whose checkpoint it goes back to.
+  targetRunId  String?
   /// The repo's checks after the turn's changes: passed | failed | error (couldn't run) | skipped.
   checkStatus  String?
   checkCommand String?

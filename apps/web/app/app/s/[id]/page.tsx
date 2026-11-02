@@ -47,6 +47,7 @@ import { DesktopViewer } from "@/components/desktop-viewer";
 import { ContextPanel } from "@/components/context-panel";
 import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
 import { ReviewRequest, ReviewResult, TriggerNote, CiFixRequest } from "@/components/review";
+import { CheckpointRequest, ForkBanner, TurnMenu } from "@/components/checkpoints";
 import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
@@ -191,7 +192,22 @@ function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
   );
 }
 
-function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }: { turn: Turn; events: StreamEvent[]; harness: string; now: number; onOpenChanges: () => void }) {
+function TurnView({
+  turn,
+  events,
+  harness: sessionHarness,
+  now,
+  onOpenChanges,
+  checkpoint,
+}: {
+  turn: Turn;
+  events: StreamEvent[];
+  harness: string;
+  now: number;
+  onOpenChanges: () => void;
+  /** Rewind and fork, for a finished turn. */
+  checkpoint?: { threadId: string; canRewind: boolean; rewindNote?: string };
+}) {
   // A review runs with the repo's reviewer, not the session's agent.
   const harness = turn.harness ?? sessionHarness;
   const h = harnessById(harness);
@@ -205,8 +221,11 @@ function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }:
   }, [events]);
 
   return (
-    <article className="turn">
-      {turn.kind === "fix" ? (
+    <article className="turn" data-rewound={turn.rewoundAt ? true : undefined}>
+      {turn.rewoundAt ? <div className="rewound-tag">Rewound</div> : null}
+      {turn.kind === "fork" ? null : turn.kind === "rewind" ? (
+        <CheckpointRequest turn={turn} />
+      ) : turn.kind === "fix" ? (
         <FixRequest turn={turn} agent={h.name} />
       ) : turn.kind === "ci_fix" ? (
         <CiFixRequest turn={turn} agent={h.name} />
@@ -254,7 +273,7 @@ function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }:
             {status}
           </span>
           {active ? <span className="num">{elapsed(turn.createdAt, now)}</span> : null}
-          {turn.onPlan ? (
+          {turn.kind === "rewind" || turn.kind === "fork" ? null : turn.onPlan ? (
             <span>On your plan</span>
           ) : turn.costUsd !== null ? (
             <span className="num" title={h.cost === "estimated" ? "Estimated from token counts" : "Reported by the agent"}>
@@ -281,6 +300,7 @@ function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }:
               <ArrowSquareOut size={12} />
             </a>
           ) : null}
+          {checkpoint ? <TurnMenu threadId={checkpoint.threadId} turn={turn} harness={sessionHarness} canRewind={checkpoint.canRewind} rewindNote={checkpoint.rewindNote} /> : null}
         </footer>
         <ChecksDetail turn={turn} events={events} />
         {turn.kind === "review" || turn.kind === "audit" ? <ReviewResult turn={turn} events={events} onOpen={onOpenChanges} /> : null}
@@ -478,6 +498,8 @@ export default function SessionPage() {
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
   // The latest review's findings, as a count on the Changes button.
   const lastReview = [...turns].reverse().find((t) => t.kind === "review" || t.kind === "audit");
+  // The latest turn that wasn't undone: nothing after it to rewind.
+  const lastLiveTurn = [...turns].reverse().find((t) => !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork");
   const openFindings = lastReview?.status === "succeeded" && lastReview.output ? Number(/(\d+) blocking/.exec(lastReview.output)?.[1] ?? 0) + Number(/(\d+) suggestions?/.exec(lastReview.output)?.[1] ?? 0) : 0;
 
   // A /word the agent didn't announce isn't a command in this mode (interactive-only
@@ -660,6 +682,7 @@ export default function SessionPage() {
       ) : null}
 
       <div className="thread">
+        {thread.forkOf ? <ForkBanner forkOf={thread.forkOf} /> : null}
         {turns.map((t) => (
           <TurnView
             key={t.id}
@@ -667,6 +690,15 @@ export default function SessionPage() {
             events={events[t.id] ?? []}
             harness={thread.harness}
             now={now}
+            checkpoint={
+              !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && !ACTIVE.includes(t.status)
+                ? {
+                    threadId: thread.id,
+                    canRewind: !busy && !thread.mergedAt && t.id !== lastLiveTurn?.id,
+                    rewindNote: busy ? "Wait for the current turn" : thread.mergedAt ? "The pull request is merged" : "This is the latest turn",
+                  }
+                : undefined
+            }
             onOpenChanges={() => {
               setPanel("changes");
               window.scrollTo({ top: 0, behavior: "smooth" });

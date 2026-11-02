@@ -745,6 +745,21 @@ previous launch and the failed version is recorded in `skipVersion`; a build tha
 another reason restores it without skipping. With `autoUpdate` off the launch waits in
 `availableLaunch` for the Update button. Agents added by command are never touched.
 
+### Checkpoints: rewind and fork
+
+A checkpoint is the latest non-rewound `Run.commitSha` at or before a turn (or the merge base, for
+a turn before any change). Rewind and fork are queued runs (`kind` `rewind` / `fork`, with
+`targetRunId`) on the session, so they wait for its running turn; the worker's
+`processCheckpoint` does the branch work from the turn's mirror. Rewind pushes
+`<sha>:refs/heads/<branch>` with `--force-with-lease=<branch>:<what the mirror saw>`, so a push the
+session didn't make fails it rather than being overwritten; then, in one transaction under the
+run's lease fence, later runs get `rewoundAt`, and the thread's `agentSessionId` and
+`agentSessionCost` are cleared, since the agent's own session file still holds the rewound turns.
+The transcript (`promptWithHistory`) leaves out rewound runs and checkpoint runs. A fork is a new
+thread with `forkOfThreadId`/`forkAtRunId` whose first run pushes the checkpoint as its branch;
+its transcript is the parent chain's turns up to each fork point, then its own. The API refuses a
+rewind while a turn runs or after the PR merged.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

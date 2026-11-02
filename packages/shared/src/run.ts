@@ -25,6 +25,8 @@ export const RunSchema = z.object({
   threadId: z.string().nullable().optional(),
   councilId: z.string().nullable().optional(),
   kind: z.string().optional(),
+  // A rewind or fork turn: the turn whose checkpoint it goes back to.
+  targetRunId: z.string().nullish(),
   councilRound: z.number().nullable().optional(),
   councilRole: z.string().nullable().optional(),
   status: RunStatusSchema,

@@ -43,11 +43,28 @@ export async function promptWithHistory(
   harness: string,
   prompt: string,
 ): Promise<string> {
-  const runs = await prisma.run.findMany({
-    where: { threadId, id: { not: currentRunId }, status: { in: ["succeeded", "failed", "cancelled"] } },
-    orderBy: { createdAt: "asc" },
-    select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
-  });
+  const turns = (where: object) =>
+    prisma.run.findMany({
+      // Rewound turns were undone; rewinds and forks are Cloudly's own bookkeeping.
+      where: { ...where, id: { not: currentRunId }, rewoundAt: null, kind: { notIn: ["rewind", "fork"] }, status: { in: ["succeeded", "failed", "cancelled"] } },
+      orderBy: { createdAt: "asc" },
+      select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
+    });
+
+  // A fork starts with the conversation of the session it came from, up to the
+  // turn it was forked after (and that one's, if it was a fork too).
+  const runs: Awaited<ReturnType<typeof turns>> = [];
+  const chain: { threadId: string; until?: Date }[] = [];
+  let current = await prisma.thread.findUnique({ where: { id: threadId }, select: { forkOfThreadId: true, forkAtRunId: true } });
+  chain.push({ threadId });
+  for (let depth = 0; current?.forkOfThreadId && depth < 5; depth++) {
+    const at = current.forkAtRunId ? await prisma.run.findUnique({ where: { id: current.forkAtRunId }, select: { createdAt: true } }) : null;
+    chain.unshift({ threadId: current.forkOfThreadId, until: at?.createdAt });
+    current = await prisma.thread.findUnique({ where: { id: current.forkOfThreadId }, select: { forkOfThreadId: true, forkAtRunId: true } });
+  }
+  for (const link of chain) {
+    runs.push(...(await turns({ threadId: link.threadId, ...(link.until ? { createdAt: { lte: link.until } } : {}) })));
+  }
 
   // A review or audit turn's reply is its findings, not the reviewer's working notes.
   const prior = runs.map((r) => ({

@@ -96,6 +96,8 @@ export interface ThreadSummary {
   mergedAt?: string | null;
   /** The schedule that started it. */
   scheduleId?: string | null;
+  /** A fork: the session it came from and the turn. */
+  forkOf?: { threadId: string; title: string | null; turn: number | null } | null;
 }
 
 export interface Turn {
@@ -123,7 +125,12 @@ export interface Turn {
    * review: the reviewer looked at the session's change; review_fix: the author
    * was sent the reviewer's blocking findings; audit: the whole repo was reviewed.
    */
-  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix";
+  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix" | "rewind" | "fork";
+  /** The turn's commit: a checkpoint to rewind or fork from. */
+  commitSha?: string | null;
+  /** Undone by a rewind. */
+  rewoundAt?: string | null;
+  targetRunId?: string | null;
   /** What on GitHub started the turn, when something did. */
   trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord" | "slack"; name?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */

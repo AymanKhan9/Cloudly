@@ -31,6 +31,7 @@ import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
 import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } from "./checks";
 import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { notifyTurnEnd } from "./notify";
+import { processCheckpoint } from "./checkpoints";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -111,6 +112,8 @@ export async function processRun(
   if (run.councilId) return processCouncilTurn(run, workerId, runContainer, heartbeatIntervalMs);
   // A review of the session's change, or an audit of the repo: findings, not a commit.
   if (run.kind === "review" || run.kind === "audit") return processReviewTurn(run, workerId, runContainer, heartbeatIntervalMs);
+  // Going back to a checkpoint, or starting a fork from one: branch work, no agent.
+  if (run.kind === "rewind" || run.kind === "fork") return processCheckpoint(run, workerId);
   let leaseLost = false;
   let cancelled = false;
 

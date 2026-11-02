@@ -135,3 +135,13 @@ Type `/` in the chat box to see the commands the agent announced, and use the ar
 | Other sessions | Which of your other sessions the agent can read and message. See [Sessions that talk to each other](#sessions-that-talk-to-each-other). |
 | Context ring | How full the agent's context window is. `/compact` frees it up on Claude Code. |
 | Cost | The session's total, with `~` when it is estimated. |
+
+## Rewind and fork
+
+Every turn that changes code is a checkpoint: its commit on the session's branch. Each finished turn has a **⋯** menu with two ways back to it.
+
+**Rewind to here** undoes the turns after it. The session's branch goes back to that turn's commit (so the pull request shows the session as it was then), and the later turns are greyed out and left out of what the agent remembers. The agent's own saved session is set aside too, so its next turn starts from the conversation as it now stands. You can't rewind while a turn is running, or once the pull request is merged.
+
+The branch is reset with a safe force-push: if anyone pushed to it since the session last did, the rewind stops instead of overwriting their work.
+
+**Fork from here** starts a new session from that point: its own branch, starting at that turn's commit, and the conversation up to that turn. Pick another agent for it if you like ("try this with Codex instead"), and give it its first message. The original session isn't touched, so you can compare the two and keep the better pull request. A fork links back to where it came from.
