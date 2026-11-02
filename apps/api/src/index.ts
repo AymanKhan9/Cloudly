@@ -23,6 +23,7 @@ import { repoSettings } from './repo-settings-routes';
 import { reviewRoutes } from './review-routes';
 import { webhooks, webhookSettings } from './webhook-routes';
 import { schedules } from './schedule-routes';
+import { discord, discordSettings } from './discord-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -86,6 +87,8 @@ app.route('/threads', reviewRoutes)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
+app.route('/discord', discord)
+app.route('/settings', discordSettings)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.

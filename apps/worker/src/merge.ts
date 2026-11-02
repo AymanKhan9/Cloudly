@@ -2,6 +2,7 @@ import { prisma } from "@repo/db";
 
 import { github as realGitHub, type GitHubPort } from "./github";
 import { repoSettings } from "./checks";
+import { notify } from "./notify";
 
 // Merge when ready: a session with it on gets its pull request merged once
 // nothing stands in the way. Cloudly's side first (no turn running, nothing
@@ -68,6 +69,7 @@ export async function maybeMerge(threadId: string, gh: GitHubPort = realGitHub, 
         where: { id: thread.id },
         data: { needsInput: `The pull request conflicts with ${pr.baseRef}, so it can't be merged. Reply "merge ${pr.baseRef} and resolve the conflicts" to have the agent do it.`, settledAt: null },
       });
+      await notify({ userId: thread.userId, threadId: thread.id, kind: "needs_you", title: thread.title, body: `The pull request conflicts with ${pr.baseRef}. Reply "merge ${pr.baseRef} and resolve the conflicts" to have the agent do it.`, key: `conflict:${thread.id}:${pr.headSha}` });
     }
     return say(`Conflicts with ${pr.baseRef}`);
   }
@@ -80,6 +82,7 @@ export async function maybeMerge(threadId: string, gh: GitHubPort = realGitHub, 
 
   const result = await gh.merge(ref.owner, ref.repo, ref.number, pr.headSha, settings.mergeMethod);
   if (!result.merged) return say(`GitHub didn't merge it: ${result.message}`.slice(0, 300));
+  await notify({ userId: thread.userId, threadId: thread.id, kind: "merged", title: thread.title, body: `Cloudly merged the pull request into ${pr.baseRef} (${settings.mergeMethod}).`, key: `merged:${thread.id}` });
   return say("Merged", { mergedAt: new Date(now) });
 }
 

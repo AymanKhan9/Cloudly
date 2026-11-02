@@ -30,6 +30,7 @@ import { prepareSessions, collectOutbox, deliverMessages, sendReply, destroySess
 import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
 import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } from "./checks";
 import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
+import { notifyTurnEnd } from "./notify";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -479,5 +480,7 @@ export async function processRun(
     if (publishResult) await destroyPublish(publishResult);
     // A turn answering another session's message: its answer goes back there.
     if (run.replyToThreadId) await sendReply(run.id).catch((err) => console.error(`run ${run.id}: couldn't send its reply:`, err));
+    // Tell the user, once the session has nothing more queued.
+    if (!leaseLost) await notifyTurnEnd(run.id).catch((err) => console.error(`run ${run.id}: couldn't queue its notification:`, err));
   }
 }

@@ -17,11 +17,15 @@ model User {
   githubId    Int      @unique
   login       String
   avatarUrl   String?
+  /// The Discord account linked to this user (with /cloudly link): only linked accounts can use the bot.
+  discordUserId String? @unique
   createdAt   DateTime   @default(now())
   sessions    Session[]
   runs        Run[]
   threads     Thread[]
   schedules   Schedule[]
+  notifications Notification[]
+  notifySettings NotifySettings?
   arenas      Arena[]
   previews    Preview[]
   tokens      AccessToken[]
@@ -82,6 +86,11 @@ model Thread {
   mergedAt       DateTime?
   /// The schedule that started the session, if one did.
   scheduleId     String?
+  /// Started from Discord: the channel, and the Discord thread its updates go to.
+  discordChannelId String?
+  discordThreadId  String?
+  /// The interaction's token, kept only until the Discord thread is made (it expires after 15 minutes).
+  discordToken     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -536,4 +545,55 @@ model Schedule {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([enabled, nextRunAt])
   @@index([userId])
+}
+
+/// A one-time code from Settings > Discord, entered with /cloudly link.
+model DiscordLinkCode {
+  code      String   @id
+  userId    String
+  expiresAt DateTime
+}
+
+/// A Discord channel's default repo for /cloudly task.
+model DiscordChannel {
+  channelId String   @id
+  repo      String
+  baseBranch String?
+  updatedAt DateTime @updatedAt
+}
+
+/// Where and when a user hears from Cloudly. The webhook URLs hold tokens, so
+/// they're stored encrypted with the instance's key.
+model NotifySettings {
+  userId            String  @id
+  discordDm         Boolean @default(true)
+  discordWebhookUrl String?
+  slackWebhookUrl   String?
+  onNeedsYou        Boolean @default(true)
+  onDone            Boolean @default(true)
+  onFailed          Boolean @default(true)
+  onMerged          Boolean @default(true)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Something to tell a user about, sent by the worker's notifier.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  threadId  String?
+  /// needs_you | done | failed | merged
+  kind      String
+  title     String
+  body      String
+  url       String?
+  /// One per event, so it can't be sent twice.
+  key       String    @unique
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+  attempts  Int       @default(0)
+  error     String?
+  /// Where it has gone so far (discord-thread, discord-dm, discord-webhook, slack), so a retry only sends the rest.
+  sentTo    String[]  @default([])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([sentAt, createdAt])
 }

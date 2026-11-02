@@ -15,6 +15,7 @@ export const DOCS: DocPage[] = [
   { slug: "checks", title: "Checks, review and audits", group: "Using Cloudly" },
   { slug: "github-triggers", title: "GitHub triggers", group: "Using Cloudly" },
   { slug: "merge-and-schedules", title: "Merging and schedules", group: "Using Cloudly" },
+  { slug: "discord-and-notifications", title: "Discord and notifications", group: "Using Cloudly" },
   { slug: "arena", title: "Comparing agents", group: "Using Cloudly" },
   { slug: "council", title: "Agent council", group: "Using Cloudly" },
   { slug: "mcp", title: "MCP servers", group: "Using Cloudly" },

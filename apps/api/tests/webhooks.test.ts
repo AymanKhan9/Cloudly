@@ -95,3 +95,16 @@ test("a new GitHub App is created with the webhook, its events and the permissio
   expect(m.default_events).toEqual(["issues", "issue_comment", "pull_request_review", "check_suite"]);
   expect(m.default_permissions).toMatchObject({ issues: "write", checks: "read", actions: "read", contents: "write", pull_requests: "write" });
 });
+
+test("making a webhook secret saves it, and deliveries signed with it are accepted", async () => {
+  delete process.env.GITHUB_WEBHOOK_SECRET;
+  const r = await call("/settings/webhooks/secret", { method: "POST" });
+  expect(r.status).toBe(200);
+  const { secret } = await r.json();
+  expect(secret.length).toBeGreaterThan(20);
+  const body = JSON.stringify({ action: "labeled" });
+  const sig = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  expect((await post("issues", `api-${stamp}-saved`, body, sig)).status).toBe(202);
+  await prisma.setting.deleteMany({ where: { name: "GITHUB_WEBHOOK_SECRET" } });
+  process.env.GITHUB_WEBHOOK_SECRET = SECRET;
+});

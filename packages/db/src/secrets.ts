@@ -9,7 +9,7 @@ export interface SettingSpec {
   label: string;
   /** Secret values are never shown again after saving. */
   secret: boolean;
-  group: "github" | "models" | "alerts" | "access" | "sandbox";
+  group: "github" | "models" | "alerts" | "access" | "sandbox" | "discord";
   /** Keys and tokens: never contain whitespace, but a terminal-wrapped copy often does. */
   token?: boolean;
 }
@@ -22,6 +22,7 @@ export const SETTINGS: SettingSpec[] = [
   { name: "GITHUB_CLIENT_ID", label: "GitHub App client ID", secret: false, group: "github" },
   { name: "GITHUB_CLIENT_SECRET", label: "GitHub App client secret", secret: true, group: "github" , token: true },
   { name: "GITHUB_APP_PRIVATE_KEY", label: "GitHub App private key", secret: true, group: "github" },
+  { name: "GITHUB_WEBHOOK_SECRET", label: "GitHub webhook secret", secret: true, group: "github", token: true },
   { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" , token: true },
   { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" , token: true },
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" , token: true },
@@ -30,6 +31,9 @@ export const SETTINGS: SettingSpec[] = [
   { name: "RESEND_API_KEY", label: "Resend API key (budget emails)", secret: true, group: "alerts" , token: true },
   { name: "SANDBOX_SETUP_SCRIPT", label: "Sandbox setup script", secret: false, group: "sandbox" },
   { name: "SANDBOX_EGRESS_HOSTS", label: "Extra hosts the sandbox may reach", secret: false, group: "sandbox" },
+  { name: "DISCORD_APPLICATION_ID", label: "Discord application ID", secret: false, group: "discord", token: true },
+  { name: "DISCORD_PUBLIC_KEY", label: "Discord public key", secret: false, group: "discord", token: true },
+  { name: "DISCORD_BOT_TOKEN", label: "Discord bot token", secret: true, group: "discord", token: true },
 ];
 
 export function settingSpec(name: string): SettingSpec | undefined {
@@ -209,4 +213,19 @@ export async function recoverSettings(oldRecoveryKey: string): Promise<number> {
     recovered++;
   }
   return recovered;
+}
+
+/** Encrypts a value with the instance's key, for storing outside the settings table. */
+export async function seal(plain: string): Promise<string> {
+  return encrypt(plain, await masterKey());
+}
+
+/** The value seal() stored, or null when it can't be read (a different install's key). */
+export async function unseal(blob: string | null | undefined): Promise<string | null> {
+  if (!blob) return null;
+  try {
+    return decrypt(blob, await masterKey());
+  } catch {
+    return null;
+  }
 }

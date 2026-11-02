@@ -675,6 +675,32 @@ ordinary thread (or, in `continue` mode, the next run in the schedule's thread, 
 thread is busy), with `trigger.type = "schedule"` and a `triggerKey` per firing. The spend limit is
 checked before anything is created.
 
+### Discord and notifications
+
+The Discord bot is HTTP interactions only: `POST /discord/interactions` (API, no session auth)
+verifies Discord's Ed25519 signature over `timestamp + body` against `DISCORD_PUBLIC_KEY` and
+rejects anything else with 401. There's no gateway connection and no Message Content intent;
+replies go through a button that opens a modal. Every interaction is a database write (a thread
+and its first run, a run, a cancel), so it answers inside Discord's three seconds. A Discord
+account can do nothing until it's linked to a Cloudly user (`User.discordUserId`) with a
+ten-minute one-time code made in Settings, and buttons and modals act only on that user's own
+threads. Repo names for autocomplete come from the GitHub App installation, cached, with a
+1.5-second cut-off.
+
+A thread started from Discord keeps the interaction token (`Thread.discordToken`) only until the
+worker's notifier has fetched the reply message and made a Discord thread on it (falling back to
+the channel in DMs, without permission, or once the 15-minute token has expired).
+
+Notifications are an outbox: `Notification` rows with a unique `key` per event, written when a
+session settles (`notifyTurnEnd` after every turn, skipped while another run is queued in the
+thread, so an automatic chain is one message), on merge, on merge conflicts, and when CI fixes run
+out. The notifier loop sends each to the session's Discord thread (always) and, per the user's
+`NotifySettings`, to a Discord DM, a Discord webhook and a Slack webhook. `sentTo` records each
+delivery so a retry only sends the rest; five failed attempts give up. Webhook URLs are sealed with
+the instance key and must match the Discord or Slack webhook URL patterns both when saved and
+before each send (redirects refused), so they can't point the worker at other hosts. Bot messages
+set `allowed_mentions: { parse: [] }`.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

@@ -125,7 +125,7 @@ export interface Turn {
    */
   kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix";
   /** What on GitHub started the turn, when something did. */
-  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule"; name?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
+  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord"; name?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */
   harness?: string;
   /** A review's or audit's findings, as text. */

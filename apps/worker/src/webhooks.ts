@@ -3,6 +3,7 @@ import { prisma, config, budgetStatus, harnessUsesPlan } from "@repo/db";
 import { github as realGitHub, type GitHubPort, type FailedCheck } from "./github";
 import { repoSettings } from "./checks";
 import { maybeMerge } from "./merge";
+import { notify } from "./notify";
 
 // GitHub triggers. The API stores each signed webhook delivery; this turns them
 // into sessions and turns:
@@ -313,7 +314,9 @@ async function onCheckSuite(d: Delivery, gh: GitHubPort): Promise<Outcome> {
   const done = await prisma.run.count({ where: { threadId: thread.id, kind: "ci_fix", createdAt: { gt: since } } });
   const of = settings.ciFixAttempts;
   if (done >= of) {
-    await prisma.thread.update({ where: { id: thread.id }, data: { needsInput: `CI still fails${of ? ` after ${of} fix attempt${of === 1 ? "" : "s"}` : ""}. Look at the checks on the pull request, then reply with what to do.`, settledAt: null } });
+    const needs = `CI still fails${of ? ` after ${of} fix attempt${of === 1 ? "" : "s"}` : ""}. Look at the checks on the pull request, then reply with what to do.`;
+    await prisma.thread.update({ where: { id: thread.id }, data: { needsInput: needs, settledAt: null } });
+    await notify({ userId: thread.userId, threadId: thread.id, kind: "needs_you", title: thread.title, body: needs, key: `ci-gave-up:${thread.id}:${suite.head_sha}` });
     return { status: "ignored", note: "fix attempts used up" };
   }
   if (await overBudget(thread.userId, thread.harness)) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarBlank, CaretRight, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
+import { CalendarBlank, CaretRight, ChatsCircle, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import type { Turn } from "@/lib/api";
 import type { StreamEvent } from "@/lib/events";
 
@@ -75,6 +75,14 @@ export function ReviewResult({ turn, events, onOpen }: { turn: Turn; events: Str
 export function TriggerNote({ turn }: { turn: Turn }) {
   const t = turn.trigger;
   if (!t || t.type === "ci") return null;
+  if (t.type === "discord") {
+    return (
+      <span className="msg-from">
+        <ChatsCircle size={14} />
+        From Discord{t.by ? `, @${t.by}` : ""}
+      </span>
+    );
+  }
   if (t.type === "schedule") {
     return (
       <Link className="msg-from" href="/app/schedules">

@@ -18,6 +18,7 @@ import { readRegular } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
 import { repoSettings } from "./checks";
 import { memberName } from "./council";
+import { notifyTurnEnd } from "./notify";
 
 // The reviewer: after a turn changes code (and its checks pass), a second agent
 // reviews the session's change, from the base branch to the session's branch,
@@ -335,6 +336,7 @@ export async function processReviewTurn(run: Run, workerId: string, runContainer
     clearInterval(timer);
     if (ws) await destroyWorkspace(ws);
     if (reviewDir) await rm(reviewDir, { recursive: true, force: true });
+    if (!leaseLost) await notifyTurnEnd(run.id).catch((err) => console.error(`run ${run.id}: couldn't queue its notification:`, err));
   }
 }
 

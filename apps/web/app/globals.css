@@ -5815,3 +5815,22 @@ div.msg-system {
     flex-direction: column;
   }
 }
+
+/* ---------- Settings: Discord and notifications ---------- */
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-actions .input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.set-body .hint a {
+  color: var(--accent-ink);
+  text-decoration: underline;
+}

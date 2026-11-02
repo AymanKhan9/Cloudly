@@ -9,6 +9,7 @@ import { runCouncilLoop } from "./council";
 import { runWebhookLoop } from "./webhooks";
 import { runMergeLoop } from "./merge";
 import { runScheduleLoop } from "./schedules";
+import { runNotifyLoop } from "./notify";
 
 const workerId = process.env.WORKER_ID ?? `${hostname()}-${process.pid}`;
 // ponytail: poll and recovery each cap at this, so the true ceiling is 2x; share one counter if that matters.
@@ -38,4 +39,5 @@ await Promise.all([
   runWebhookLoop(controller.signal),
   runMergeLoop(controller.signal),
   runScheduleLoop(controller.signal),
+  runNotifyLoop(controller.signal),
 ]);
