@@ -28,6 +28,7 @@ import { discord, discordSettings } from './discord-routes';
 import { slack, slackSettings } from './slack-routes';
 import { agents } from './agent-routes';
 import { checkpoints } from './checkpoint-routes';
+import { plans } from './plan-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -43,7 +44,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -88,6 +89,7 @@ app.route('/councils', councils)
 app.route('/settings/repos', repoSettings)
 app.route('/threads', reviewRoutes)
 app.route('/threads', checkpoints)
+app.route('/plans', plans)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)

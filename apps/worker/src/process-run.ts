@@ -32,6 +32,7 @@ import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } 
 import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { notifyTurnEnd } from "./notify";
 import { processCheckpoint } from "./checkpoints";
+import { processPlanTurn } from "./plans";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -114,6 +115,8 @@ export async function processRun(
   if (run.kind === "review" || run.kind === "audit") return processReviewTurn(run, workerId, runContainer, heartbeatIntervalMs);
   // Going back to a checkpoint, or starting a fork from one: branch work, no agent.
   if (run.kind === "rewind" || run.kind === "fork") return processCheckpoint(run, workerId);
+  // A planner breaking a big task into a plan's tasks.
+  if (run.kind === "plan") return processPlanTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
   let cancelled = false;
 

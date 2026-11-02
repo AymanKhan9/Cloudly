@@ -26,6 +26,7 @@ model User {
   runs        Run[]
   threads     Thread[]
   schedules   Schedule[]
+  plans       Plan[]
   notifications Notification[]
   notifySettings NotifySettings?
   arenas      Arena[]
@@ -102,6 +103,8 @@ model Thread {
   /// A fork: the session it came from, and the turn it was forked after.
   forkOfThreadId   String?
   forkAtRunId      String?
+  /// One task of a plan (see Plan).
+  planId           String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -330,6 +333,8 @@ model Run {
   rewoundAt    DateTime?
   /// A rewind or fork turn: the turn whose checkpoint it goes back to.
   targetRunId  String?
+  /// A planner's turn (kind "plan"): the plan it writes.
+  planId       String?
   /// The repo's checks after the turn's changes: passed | failed | error (couldn't run) | skipped.
   checkStatus  String?
   checkCommand String?
@@ -637,4 +642,51 @@ model SlackChannel {
   repo       String
   baseBranch String?
   updatedAt  DateTime @updatedAt
+}
+
+/// A big task broken into smaller ones: a planner agent writes the tasks and
+/// the order between them; once started, each task becomes its own session and
+/// pull request, as soon as the tasks it waits for are merged.
+model Plan {
+  id          String     @id @default(uuid())
+  userId      String
+  repo        String
+  baseBranch  String
+  goal        String
+  /// The agent that plans, and the one each task's session uses.
+  planner     String
+  harness     String
+  /// planning | ready | running | done | failed | cancelled
+  status      String     @default("planning")
+  /// Tasks whose sessions may work at the same time.
+  maxParallel Int        @default(3)
+  /// Each task's session merges its pull request when it's ready, so the tasks after it build on it.
+  autoMerge   Boolean    @default(true)
+  /// The planner's overview, or why planning failed.
+  summary     String?
+  error       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       PlanTask[]
+  @@index([status])
+  @@index([userId, createdAt])
+}
+
+model PlanTask {
+  id        String   @id @default(uuid())
+  planId    String
+  /// A short name the others refer to in dependsOn.
+  key       String
+  title     String
+  prompt    String
+  dependsOn String[] @default([])
+  position  Int
+  /// The task's session, once started.
+  threadId  String?  @unique
+  /// pending | running | review (PR open, not merged) | needs_you | done | failed | skipped
+  status    String   @default("pending")
+  note      String?
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  @@unique([planId, key])
 }

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat, MagnifyingGlass, TreeStructure } from "@phosphor-icons/react";
 import { api, ApiError, type AgentReadiness, type Capabilities, type Repo } from "@/lib/api";
 import { agentsAskedFor } from "@repo/shared/agent-names";
 import { isProviderHarness } from "@repo/shared/providers";
@@ -24,7 +24,7 @@ const COUNCIL_STARTERS = [
   "What changed in AI coding agents in the last three months that matters to a small team?",
 ];
 
-type Mode = "session" | "compare" | "council" | "audit";
+type Mode = "session" | "compare" | "council" | "audit" | "plan";
 
 interface Estimate {
   turns: number;
@@ -48,7 +48,9 @@ export default function NewSessionPage() {
   const council = mode === "council";
   // Audit: the agent reviews the whole repo and lists findings; nothing changes until you pick some.
   const audit = mode === "audit";
-  const single = mode === "session" || audit;
+  // Plan: a planner breaks a big task into sessions that run side by side.
+  const planMode = mode === "plan";
+  const single = mode === "session" || audit || planMode;
   const [rivals, setRivals] = useState<string[]>(["native-claude", "native-codex"]);
   const [chair, setChair] = useState<string>("native-claude");
   const [rounds, setRounds] = useState(3);
@@ -69,6 +71,8 @@ export default function NewSessionPage() {
   useEffect(() => {
     // "New session on <repo>" from a session's menu comes with ?repo= and ?branch=.
     const asked = new URLSearchParams(window.location.search);
+    // "New plan" from the Plans page.
+    if (asked.get("mode") === "plan") setMode("plan");
     api<{ repos: Repo[] }>("/repos")
       .then(({ repos }) => {
         setRepos(repos);
@@ -148,6 +152,14 @@ export default function NewSessionPage() {
         router.push(`/app/arena/${id}`);
         return;
       }
+      if (planMode) {
+        const { id } = await api<{ id: string }>("/plans", {
+          method: "POST",
+          body: JSON.stringify({ repo, baseBranch: branch, goal: prompt, planner: harness }),
+        });
+        router.push(`/app/plans/${id}`);
+        return;
+      }
       const { id } = await api<{ id: string }>("/threads", {
         method: "POST",
         body: JSON.stringify(
@@ -175,11 +187,13 @@ export default function NewSessionPage() {
 
   return (
     <div className="start">
-      <h1>{council ? "What should the council answer?" : audit ? "Audit a repository" : "What should the agent work on?"}</h1>
+      <h1>{council ? "What should the council answer?" : audit ? "Audit a repository" : planMode ? "What's the big task?" : "What should the agent work on?"}</h1>
       <p>
         {council
           ? "Each agent researches on its own, then they review each other's findings and give final positions. The chair writes the report."
-          : audit
+          : planMode
+            ? "The agent reads the repo and breaks this into tasks, each its own session and pull request. You look over the tasks, then they run side by side, each starting once the ones it builds on are merged."
+            : audit
             ? "The agent reads the whole repo and lists what's wrong, most important first. It changes nothing: pick the findings you want fixed and they go to the agent as a turn."
             : "Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward."}
       </p>
@@ -203,7 +217,9 @@ export default function NewSessionPage() {
               }
             }}
             placeholder={
-              audit
+              planMode
+                ? "Add multi-currency billing: store a currency per invoice, convert totals, show amounts in the dashboard and the PDF, and migrate existing invoices to USD."
+                : audit
                 ? "Optional: what to focus on, like security, error handling or the API layer"
                 : council
                 ? "What's the state of the job market for software engineers right now? Where is hiring growing, where is it shrinking, and what's driving it?"
@@ -314,6 +330,10 @@ export default function NewSessionPage() {
                 </label>
               </>
             ) : null}
+            <button type="button" className="pill" aria-pressed={planMode} onClick={() => setMode(planMode ? "session" : "plan")} title="Break a big task into sessions that run side by side">
+              <TreeStructure size={14} />
+              <span className="pill-text">Plan</span>
+            </button>
             <button type="button" className="pill" aria-pressed={audit} onClick={() => setMode(audit ? "session" : "audit")} title="Review the whole repo for bugs and problems, then pick what to fix">
               <MagnifyingGlass size={14} />
               <span className="pill-text">Audit</span>
@@ -326,7 +346,7 @@ export default function NewSessionPage() {
               <UsersThree size={14} />
               <span className="pill-text">Council</span>
             </button>
-            {caps?.desktop && !council && !audit ? (
+            {caps?.desktop && !council && !audit && !planMode ? (
               <button type="button" className="pill" aria-pressed={desktop} onClick={() => setDesktop((d) => !d)} title="Give the agent a virtual desktop and browser">
                 <Monitor size={14} />
                 <span className="pill-text">Desktop</span>
@@ -375,6 +395,8 @@ export default function NewSessionPage() {
                 ? rivals.length < 2
                   ? "Pick at least two agents for the council."
                   : `${estimate ? `${estimate.turns} turns` : "Several turns"}${estimate?.usd != null ? `, about $${estimate.usd.toFixed(2)} from your recent turns` : ""}${estimate?.onPlan.length ? ` (${estimate.onPlan.join(" and ")} on your plan)` : ""}. Stops at the cap.`
+                : planMode
+                ? `${h.name} plans (one turn); each task is then a session of its own, costing what its turns cost.`
                 : audit
                 ? `${h.name} reviews the repo read-only and writes up findings. Costs like one turn.`
                 : compare
@@ -393,7 +415,7 @@ export default function NewSessionPage() {
         </div>
       </form>
 
-      {prompt.trim() || audit ? null : (
+      {prompt.trim() || audit || planMode ? null : (
         <div className="starters">
           <h2>Or start from</h2>
           {(council ? COUNCIL_STARTERS : STARTERS).map((s) => (

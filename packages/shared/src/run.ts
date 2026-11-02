@@ -24,6 +24,8 @@ export const RunSchema = z.object({
   userId: z.string().nullable().optional(),
   threadId: z.string().nullable().optional(),
   councilId: z.string().nullable().optional(),
+  // A planner's turn: the plan it writes.
+  planId: z.string().nullish(),
   kind: z.string().optional(),
   // A rewind or fork turn: the turn whose checkpoint it goes back to.
   targetRunId: z.string().nullish(),

@@ -96,6 +96,8 @@ export interface ThreadSummary {
   mergedAt?: string | null;
   /** The schedule that started it. */
   scheduleId?: string | null;
+  /** One task of a plan. */
+  planId?: string | null;
   /** A fork: the session it came from and the turn. */
   forkOf?: { threadId: string; title: string | null; turn: number | null } | null;
 }
@@ -132,7 +134,7 @@ export interface Turn {
   rewoundAt?: string | null;
   targetRunId?: string | null;
   /** What on GitHub started the turn, when something did. */
-  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord" | "slack"; name?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
+  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord" | "slack" | "plan"; name?: string; planId?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */
   harness?: string;
   /** A review's or audit's findings, as text. */
@@ -432,4 +434,44 @@ export interface Schedule {
   lastThreadTitle: string | null;
   /** "Weekdays at 09:00". */
   description: string;
+}
+
+export interface Plan {
+  id: string;
+  repo: string;
+  baseBranch: string;
+  goal: string;
+  planner: string;
+  harness: string;
+  status: "planning" | "ready" | "running" | "done" | "failed" | "cancelled";
+  maxParallel: number;
+  autoMerge: boolean;
+  summary: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface PlanTask {
+  id: string;
+  key: string;
+  title: string;
+  prompt: string;
+  dependsOn: string[];
+  position: number;
+  threadId: string | null;
+  status: "pending" | "running" | "review" | "needs_you" | "done" | "failed" | "skipped";
+  note: string | null;
+  session: { id: string; title: string; prUrl: string | null; mergedAt: string | null; harness: string } | null;
+}
+
+export interface PlanView {
+  plan: Plan;
+  tasks: PlanTask[];
+  planner: { id: string; status: string; error: string | null; output: string | null; costUsd: number | null; harness: string } | null;
+}
+
+export interface PlanSummary extends Plan {
+  total: number;
+  done: number;
+  needsYou: number;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarBlank, CaretRight, ChatsCircle, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
+import { CalendarBlank, CaretRight, ChatsCircle, TreeStructure, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import type { Turn } from "@/lib/api";
 import type { StreamEvent } from "@/lib/events";
 
@@ -81,6 +81,14 @@ export function TriggerNote({ turn }: { turn: Turn }) {
         <ChatsCircle size={14} />
         From {t.type === "slack" ? "Slack" : "Discord"}{t.by ? `, @${t.by}` : ""}
       </span>
+    );
+  }
+  if (t.type === "plan") {
+    return (
+      <Link className="msg-from" href={`/app/plans/${t.planId}`}>
+        <TreeStructure size={14} />
+        A task of the plan: {t.name ?? "a plan"}
+      </Link>
     );
   }
   if (t.type === "schedule") {

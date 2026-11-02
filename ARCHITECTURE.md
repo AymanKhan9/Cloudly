@@ -760,6 +760,26 @@ thread with `forkOfThreadId`/`forkAtRunId` whose first run pushes the checkpoint
 its transcript is the parent chain's turns up to each fork point, then its own. The API refuses a
 rewind while a turn runs or after the PR merged.
 
+### Plans
+
+A `Plan` has a planner turn (`Run.kind = "plan"`, `planId`, no thread) handled by
+`processPlanTurn`: a read-only workspace on the base branch with the goal at
+`/workspace/.cloudly-plan/goal.md`; the agent writes `plan.json`, read with `readRegular` and
+checked by `checkPlan` (`@repo/shared/plan`: 1–12 tasks, unique keys, dependencies that exist, no
+cycles via the same wave grouping the UI shows). Valid tasks become `PlanTask` rows and the plan
+waits in `ready` for the user, who can replace the list (checked the same way) before starting it.
+
+The worker's plan loop (`advancePlan`, every 5 s) keeps each started task's status in step with its
+session (merged → done; a running turn → running; `needsInput`, a cancelled turn or no commit →
+needs_you; a failed turn → failed; a PR waiting → review; committed with no remote → done), then
+starts pending tasks whose dependencies are done or skipped, up to `maxParallel` running at once
+and within the spend limit. A task is claimed with a conditional update (`status = pending AND
+threadId IS NULL`) before its thread is created, so passes on several workers can't start it
+twice. Task sessions are ordinary threads with `planId`, `autoMerge` from the plan (so dependents
+start from a base branch that has their dependencies' code), and a prompt that names the task's
+place in the plan. When every task is done or skipped the plan is done and a notification goes
+out.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own
