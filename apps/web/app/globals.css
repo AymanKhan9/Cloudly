@@ -6155,3 +6155,122 @@ div.msg-system {
 .plan-replan {
   margin-top: 16px;
 }
+
+/* ---------- Import ---------- */
+
+.import-ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.import-way {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.import-way h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  margin: 0;
+}
+
+.import-drop {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.import-drop:hover,
+.import-drop[data-dragging] {
+  border-color: var(--accent);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.import-where summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.import-where dl {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}
+
+.import-where dt {
+  font-weight: 600;
+}
+
+.import-where dd {
+  margin: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.import-preview {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.import-found {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.import-found > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.import-found .dim {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.import-prompts {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.import-prompts li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imported-tag {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}

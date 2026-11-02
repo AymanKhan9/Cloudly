@@ -132,7 +132,7 @@ export function ContextSettings() {
             <span className="label">Connect an editor</span>
             <p className="hint">
               Create a token for each editor, then add Cloudly as an MCP server there. The editor gets four tools: list_repos, repo_context, add_note and record_work. A token
-              only reaches shared context, nothing else in Cloudly.
+              reaches shared context and session imports (the Import page&apos;s command), nothing else in Cloudly.
             </p>
             {tokens?.length ? (
               <ul className="file-list">

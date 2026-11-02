@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowCounterClockwise, DotsThree, GitFork } from "@phosphor-icons/react";
-import { api, ApiError, type Turn } from "@/lib/api";
+import { ArrowCounterClockwise, DotsThree, DownloadSimple, GitFork } from "@phosphor-icons/react";
+import { IMPORT_SOURCES, type ImportSource } from "@repo/shared/session-import";
+import { api, ApiError, type ThreadSummary, type Turn } from "@/lib/api";
 import { HARNESSES, type Harness } from "@/lib/harness";
 
-/** The line at the top of a rewind or fork turn. */
+/** The line at the top of a rewind, fork or import turn. */
 export function CheckpointRequest({ turn }: { turn: Turn }) {
   return (
     <div className="msg-system">
-      {turn.kind === "rewind" ? <ArrowCounterClockwise size={14} /> : <GitFork size={14} />}
+      {turn.kind === "rewind" ? <ArrowCounterClockwise size={14} /> : turn.kind === "import" ? <DownloadSimple size={14} /> : <GitFork size={14} />}
       {turn.prompt}
     </div>
   );
@@ -26,6 +27,27 @@ export function ForkBanner({ forkOf }: { forkOf: { threadId: string; title: stri
         Forked from{" "}
         {forkOf.title ? <Link href={`/app/s/${forkOf.threadId}`}>{forkOf.title}</Link> : "a session that's gone"}
         {forkOf.turn ? ` after turn ${forkOf.turn}` : ""}.
+      </span>
+    </div>
+  );
+}
+
+/** Where an imported session came from, above its first turn. */
+export function ImportBanner({ imported, harness, settingUp }: { imported: NonNullable<ThreadSummary["imported"]>; harness: string; settingUp: boolean }) {
+  const source = IMPORT_SOURCES[imported.source as ImportSource];
+  const name = source?.name ?? "another agent";
+  const total = imported.turns + imported.dropped;
+  return (
+    <div className="fork-banner">
+      <DownloadSimple size={14} />
+      <span>
+        Imported from {name}: {total} turn{total === 1 ? "" : "s"}
+        {imported.dropped ? `, the most recent ${imported.turns} shown` : ""}.{" "}
+        {settingUp
+          ? "Setting up its branch and session…"
+          : imported.resumed && source?.harness === harness
+            ? `${name} carries on in its own session.`
+            : "Later turns get this conversation with each message."}
       </span>
     </div>
   );

@@ -156,7 +156,7 @@ async function sessionState(task: TaskRow): Promise<{ status: string; note: stri
   const thread = task.threadId ? await prisma.thread.findUnique({ where: { id: task.threadId } }) : null;
   if (!thread) return { status: "failed", note: "Its session was deleted." };
   if (thread.mergedAt) return { status: "done", note: null };
-  const runs = await prisma.run.findMany({ where: { threadId: thread.id, rewoundAt: null, kind: { notIn: ["rewind", "fork"] } }, orderBy: { createdAt: "desc" }, take: 20 });
+  const runs = await prisma.run.findMany({ where: { threadId: thread.id, rewoundAt: null, kind: { notIn: ["rewind", "fork", "import"] } }, orderBy: { createdAt: "desc" }, take: 20 });
   if (runs.some((r) => ACTIVE.includes(r.status))) return { status: "running", note: null };
   if (thread.needsInput) return { status: "needs_you", note: thread.needsInput };
   const last = runs[0];

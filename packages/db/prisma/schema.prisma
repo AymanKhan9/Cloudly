@@ -105,6 +105,8 @@ model Thread {
   forkAtRunId      String?
   /// One task of a plan (see Plan).
   planId           String?
+  /// Brought in from an agent run elsewhere (see SessionImport).
+  imported         SessionImport?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -689,4 +691,33 @@ model PlanTask {
   note      String?
   plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
   @@unique([planId, key])
+}
+
+/// A session brought into Cloudly from a coding agent run elsewhere (Claude Code,
+/// Codex, Pi, Gemini CLI, OpenCode, or any chat export; see @repo/shared/session-import).
+/// Its conversation becomes the session's first turns (Run.kind "import_turn");
+/// a queued "import" turn sets up its branch and, when the session's agent wrote
+/// the file, the agent's own session to resume.
+model SessionImport {
+  id        String   @id @default(uuid())
+  threadId  String   @unique
+  /// claude-code | codex | pi | gemini | opencode | chat | text
+  source    String
+  /// The agent's own id for the session, and the directory it ran in.
+  sessionId String?
+  cwd       String?
+  /// The original file, gzipped and sealed, for the agent that wrote it to resume.
+  fileName  String?
+  file      String?
+  /// The agent's own summary from before a compaction.
+  summary   String?
+  /// The branch the session's code starts from, if not the base branch.
+  startFrom String?
+  turns     Int
+  /// Older turns left out (only the most recent are kept).
+  dropped   Int      @default(0)
+  /// Whether the session's agent picked up its own session (set by the import turn).
+  resumed   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
 }

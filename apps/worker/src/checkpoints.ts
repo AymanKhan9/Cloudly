@@ -34,7 +34,7 @@ async function checkpoint(threadId: string, at: { createdAt: Date }, ws: Workspa
 
 /** "turn 3": where a turn sits in its session. */
 async function turnNumber(threadId: string, runId: string): Promise<number> {
-  const runs = await prisma.run.findMany({ where: { threadId, kind: { notIn: ["rewind", "fork"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  const runs = await prisma.run.findMany({ where: { threadId, kind: { notIn: ["rewind", "fork", "import"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
   return runs.findIndex((r) => r.id === runId) + 1;
 }
 

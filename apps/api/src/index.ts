@@ -29,6 +29,7 @@ import { slack, slackSettings } from './slack-routes';
 import { agents } from './agent-routes';
 import { checkpoints } from './checkpoint-routes';
 import { plans } from './plan-routes';
+import { imports, importCommand } from './import-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -90,6 +91,8 @@ app.route('/settings/repos', repoSettings)
 app.route('/threads', reviewRoutes)
 app.route('/threads', checkpoints)
 app.route('/plans', plans)
+// Signed in, or a personal token from the import command (import-routes).
+app.route('/imports', imports)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
@@ -104,6 +107,11 @@ app.route('/mcp', mcpEndpoint)
 app.route('/', live)
 
 app.get('/health', (c) => c.json({ ok: true }))
+
+// The import command (no secrets in it): fetched with curl, run with node.
+app.get('/import.mjs', async (c) => {
+  return c.body(await importCommand(), 200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+})
 
 app.get('/harnesses', async (c) => {
   // ?check=acp-pi,acp-muse: whether those can run, added or not (the composer's check
@@ -243,24 +251,30 @@ const TURN_FIELDS = {
 async function forkOf(threadId: string | null, runId: string | null, userId: string) {
   if (!threadId) return null;
   const parent = await prisma.thread.findFirst({ where: { id: threadId, userId }, select: { id: true, title: true } });
-  const runs = parent ? await prisma.run.findMany({ where: { threadId, kind: { notIn: ['rewind', 'fork'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } }) : [];
+  const runs = parent ? await prisma.run.findMany({ where: { threadId, kind: { notIn: ['rewind', 'fork', 'import'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } }) : [];
   return { threadId, title: parent?.title ?? null, turn: runId ? runs.findIndex((r) => r.id === runId) + 1 || null : null };
 }
 
 async function threadView(threadId: string, userId: string) {
   const thread = await prisma.thread.findFirst({
     where: { id: threadId, userId },
-    include: { runs: { orderBy: { createdAt: 'asc' }, select: TURN_FIELDS } },
+    include: {
+      runs: { orderBy: { createdAt: 'asc' }, select: TURN_FIELDS },
+      imported: { select: { source: true, turns: true, dropped: true, resumed: true, startFrom: true, summary: true } },
+    },
   });
   if (!thread) return null;
-  const { runs, ...meta } = thread;
+  const { runs, imported, ...meta } = thread;
   // Turns other sessions asked for name where they came from, if the user still has it.
   const fromIds = [...new Set(runs.map((r) => r.fromThreadId).filter((x): x is string => Boolean(x)))];
   const titles = new Map(
     (await prisma.thread.findMany({ where: { id: { in: fromIds }, userId }, select: { id: true, title: true } })).map((t) => [t.id, t.title]),
   );
   return {
-    thread: { ...meta, agentSessionId: undefined, forkOf: await forkOf(meta.forkOfThreadId, meta.forkAtRunId, userId) },
+    thread: {
+      ...meta, agentSessionId: undefined, forkOf: await forkOf(meta.forkOfThreadId, meta.forkAtRunId, userId),
+      imported: imported ? { source: imported.source, turns: imported.turns, dropped: imported.dropped, resumed: imported.resumed, startFrom: imported.startFrom, hasSummary: Boolean(imported.summary) } : null,
+    },
     // The password itself only goes out alongside a relay token (live-routes).
     turns: runs.map(({ desktopPassword, fromThreadId, ...r }) => ({
       ...r,
@@ -426,18 +440,27 @@ app.get('/threads/:id/events', async (c) => {
   const response = streamSSE(c, async (stream) => {
     const lastSeq = new Map<string, number>();
     let lastSummary = '';
+    // Turns that had ended before a pass that read their events: nothing more comes for them.
+    const ended = new Set<string>();
+    let endedBefore = new Set<string>();
 
     while (!stream.aborted) {
       const view = await threadView(threadId, userId);
       if (!view) break;
 
       let sent = 0;
-      for (const turn of view.turns) {
-        const events = await prisma.runEvent.findMany({
-          where: { runId: turn.id, seq: { gt: lastSeq.get(turn.id) ?? -1 } },
-          orderBy: { seq: 'asc' },
-        });
-        for (const e of events) {
+      // One query for every turn still open (an imported session can have hundreds of turns).
+      const open = view.turns.filter((t) => !ended.has(t.id));
+      const events = open.length
+        ? await prisma.runEvent.findMany({
+            where: { OR: open.map((t) => ({ runId: t.id, seq: { gt: lastSeq.get(t.id) ?? -1 } })) },
+            orderBy: [{ runId: 'asc' }, { seq: 'asc' }],
+          })
+        : [];
+      const byRun = new Map<string, typeof events>();
+      for (const e of events) byRun.set(e.runId, [...(byRun.get(e.runId) ?? []), e]);
+      for (const turn of open) {
+        for (const e of byRun.get(turn.id) ?? []) {
           await stream.writeSSE({
             event: 'turn-event',
             data: JSON.stringify({ runId: turn.id, seq: e.seq, kind: e.kind, data: e.data, ts: e.ts }),
@@ -446,6 +469,9 @@ app.get('/threads/:id/events', async (c) => {
           sent++;
         }
       }
+      // Read once more after a turn ends, for events written as it ended; then it's done.
+      for (const id of endedBefore) ended.add(id);
+      endedBefore = new Set(open.filter((t) => TERMINAL_STATUSES.includes(t.status)).map((t) => t.id));
 
       const summary = JSON.stringify(view);
       if (summary !== lastSummary) {

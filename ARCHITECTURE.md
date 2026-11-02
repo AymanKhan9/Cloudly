@@ -780,6 +780,28 @@ start from a base branch that has their dependencies' code), and a prompt that n
 place in the plan. When every task is done or skipped the plan is done and a notification goes
 out.
 
+### Imported sessions
+
+`@repo/shared/session-import` reads each agent's session format (Claude Code's and Pi's
+JSONL trees, following the current branch; Codex rollouts; Gemini CLI chat logs and
+checkpoints; `opencode export`; generic `{role, content}` JSON or `User:`/`Assistant:` text) into
+turns of a prompt plus text and one-line tool steps. `POST /imports` (signed in, or a personal
+token from the import command in `apps/api/static/cloudly-import.mjs`) creates the thread, a
+`SessionImport` row, one finished `Run.kind = "import_turn"` per turn with its steps as events,
+and a queued `"import"` turn. The original file is kept gzipped and sealed when its agent can
+resume it.
+
+The worker's `processImport` points the session's branch at the work: the command's own
+`cloudly/import-…` branch is used as the thread's branch; another branch is pushed to
+`agent/import-<id>`; otherwise the base. The last import turn gets that commit as its
+`commitSha`, so it's a checkpoint. When the thread's agent wrote the file (Claude Code, Codex,
+Pi), the file goes into the thread's home where that agent looks (`.claude/projects/-workspace`,
+`.codex/sessions/...` plus the shared ChatGPT Codex home, Pi's sessions dir plus pi-acp's
+`session-map.json`) with the old working directory rewritten to `/workspace`, and
+`agentSessionId` is set, so the next turn resumes it natively. Otherwise `promptWithHistory`
+puts the imported turns in their own section (`importedHistory`: the compaction summary, then as
+many recent turns as fit in 24k characters) ahead of the Cloudly turns.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

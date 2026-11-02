@@ -47,7 +47,7 @@ import { DesktopViewer } from "@/components/desktop-viewer";
 import { ContextPanel } from "@/components/context-panel";
 import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
 import { ReviewRequest, ReviewResult, TriggerNote, CiFixRequest } from "@/components/review";
-import { CheckpointRequest, ForkBanner, TurnMenu } from "@/components/checkpoints";
+import { CheckpointRequest, ForkBanner, ImportBanner, TurnMenu } from "@/components/checkpoints";
 import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
@@ -223,7 +223,7 @@ function TurnView({
   return (
     <article className="turn" data-rewound={turn.rewoundAt ? true : undefined}>
       {turn.rewoundAt ? <div className="rewound-tag">Rewound</div> : null}
-      {turn.kind === "fork" ? null : turn.kind === "rewind" ? (
+      {turn.kind === "fork" ? null : turn.kind === "rewind" || turn.kind === "import" ? (
         <CheckpointRequest turn={turn} />
       ) : turn.kind === "fix" ? (
         <FixRequest turn={turn} agent={h.name} />
@@ -273,7 +273,8 @@ function TurnView({
             {status}
           </span>
           {active ? <span className="num">{elapsed(turn.createdAt, now)}</span> : null}
-          {turn.kind === "rewind" || turn.kind === "fork" ? null : turn.onPlan ? (
+          {turn.kind === "import_turn" ? <span className="imported-tag">Imported</span> : null}
+          {turn.kind === "rewind" || turn.kind === "fork" || turn.kind === "import" || turn.kind === "import_turn" ? null : turn.onPlan ? (
             <span>On your plan</span>
           ) : turn.costUsd !== null ? (
             <span className="num" title={h.cost === "estimated" ? "Estimated from token counts" : "Reported by the agent"}>
@@ -499,7 +500,9 @@ export default function SessionPage() {
   // The latest review's findings, as a count on the Changes button.
   const lastReview = [...turns].reverse().find((t) => t.kind === "review" || t.kind === "audit");
   // The latest turn that wasn't undone: nothing after it to rewind.
-  const lastLiveTurn = [...turns].reverse().find((t) => !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork");
+  const lastLiveTurn = [...turns].reverse().find((t) => !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import");
+  // Of an imported conversation, only the last turn has its code (the code as it was imported).
+  const lastImported = [...turns].reverse().find((t) => t.kind === "import_turn");
   const openFindings = lastReview?.status === "succeeded" && lastReview.output ? Number(/(\d+) blocking/.exec(lastReview.output)?.[1] ?? 0) + Number(/(\d+) suggestions?/.exec(lastReview.output)?.[1] ?? 0) : 0;
 
   // A /word the agent didn't announce isn't a command in this mode (interactive-only
@@ -683,6 +686,7 @@ export default function SessionPage() {
 
       <div className="thread">
         {thread.forkOf ? <ForkBanner forkOf={thread.forkOf} /> : null}
+        {thread.imported ? <ImportBanner imported={thread.imported} harness={thread.harness} settingUp={turns.some((t) => t.kind === "import" && ACTIVE.includes(t.status))} /> : null}
         {turns.map((t) => (
           <TurnView
             key={t.id}
@@ -691,7 +695,7 @@ export default function SessionPage() {
             harness={thread.harness}
             now={now}
             checkpoint={
-              !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && !ACTIVE.includes(t.status)
+              !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import" && (t.kind !== "import_turn" || t.id === lastImported?.id) && !ACTIVE.includes(t.status)
                 ? {
                     threadId: thread.id,
                     canRewind: !busy && !thread.mergedAt && t.id !== lastLiveTurn?.id,

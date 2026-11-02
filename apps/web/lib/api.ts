@@ -100,6 +100,28 @@ export interface ThreadSummary {
   planId?: string | null;
   /** A fork: the session it came from and the turn. */
   forkOf?: { threadId: string; title: string | null; turn: number | null } | null;
+  /** Brought in from an agent run elsewhere. */
+  imported?: { source: string; turns: number; dropped: number; resumed: boolean; startFrom: string | null; hasSummary: boolean } | null;
+}
+
+/** What an import found in a session file, before it's imported. */
+export interface ImportPreview {
+  source: string;
+  sourceName: string;
+  /** The agent that wrote it, when Cloudly has one like it. */
+  sourceHarness: string | null;
+  title: string;
+  sessionId: string | null;
+  cwd: string | null;
+  gitBranch: string | null;
+  repo: string | null;
+  turns: number;
+  dropped: number;
+  toolCalls: number;
+  hasSummary: boolean;
+  canResume: boolean;
+  prompts: string[];
+  lastPrompt: string | null;
 }
 
 export interface Turn {
@@ -127,7 +149,7 @@ export interface Turn {
    * review: the reviewer looked at the session's change; review_fix: the author
    * was sent the reviewer's blocking findings; audit: the whole repo was reviewed.
    */
-  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix" | "rewind" | "fork";
+  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix" | "rewind" | "fork" | "import" | "import_turn";
   /** The turn's commit: a checkpoint to rewind or fork from. */
   commitSha?: string | null;
   /** Undone by a rewind. */

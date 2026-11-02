@@ -1,5 +1,6 @@
 import { prisma } from "@repo/db";
 import { isAcpHarness } from "@repo/shared/providers";
+import { IMPORT_SOURCES, importedHistory, type ImportSource } from "@repo/shared/session-import";
 
 export interface PriorTurn {
   prompt: string;
@@ -20,8 +21,8 @@ function clip(s: string, n: number) {
  * earlier conversation written into its prompt. The code itself carries over
  * through the thread's git branch, not through this text.
  */
-export function formatTranscript(prior: PriorTurn[], prompt: string): string {
-  if (prior.length === 0) return prompt;
+export function formatTranscript(prior: PriorTurn[], prompt: string, imported?: { from: string; history: string }): string {
+  if (prior.length === 0 && !imported) return prompt;
   const recent = prior.slice(-MAX_TURNS);
   const body = recent
     .map((t) => `User: ${clip(t.prompt, MAX_PROMPT_CHARS)}\nYou: ${t.reply ? clip(t.reply, MAX_REPLY_CHARS) : "(no written reply)"}`)
@@ -29,9 +30,14 @@ export function formatTranscript(prior: PriorTurn[], prompt: string): string {
   return [
     "You are continuing a conversation about this repository. The files in the working directory already contain everything done in the earlier turns.",
     "",
-    "Earlier in this conversation:",
-    body,
-    "",
+    ...(imported
+      ? [
+          `This conversation started in ${imported.from} and was brought into Cloudly. There, earlier:`,
+          imported.history,
+          "",
+          ...(recent.length ? ["Then, in Cloudly:", body, ""] : []),
+        ]
+      : ["Earlier in this conversation:", body, ""]),
     "The user's new message (answer this one):",
     prompt,
   ].join("\n");
@@ -46,9 +52,9 @@ export async function promptWithHistory(
   const turns = (where: object) =>
     prisma.run.findMany({
       // Rewound turns were undone; rewinds and forks are Cloudly's own bookkeeping.
-      where: { ...where, id: { not: currentRunId }, rewoundAt: null, kind: { notIn: ["rewind", "fork"] }, status: { in: ["succeeded", "failed", "cancelled"] } },
+      where: { ...where, id: { not: currentRunId }, rewoundAt: null, kind: { notIn: ["rewind", "fork", "import"] }, status: { in: ["succeeded", "failed", "cancelled"] } },
       orderBy: { createdAt: "asc" },
-      select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
+      select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: { in: ["text", "tool_call"] } }, orderBy: { seq: "asc" }, select: { kind: true, data: true } } },
     });
 
   // A fork starts with the conversation of the session it came from, up to the
@@ -66,12 +72,32 @@ export async function promptWithHistory(
     runs.push(...(await turns({ threadId: link.threadId, ...(link.until ? { createdAt: { lte: link.until } } : {}) })));
   }
 
+  // A session imported from elsewhere (the first link of the chain, if forked): its
+  // turns go in as their own section, with more room, since there may be many.
+  const imp = await prisma.sessionImport.findUnique({ where: { threadId: chain[0]!.threadId }, select: { source: true, summary: true } });
+  const importedRuns = imp ? runs.filter((r) => r.kind === "import_turn") : [];
+  const imported = imp
+    ? {
+        from: IMPORT_SOURCES[imp.source as ImportSource]?.name ?? "another agent",
+        history: importedHistory(
+          importedRuns.map((r) => ({
+            prompt: r.prompt,
+            reply: replyText(r.events.filter((e) => e.kind === "text"), r.harness ?? harness),
+            tools: r.events.filter((e) => e.kind === "tool_call").map((e) => String((e.data as { title?: unknown } | null)?.title ?? "")).filter(Boolean),
+          })),
+          imp.summary,
+        ),
+      }
+    : undefined;
+
   // A review or audit turn's reply is its findings, not the reviewer's working notes.
-  const prior = runs.map((r) => ({
-    prompt: r.prompt,
-    reply: (r.kind === "review" || r.kind === "audit") && r.output ? r.output : replyText(r.events, r.harness ?? harness),
-  }));
-  return formatTranscript(prior, prompt);
+  const prior = runs
+    .filter((r) => !imp || r.kind !== "import_turn")
+    .map((r) => ({
+      prompt: r.prompt,
+      reply: (r.kind === "review" || r.kind === "audit") && r.output ? r.output : replyText(r.events.filter((e) => e.kind === "text"), r.harness ?? harness),
+    }));
+  return formatTranscript(prior, prompt, imported);
 }
 
 /** A turn's written reply, from its text events. */

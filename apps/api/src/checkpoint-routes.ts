@@ -14,8 +14,13 @@ export const checkpoints = new Hono<AuthEnv>();
 const ACTIVE = ["queued", "running", "finalizing"];
 
 /** Why the session can't go back to that turn now, if it can't. */
-async function problem(thread: { id: string; mergedAt: Date | null }, target: { status: string; rewoundAt: Date | null; kind: string } | null, rewind: boolean) {
-  if (!target || target.kind === "rewind" || target.kind === "fork") return "No such turn in this session.";
+async function problem(thread: { id: string; mergedAt: Date | null }, target: { status: string; rewoundAt: Date | null; kind: string; createdAt: Date } | null, rewind: boolean) {
+  if (!target || target.kind === "rewind" || target.kind === "fork" || target.kind === "import") return "No such turn in this session.";
+  // Cloudly has an imported session's code only as it was when it came in.
+  if (target.kind === "import_turn") {
+    const later = await prisma.run.count({ where: { threadId: thread.id, kind: "import_turn", createdAt: { gt: target.createdAt } } });
+    if (later) return "Cloudly has this session's code only as it was when it was imported, so it can go back to the last imported turn but not before it.";
+  }
   if (target.rewoundAt) return "That turn was rewound already.";
   if (ACTIVE.includes(target.status)) return "That turn hasn't finished yet.";
   if (rewind && thread.mergedAt) return "The pull request is merged, so the branch stays as it is. Fork the session instead.";
@@ -26,7 +31,7 @@ async function problem(thread: { id: string; mergedAt: Date | null }, target: { 
 }
 
 async function turnNumber(threadId: string, runId: string) {
-  const runs = await prisma.run.findMany({ where: { threadId, kind: { notIn: ["rewind", "fork"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  const runs = await prisma.run.findMany({ where: { threadId, kind: { notIn: ["rewind", "fork", "import"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
   return runs.findIndex((r) => r.id === runId) + 1;
 }
 
