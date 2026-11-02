@@ -61,6 +61,7 @@ These are normally entered in the browser. A value in `.env` is only used when n
 | `SANDBOX_PIDS` | Process limit per run container. Default `2048`. |
 | `CLOUDLY_REPO_CACHE` | Where the worker keeps a copy of each repo so turns start fast. Default `~/.cloudly/repo-cache`; `off` clones the whole repo every turn. |
 | `CLOUDLY_REPO_CACHE_DAYS` | A repo's copy is removed after this many days without a turn. Default `14`. |
+| `CLOUDLY_AGENT_UPDATE_HOURS` | How often added agents are checked for newer versions. Default `6`; `0` turns the checks off. |
 
 ### Fast starts
 

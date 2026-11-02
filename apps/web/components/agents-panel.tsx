@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowSquareOut, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowCircleUp, ArrowSquareOut, ArrowsClockwise, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { api, ApiError, type AgentRow, type AgentsSettings, type CatalogItem, type RegistryItem } from "@/lib/api";
 import { AgentLogo, MaskIcon } from "@/components/agent-logo";
 import { useApp } from "@/components/app-context";
@@ -126,6 +126,52 @@ function DefineKey({ agent, onSaved }: { agent: AgentRow; onSaved: () => void })
 
 type ImageStatus = NonNullable<AgentsSettings["image"]>["status"] | undefined;
 
+/** Where an agent is with its updates: installing one, one waiting, or what the last one did. */
+function UpdateLine({ agent, busy, onUpdate }: { agent: AgentRow; busy: boolean; onUpdate: () => void }) {
+  if (agent.source === "custom") return null;
+  if (agent.updateState === "updating") {
+    return (
+      <div className="state update-line">
+        <ArrowsClockwise size={13} weight="bold" />
+        <span>
+          Updating to <span className="mono">{agent.version}</span>. New turns use it once the sandbox image is rebuilt.
+        </span>
+      </div>
+    );
+  }
+  if (agent.availableVersion) {
+    return (
+      <div className="state update-line" data-available>
+        <ArrowCircleUp size={13} weight="bold" />
+        <span>
+          <span className="mono">{agent.availableVersion}</span> is available.
+        </span>
+        <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={onUpdate}>
+          Update
+        </button>
+      </div>
+    );
+  }
+  if (agent.updateState === "failed" && agent.updateNote) {
+    return (
+      <div className="state update-line" data-locked>
+        <WarningCircle size={13} weight="bold" />
+        <span>{agent.updateNote}</span>
+      </div>
+    );
+  }
+  // A recent update, shown for a week.
+  if (agent.updateState === "updated" && agent.updateNote && agent.updatedVersionAt && Date.now() - new Date(agent.updatedVersionAt).getTime() < 7 * 86_400_000) {
+    return (
+      <div className="state update-line" data-set>
+        <ArrowCircleUp size={13} weight="bold" />
+        <span>{agent.updateNote}</span>
+      </div>
+    );
+  }
+  return null;
+}
+
 /** Where an agent is on its way to its first turn. */
 function installState(agent: AgentRow, image: ImageStatus): { ok: boolean; text: string } {
   if (agent.missing.length) return { ok: false, text: `Needs ${agent.missing.join(" and ")}` };
@@ -179,8 +225,22 @@ function AgentItem({ agent, image, onChange }: { agent: AgentRow; image: ImageSt
             {state.ok ? <CheckCircle size={13} weight="bold" /> : agent.missing.length ? <WarningCircle size={13} weight="bold" /> : <Circle size={13} weight="bold" />}
             {state.text}
           </div>
+          <UpdateLine agent={agent} busy={busy} onUpdate={() => act({ method: "POST" }, "/update")} />
         </div>
         <div className="mcp-actions">
+          {agent.source !== "custom" ? (
+            <button
+              type="button"
+              className="pill"
+              aria-pressed={agent.autoUpdate}
+              disabled={busy}
+              onClick={() => act({ method: "PATCH", body: JSON.stringify({ autoUpdate: !agent.autoUpdate }) })}
+              title={agent.autoUpdate ? "Newer versions install on their own. Click to update by hand instead." : "Install newer versions on their own"}
+            >
+              <ArrowsClockwise size={13} />
+              <span className="pill-text">{agent.autoUpdate ? "Auto-update on" : "Auto-update off"}</span>
+            </button>
+          ) : null}
           <button type="button" className="btn btn-secondary" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             Keys
           </button>
@@ -538,6 +598,8 @@ export function AgentsPanel() {
   const { refreshHarnesses } = useApp();
   const [settings, setSettings] = useState<AgentsSettings | null>(null);
   const [adding, setAdding] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkMsg, setCheckMsg] = useState<string | null>(null);
   const load = useCallback(async () => {
     const s = await api<AgentsSettings>("/settings/agents").catch(() => null);
     setSettings(s);
@@ -547,8 +609,28 @@ export function AgentsPanel() {
     load();
   }, [load]);
 
+  async function checkUpdates() {
+    setChecking(true);
+    setCheckMsg(null);
+    try {
+      const { results } = await api<{ results: { id: string; to: string; outcome: "installing" | "available" | "skipped" }[] }>("/settings/agents/updates/check", { method: "POST" });
+      const name = (id: string) => settings?.agents.find((a) => a.id === id)?.name ?? id;
+      const fresh = results.filter((r) => r.outcome !== "skipped");
+      setCheckMsg(
+        fresh.length === 0
+          ? "Every agent is up to date."
+          : fresh.map((r) => `${name(r.id)} ${r.to}${r.outcome === "installing" ? " is installing" : " is available"}`).join(". ") + ".",
+      );
+      await load();
+    } catch (err) {
+      setCheckMsg(err instanceof ApiError ? err.message : "Couldn't check for updates.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   // The image builds in the background after an agent is added; check back until it's done.
-  const waiting = Boolean(settings?.agents.some((a) => !a.installed) && settings?.image?.status !== "failed");
+  const waiting = Boolean(settings?.agents.some((a) => !a.installed || a.updateState === "updating") && settings?.image?.status !== "failed");
   useEffect(() => {
     if (!waiting) return;
     const timer = window.setInterval(load, 5000);
@@ -592,7 +674,13 @@ export function AgentsPanel() {
             settings.agents.map((a) => <AgentItem key={a.id} agent={a} image={settings.image?.status} onChange={load} />)
           )}
           <div className="panel-row form-foot">
-            <span className="msg">Added agents&apos; turns record no cost unless you set prices for them (see Configuration in the docs).</span>
+            <span className="msg" role="status">
+              {checkMsg ?? "Pi and OpenCode report what their turns cost. Other added agents record no cost unless you set prices for them (see Configuration in the docs)."}
+            </span>
+            <button type="button" className="btn btn-secondary" disabled={!settings?.agents.some((a) => a.source !== "custom") || checking} onClick={checkUpdates} title="Agents also check for updates every six hours">
+              <ArrowsClockwise size={15} />
+              {checking ? "Checking" : "Check for updates"}
+            </button>
             <button type="button" className="btn btn-primary" disabled={!settings} onClick={() => setAdding(true)}>
               <Plus size={15} />
               Add agent

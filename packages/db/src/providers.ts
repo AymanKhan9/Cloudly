@@ -50,6 +50,13 @@ export interface ProviderView {
   /** A required key is missing, so turns can't start yet. */
   missing: string[];
   createdAt: Date;
+  /** Updates (see provider-updates.ts). */
+  autoUpdate: boolean;
+  availableVersion: string | null;
+  updateState: string | null;
+  updateNote: string | null;
+  updatedVersionAt: Date | null;
+  checkedAt: Date | null;
 }
 
 function readSecret(blob: string | null, key: Buffer): Record<string, string> {
@@ -88,6 +95,12 @@ async function view(row: ProviderRow, key: Buffer): Promise<ProviderView> {
     credentials,
     missing: credentials.filter((c) => !c.optional && !c.set && !c.reused).map((c) => c.env),
     createdAt: row.createdAt,
+    autoUpdate: row.autoUpdate,
+    availableVersion: row.availableVersion,
+    updateState: row.updateState,
+    updateNote: row.updateNote,
+    updatedVersionAt: row.updatedVersionAt,
+    checkedAt: row.checkedAt,
   };
 }
 
@@ -155,7 +168,7 @@ export async function addProvider(input: {
   }
 }
 
-export async function updateProvider(id: string, input: { name?: string; enabled?: boolean; hosts?: string[] }): Promise<void> {
+export async function updateProvider(id: string, input: { name?: string; enabled?: boolean; hosts?: string[]; autoUpdate?: boolean }): Promise<void> {
   const row = await prisma.provider.findUnique({ where: { id } });
   if (!row) throw new Error("No such agent.");
   const spec = input.hosts !== undefined ? cleanSpec({ ...specOf(row), hosts: input.hosts }) : undefined;
@@ -164,6 +177,7 @@ export async function updateProvider(id: string, input: { name?: string; enabled
     data: {
       ...(input.name !== undefined ? { name: input.name.trim().slice(0, 64) || id } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      ...(input.autoUpdate !== undefined ? { autoUpdate: input.autoUpdate } : {}),
       ...(spec ? { spec: spec as unknown as Prisma.InputJsonValue } : {}),
     },
   });

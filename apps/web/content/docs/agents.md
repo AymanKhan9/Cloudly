@@ -45,6 +45,19 @@ Two agents in the list can't be added yet. **Muse Code** signs in only with a Me
 
 Once you add an agent, the worker installs it into the sandbox image in the background. **Settings → Sandbox tools** shows the build. Its first session can start when the build finishes. An agent whose install fails is left out; the rest of the image still builds. **Turn off** hides an agent from the pickers but keeps it installed, so turning it back on needs no download. **Remove** takes it out of the next image build.
 
+### Updates
+
+Agents added from Cloudly's list or the ACP registry keep themselves up to date. Every six hours (and when you press **Check for updates** under **Settings → Agents**), Cloudly compares each one with the newest release in the ACP registry. Packages the registry doesn't pin, like Pi's own `pi-coding-agent`, are compared with their latest release on npm.
+
+When there's a newer one:
+
+- **Auto-update on** (the default): Cloudly switches the agent to it and rebuilds the sandbox image. Turns that are running keep the version they started with; new turns use the new one once the image is built. The agent's row says what it updated from and to.
+- **Auto-update off:** the row says the new version is available, with an **Update** button.
+
+If a new version doesn't install, Cloudly puts the old one back, says so on the agent's row, and doesn't try that version again; the next release is tried as usual. If the image fails to build for another reason (the setup script, say), the agent goes back to its old version for now and the new one is tried again at the next check.
+
+Agents you added with your own command never update on their own: Cloudly doesn't know where their releases come from. Set `CLOUDLY_AGENT_UPDATE_HOURS` to change how often agents are checked, or to `0` to stop the checks. The built-in agents (Claude Agent, Codex, Gemini CLI) update with Cloudly itself.
+
 ### Keys stay out of the sandbox
 
 Added agents follow the same rule as the built-in ones. The sandbox gets a placeholder for each key. The egress proxy swaps in the real key only on HTTPS requests to that key's hosts, so a prompt-injected agent has nothing to leak. The sandbox can reach a key's hosts, plus any **Other hosts it needs** you list for the agent (sign-in pages, model lists, update checks). Everything else is blocked as usual. See [Sandbox](/docs/sandbox).

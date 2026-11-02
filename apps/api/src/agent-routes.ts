@@ -3,12 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   prisma, listProviders, getProvider, addProvider, updateProvider, deleteProvider, setProviderCredentials,
-  removeProviderCredential, providerInstalled,
+  removeProviderCredential, providerInstalled, checkProviderUpdates, installAvailableUpdate,
 } from "@repo/db";
 import {
   ACP_REGISTRY_URL, BUILTIN_AGENTS, PROVIDER_CATALOG, catalogEntry, catalogLaunch, launchFromRegistry,
   providerIdFrom, registryInstallable, type ProviderSpec, type RegistryAgent,
 } from "@repo/shared/providers";
+import { parseRegistry, npmLatest } from "@repo/shared/agent-updates";
 import type { AuthEnv } from "./middleware/auth_middleware";
 
 // Settings > Agents: agents beyond the three built in, added the way T3 Code
@@ -18,17 +19,6 @@ import type { AuthEnv } from "./middleware/auth_middleware";
 
 export const agents = new Hono<AuthEnv>();
 
-const RegistryAgentSchema = z.object({
-  id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,62}$/i),
-  name: z.string().max(100),
-  version: z.string().max(100),
-  description: z.string().max(1000).optional(),
-  website: z.string().max(500).optional(),
-  repository: z.string().max(500).optional(),
-  icon: z.string().max(500).optional(),
-  distribution: z.record(z.string(), z.any()),
-});
-
 let registryCache: { at: number; agents: RegistryAgent[] } | null = null;
 const REGISTRY_TTL_MS = 60 * 60 * 1000;
 
@@ -37,11 +27,7 @@ export async function fetchRegistry(fetcher: typeof fetch = fetch): Promise<Regi
   if (registryCache && Date.now() - registryCache.at < REGISTRY_TTL_MS) return registryCache.agents;
   const res = await fetcher(process.env.ACP_REGISTRY_URL ?? ACP_REGISTRY_URL, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`The ACP registry answered ${res.status}.`);
-  const body = (await res.json()) as { agents?: unknown[] };
-  const list = (Array.isArray(body.agents) ? body.agents : []).flatMap((a) => {
-    const parsed = RegistryAgentSchema.safeParse(a);
-    return parsed.success ? [parsed.data as RegistryAgent] : [];
-  });
+  const list = parseRegistry(await res.json());
   registryCache = { at: Date.now(), agents: list };
   return list;
 }
@@ -227,6 +213,38 @@ const PatchSchema = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   enabled: z.boolean().optional(),
   hosts: z.array(z.string().max(253)).max(30).optional(),
+  /** Install newer versions on its own. */
+  autoUpdate: z.boolean().optional(),
+});
+
+/** How the API checks for updates: the registry fetched fresh, npm for unpinned packages. Tests swap it. */
+let updateSources = {
+  registry: () => {
+    resetRegistryCache();
+    return fetchRegistry();
+  },
+  npmLatest: (name: string) => npmLatest(name),
+};
+export function setUpdateSources(src: typeof updateSources) {
+  updateSources = src;
+}
+
+// "Check for updates": the same check the worker runs every few hours.
+agents.post("/updates/check", async (c) => {
+  try {
+    let registry: Promise<RegistryAgent[]> | null = null;
+    const results = await checkProviderUpdates({ registry: () => (registry ??= updateSources.registry()), npmLatest: updateSources.npmLatest });
+    return c.json({ results });
+  } catch (err) {
+    return c.json({ message: `Couldn't check for updates: ${err instanceof Error ? err.message : String(err)}` }, 502);
+  }
+});
+
+// Installs the update a check found, for an agent with auto-update off.
+agents.post("/:id/update", async (c) => {
+  if (!(await getProvider(c.req.param("id")))) return c.json({ message: "No such agent." }, 404);
+  if (!(await installAvailableUpdate(c.req.param("id")))) return c.json({ message: "No update waiting for this agent. Check for updates first." }, 409);
+  return c.json({ agent: await getProvider(c.req.param("id")) });
 });
 
 agents.patch("/:id", zValidator("json", PatchSchema), async (c) => {

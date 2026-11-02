@@ -5834,3 +5834,24 @@ div.msg-system {
   color: var(--accent-ink);
   text-decoration: underline;
 }
+
+/* ---------- Agents: updates ---------- */
+
+.state.update-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.update-line > svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.update-line[data-available] {
+  color: var(--accent-ink);
+}
+
+.update-line .btn-sm {
+  padding-block: 2px;
+}

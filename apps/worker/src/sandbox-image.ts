@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
-import { prisma, config, providerInstallScript } from "@repo/db";
+import { prisma, config, providerInstallScript, settleProviderUpdates } from "@repo/db";
 
 export const BASE_IMAGE = "cloud-agents-base";
 const LOG_CHARS = 8000;
@@ -76,6 +76,7 @@ export async function syncSandboxImage(): Promise<void> {
   if (current.scriptHash === hash && current.status === "ready" && current.image === tag) return;
   if ((await docker(["image", "inspect", tag])).ok) {
     await prisma.sandboxImage.update({ where: { id: 1 }, data: { scriptHash: hash, status: "ready", image: tag } });
+    await settleProviderUpdates({ ok: true, log: "" }).catch((err) => console.error("[sandbox] settling agent updates:", err));
     return;
   }
 
@@ -91,6 +92,9 @@ export async function syncSandboxImage(): Promise<void> {
     console.log(`[sandbox] building ${tag}`);
     const result = await docker(["build", "--progress=plain", "-t", tag, dir]);
     const log = result.out.slice(-LOG_CHARS);
+    // Agents updated for this build: done, or back on their old version if they didn't install.
+    const settled = await settleProviderUpdates({ ok: result.ok, log: result.out }).catch((err) => (console.error("[sandbox] settling agent updates:", err), null));
+    if (settled?.rolledBack.length) console.warn(`[sandbox] ${settled.rolledBack.join(", ")} didn't install; back on the old version`);
     if (!result.ok) {
       console.error(`[sandbox] build of ${tag} failed`);
       await prisma.sandboxImage.update({ where: { id: 1 }, data: { status: "failed", log } });

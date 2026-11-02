@@ -167,6 +167,21 @@ model Provider {
   /// AES-256-GCM ciphertext of { ENV_NAME: value }.
   secret    String?
   enabled   Boolean  @default(true)
+  /// Install newer versions on its own (catalog and registry agents; never one added by command).
+  autoUpdate Boolean @default(true)
+  /// A newer version found and not installed yet (auto-update off), with its launch.
+  availableVersion String?
+  availableLaunch  Json?
+  /// While an update builds: the launch and version to go back to if it doesn't install.
+  previousLaunch   Json?
+  previousVersion  String?
+  /// updating | updated | failed, with what happened, for its row in Settings.
+  updateState  String?
+  updateNote   String?
+  updatedVersionAt DateTime?
+  /// A version that failed to install, so it isn't tried again.
+  skipVersion  String?
+  checkedAt    DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

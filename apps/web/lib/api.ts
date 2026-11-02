@@ -365,6 +365,13 @@ export interface AgentRow {
   /** A sandbox image with it in has finished building. */
   installed: boolean;
   createdAt: string;
+  /** Updates: installed on their own unless turned off; agents added by command never update. */
+  autoUpdate: boolean;
+  availableVersion: string | null;
+  updateState: "updating" | "updated" | "failed" | null;
+  updateNote: string | null;
+  updatedVersionAt: string | null;
+  checkedAt: string | null;
 }
 
 export interface CatalogItem {

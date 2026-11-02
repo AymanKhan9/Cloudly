@@ -729,6 +729,22 @@ the turn records an exact cost, so these agents count toward the spend limit. Ev
 offers are reported so the effort menu can list them, and the API accepts any short level name for
 added agents because the levels depend on the model.
 
+### Agent updates
+
+`checkProviderUpdates` (`packages/db/src/provider-updates.ts`) runs in the worker every
+`CLOUDLY_AGENT_UPDATE_HOURS` (6) and from Settings → Agents. For each catalog and registry agent it
+computes today's launch the same way adding it does (`catalogLaunch` / `launchFromRegistry`), pins
+any npm package without an exact version to its npm `latest` (otherwise the image build's layer
+cache would keep the first version forever), and compares it with the stored launch by canonical
+JSON (Postgres jsonb reorders keys). A difference with `autoUpdate` on replaces `spec.launch`,
+keeping the old launch and version in `previousLaunch`/`previousVersion` and setting `updateState =
+"updating"`; that changes the image's install script, so the sandbox-image loop rebuilds and turns
+pick up the new image as they start. After the build, `settleProviderUpdates` reads the full build
+log: an agent whose install block printed `cloudly: <id> failed to install` is restored to its
+previous launch and the failed version is recorded in `skipVersion`; a build that failed for
+another reason restores it without skipping. With `autoUpdate` off the launch waits in
+`availableLaunch` for the Update button. Agents added by command are never touched.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

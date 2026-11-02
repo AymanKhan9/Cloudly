@@ -10,6 +10,7 @@ export * from "./repo-files"
 export * from "./relay"
 export * from "./context"
 export * from "./providers"
+export * from "./provider-updates"
 
 export function currentMonth(now = new Date()): string {
   return now.toISOString().slice(0, 7)
