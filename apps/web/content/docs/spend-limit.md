@@ -10,13 +10,13 @@ Set a monthly limit on model spend in **Settings → Spend limit**. It covers mo
 | 80% | A banner in the app and one email for the month. Turns keep running. |
 | 100% | New turns are refused until you raise the limit or the month ends. |
 
-A turn that is already running when you reach 100% finishes, so a task isn't left half done. Claude Agent turns stop themselves at 25% over the limit and keep the work they finished on the branch. Codex and Gemini can go over by that one turn.
+A turn that is already running when you reach 100% finishes, so a task isn't left half done. Claude Code turns stop themselves at 25% over the limit and keep the work they finished on the branch. Codex and Gemini can go over by that one turn.
 
 Months follow UTC, and both alerts re-arm when you save a new limit.
 
 ## Exact and estimated costs
 
-- **Claude Agent** reports the exact cost of every turn.
+- **Claude Code** reports the exact cost of every turn.
 - **Codex** and **Gemini CLI** report tokens. Cloudly prices them from a table you control and marks the result as an estimate, shown with a `~`.
 
 Set your own prices, in US dollars per million tokens, in the [configuration](/docs/configuration#prices):

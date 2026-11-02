@@ -19,7 +19,7 @@ export interface Harness {
 }
 
 export const HARNESSES: Harness[] = [
-  { id: "native-claude", name: "Claude Agent", cost: "exact" },
+  { id: "native-claude", name: "Claude Code", cost: "exact" },
   { id: "native-codex", name: "Codex", cost: "estimated" },
   { id: "gemini-acp", name: "Gemini CLI", cost: "estimated" },
 ];

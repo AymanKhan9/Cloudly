@@ -6,7 +6,7 @@ It is free, MIT-licensed and self-hosted. There is no Cloudly account and no hos
 
 ## What you get
 
-- **Many agents, one interface.** Claude Agent, Codex and Gemini CLI are built in, and you can [add more](/docs/agents#add-more-agents): Cursor, Grok, OpenCode, Antigravity, Pi, or any agent in the ACP registry. Pick one per session; the chat, cancel button and pull request work the same for each.
+- **Many agents, one interface.** Claude Code, Codex and Gemini CLI are built in, and you can [add more](/docs/agents#add-more-agents): Cursor, Grok, OpenCode, Antigravity, Pi, or any agent in the ACP registry. Pick one per session; the chat, cancel button and pull request work the same for each.
 - **Sessions that end in a pull request.** A session is a conversation on one branch. Every turn that changes code adds commits, and the session opens one pull request.
 - **A spend limit that stops.** Set a monthly model-spend limit. You get one warning at 80%, and new turns are refused at 100%.
 - **Isolation by default.** Each turn runs in its own non-root container. Your API keys, plan tokens and GitHub credentials never enter it, and it can only reach the hosts you allow.

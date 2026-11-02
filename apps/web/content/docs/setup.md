@@ -30,8 +30,8 @@ Sign in with GitHub, open **Settings**, and under **Keys and connections** add a
 
 | Setting | Used by |
 |---|---|
-| Anthropic API key | Claude Agent |
-| Claude plan token (from `claude setup-token`) | Claude Agent, on your Claude plan instead of the API key |
+| Anthropic API key | Claude Code |
+| Claude plan token (from `claude setup-token`) | Claude Code, on your Claude plan instead of the API key |
 | OpenAI API key | Codex |
 | ChatGPT plan sign-in (the contents of `~/.codex/auth.json`) | Codex, on your ChatGPT plan instead of the API key |
 | Gemini API key | Gemini CLI |

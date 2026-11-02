@@ -2,7 +2,7 @@
 
 Coding agents on a server you already own.
 
-Cloudly runs Claude Agent, Codex, Gemini CLI, or an agent you add (Cursor, Grok, OpenCode, Antigravity, Pi, or any ACP agent) against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
+Cloudly runs Claude Code, Codex, Gemini CLI, or an agent you add (Cursor, Grok, OpenCode, Antigravity, Pi, or any ACP agent) against your GitHub repos on a VM in your own cloud account. Hand it a task in the browser, close the laptop, and come back to a pull request. It stops spending when you reach your monthly limit.
 
 Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 
@@ -26,7 +26,7 @@ Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 - **One context for every agent.** Turn on shared context for a repo and every agent working on it, whichever agent runs it here and Cursor or Claude Code on your laptop through Cloudly's MCP endpoint, starts from the same notes and sees what the others did.
 - **Secrets the agent never holds.** Tokens your tests need reach the sandbox as placeholders; the egress proxy fills in the real value only on HTTPS requests to the hosts you name. Each repo also gets a `/files` folder outside git that persists between sessions.
 - **A desktop you can watch.** Turn on a virtual desktop with a browser and every agent gets computer-use tools; watch it live or take control. Previews run a session's branch so you can try the app before merging.
-- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Agent turns stop at 25% over the limit and keep the work they finished on the branch. Claude Agent reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
+- **A spend limit that actually stops.** At 80% of your monthly limit you get a banner and one email. At 100% new runs are refused. A turn that's already running finishes, so a task isn't left half done, but Claude Code turns stop at 25% over the limit and keep the work they finished on the branch. Claude Code reports exact cost. Codex and Gemini report tokens, which Cloudly prices from a table you control and marks as an estimate.
 - **Everything stays on your VM.** One VM runs the web app, API, worker and Postgres. Each run gets its own non-root container, removed when it ends. Your keys are stored encrypted on that VM. GitHub credentials never enter the sandbox: the worker pushes and opens the PR from outside it with a short-lived GitHub App token.
 
 ## Install

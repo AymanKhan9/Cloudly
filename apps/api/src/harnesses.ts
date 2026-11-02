@@ -3,7 +3,7 @@ import { agentReadiness, harnessAvailable, listProviders, type AgentReadiness } 
 import { isProviderHarness, providerDisplayName, agentFeatures } from '@repo/shared/providers';
 
 export const HARNESSES = [
-  { id: 'native-claude', name: 'Claude Agent', cost: 'exact' },
+  { id: 'native-claude', name: 'Claude Code', cost: 'exact' },
   { id: 'native-codex', name: 'Codex', cost: 'estimated' },
   { id: 'gemini-acp', name: 'Gemini CLI', cost: 'estimated' },
 ] as const;

@@ -87,4 +87,4 @@ Transitions are 160 to 900ms on `cubic-bezier(0.16, 1, 0.3, 1)`. Motion is used 
 - Don't add decorative 3D or animation that doesn't explain something the product does.
 - Don't use orange for headings, decoration or status.
 - Don't use em or en dashes in UI copy.
-- Don't name the Claude harness "Claude Code"; it is "Claude Agent".
+- Don't name the Claude harness "Claude Code"; it is "Claude Code".

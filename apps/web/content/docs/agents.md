@@ -4,7 +4,7 @@ Cloudly runs three coding agents out of the box, and you can add more under **Se
 
 | Agent | Runs through | Cost reporting |
 |---|---|---|
-| Claude Agent | The Claude Agent SDK | Exact, reported by the agent |
+| Claude Code | The Claude Agent SDK | Exact, reported by the agent |
 | Codex | The Codex SDK | Estimated from token counts |
 | Gemini CLI | The Agent Client Protocol (ACP) | Estimated from token counts |
 | Pi, OpenCode (added) | ACP | Exact, reported by the agent |
@@ -15,7 +15,7 @@ Because Gemini CLI runs over ACP, other ACP agents can be added the same way. Se
 
 Each agent needs a credential, added under **Settings → Keys and connections**:
 
-- **Claude Agent:** an Anthropic API key, or a Claude plan token. Create the token on your own machine with `claude setup-token` and paste it in. When a plan token is set, it is used instead of the API key.
+- **Claude Code:** an Anthropic API key, or a Claude plan token. Create the token on your own machine with `claude setup-token` and paste it in. When a plan token is set, it is used instead of the API key.
 - **Codex:** an OpenAI API key, or a ChatGPT plan sign-in. Sign in to Codex on your own machine, then paste the contents of `~/.codex/auth.json`. Cloudly refreshes the sign-in itself and saves the new tokens.
 - **Gemini CLI:** a Gemini API key.
 
@@ -56,7 +56,7 @@ When there's a newer one:
 
 If a new version doesn't install, Cloudly puts the old one back, says so on the agent's row, and doesn't try that version again; the next release is tried as usual. If the image fails to build for another reason (the setup script, say), the agent goes back to its old version for now and the new one is tried again at the next check.
 
-Agents you added with your own command never update on their own: Cloudly doesn't know where their releases come from. Set `CLOUDLY_AGENT_UPDATE_HOURS` to change how often agents are checked, or to `0` to stop the checks. The built-in agents (Claude Agent, Codex, Gemini CLI) update with Cloudly itself.
+Agents you added with your own command never update on their own: Cloudly doesn't know where their releases come from. Set `CLOUDLY_AGENT_UPDATE_HOURS` to change how often agents are checked, or to `0` to stop the checks. The built-in agents (Claude Code, Codex, Gemini CLI) update with Cloudly itself.
 
 ### Keys stay out of the sandbox
 
@@ -91,7 +91,7 @@ Other added agents:
 
 Click the model in the chat box, or type `/model` and press **Enter**. Pick a model from the list, or type any model ID your account can use and choose **Use <ID>**.
 
-The choice is saved on the session and applies from the next turn, so you can change it while a turn is running. It sticks for the rest of the session. On Claude Agent it also overrides a model pinned in the repo's `.claude/settings.json`. Pick **Default** to go back to the agent's own default.
+The choice is saved on the session and applies from the next turn, so you can change it while a turn is running. It sticks for the rest of the session. On Claude Code it also overrides a model pinned in the repo's `.claude/settings.json`. Pick **Default** to go back to the agent's own default.
 
 You can also type the command directly:
 
@@ -108,13 +108,13 @@ Click the effort pill (the gauge) in the chat box to set how hard the agent thin
 
 | Agent | Levels | Default |
 |---|---|---|
-| Claude Agent | Low, Medium, High, Extra high, Max | High |
+| Claude Code | Low, Medium, High, Extra high, Max | High |
 | Codex | Low, Medium, High, Extra high | Medium |
 | Gemini CLI | Low, High | High |
 
 Like the model, effort is saved on the session and applies from the next turn, so you can change it while a turn runs. You can also set it on the new-session page before the first turn. **Use default** goes back to the agent's own level.
 
-On Claude Agent, Extra high and Max only exist on some models; on others Claude uses the nearest level the model has. On Gemini CLI the level applies to Gemini 3 models; Gemini 2.5 models keep their default.
+On Claude Code, Extra high and Max only exist on some models; on others Claude uses the nearest level the model has. On Gemini CLI the level applies to Gemini 3 models; Gemini 2.5 models keep their default.
 
 ## Subagents
 
@@ -122,4 +122,4 @@ The three built-in agents can delegate to subagents, which run in the same sandb
 
 ## Sessions across turns
 
-Each agent keeps its own session between your messages: Claude Agent and Codex resume their native sessions, and Gemini CLI gets the recent conversation replayed. Commands that depend on the session, like `/compact`, work across turns.
+Each agent keeps its own session between your messages: Claude Code and Codex resume their native sessions, and Gemini CLI gets the recent conversation replayed. Commands that depend on the session, like `/compact`, work across turns.

@@ -19,7 +19,7 @@ Everything runs on one VM in your cloud account. The pieces talk through Postgre
 1. **You send a message.** The API writes a queued run to Postgres and returns at once.
 2. **The worker claims it.** It takes the oldest queued run with `FOR UPDATE SKIP LOCKED` and a lease, so two workers never run the same turn, and a crashed worker's turn is picked up again.
 3. **It prepares a clone.** A fresh clone of the repo on the session's branch, copied rather than linked so it shares nothing with any other run.
-4. **The agent runs.** The worker starts a container with the clone and the agent's runtime. The runner inside picks the adapter for Claude Agent or Codex, or drives Gemini CLI or an [added agent](/docs/agents#add-more-agents) over the Agent Client Protocol, and every event the agent emits becomes one line of a shared event format.
+4. **The agent runs.** The worker starts a container with the clone and the agent's runtime. The runner inside picks the adapter for Claude Code or Codex, or drives Gemini CLI or an [added agent](/docs/agents#add-more-agents) over the Agent Client Protocol, and every event the agent emits becomes one line of a shared event format.
 5. **You watch it live.** The worker writes each event to Postgres; the API streams them to your browser over Server-Sent Events and replays them if you reconnect.
 6. **The result is checked.** The agent's changes are exported as a patch in a separate container with no network and no keys, then validated.
 7. **Cloudly commits and pushes.** The patch is applied and committed in a second clone the agent never touched, then pushed with a short-lived GitHub App token, and the pull request is opened or updated.

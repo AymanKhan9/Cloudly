@@ -14,7 +14,7 @@ The arena page shows, for each agent:
 
 | | |
 |---|---|
-| **Cost** | Exact for Claude Agent, estimated (`~`) for Codex and Gemini CLI, or "Plan" on a Claude or ChatGPT plan. |
+| **Cost** | Exact for Claude Code, estimated (`~`) for Codex and Gemini CLI, or "Plan" on a Claude or ChatGPT plan. |
 | **Time** | From the agent's first event to its last. |
 | **Changes** | Lines added and removed, and how many files. |
 | **Summary** | The agent's own last message. |

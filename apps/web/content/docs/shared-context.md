@@ -10,7 +10,7 @@ Open a session on the repository, click **Context** at the top, then **Turn on s
 
 From then on, every turn on that repository, in any session and with any agent:
 
-- **Starts from the shared context.** The notes and the latest work from other sessions and editors go in with the agent's instructions (Claude Agent gets them in its system prompt, Codex and Gemini CLI in front of the task).
+- **Starts from the shared context.** The notes and the latest work from other sessions and editors go in with the agent's instructions (Claude Code gets them in its system prompt, Codex and Gemini CLI in front of the task).
 - **Can add to it.** Agents get two tools: `repo_context` reads it again, and `add_note` records a convention, a decision and its reason, or a gotcha. Agents can only add; they can't edit or delete what's there.
 - **Is logged.** After each turn Cloudly records what was asked, which agent did it, what changed (files and lines), the agent's own summary, and the pull request.
 

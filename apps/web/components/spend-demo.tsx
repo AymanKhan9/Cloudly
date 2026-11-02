@@ -24,7 +24,7 @@ const OUTCOME = {
   storm: {
     icon: <Prohibit size={22} weight="bold" style={{ color: "var(--danger)" }} />,
     title: "New runs are refused.",
-    body: "A turn that's already running finishes, so nothing is left half done. Claude Agent turns can't run past 25% over your limit.",
+    body: "A turn that's already running finishes, so nothing is left half done. Claude Code turns can't run past 25% over your limit.",
     preview: "Spend limit reached. New runs are blocked",
   },
 };

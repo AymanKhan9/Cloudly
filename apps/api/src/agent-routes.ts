@@ -7,7 +7,7 @@ import {
 } from "@repo/db";
 import {
   ACP_REGISTRY_URL, BUILTIN_AGENTS, PROVIDER_CATALOG, catalogEntry, catalogLaunch, launchFromRegistry,
-  providerIdFrom, registryInstallable, type ProviderSpec, type RegistryAgent,
+  providerIdFrom, registryInstallable, catalogIconPath, type ProviderSpec, type RegistryAgent,
 } from "@repo/shared/providers";
 import { parseRegistry, npmLatest } from "@repo/shared/agent-updates";
 import type { AuthEnv } from "./middleware/auth_middleware";
@@ -37,7 +37,7 @@ export function resetRegistryCache() {
 }
 
 /** Catalog marks live in the web app; registry agents use the registry's own icon. */
-const catalogIcon = (id: string) => `/logos/agents/${id.replace(/^acp-/, "")}.svg`;
+const catalogIcon = (id: string) => catalogIconPath(id) ?? `/logos/agents/${id.replace(/^acp-/, "")}.svg`;
 
 /**
  * Registry icons, served from this origin: the web app draws them as CSS masks

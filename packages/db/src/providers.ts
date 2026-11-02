@@ -305,7 +305,7 @@ export async function harnessAvailable(id: string, builtin: readonly string[]): 
 
 /** What each built-in agent signs in with, any one of them. */
 const BUILTIN_SIGN_IN: Record<string, { name: string; keys: string[]; need: string }> = {
-  "native-claude": { name: "Claude Agent", keys: ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"], need: "an Anthropic API key or a Claude plan token under Settings → Keys and connections" },
+  "native-claude": { name: "Claude Code", keys: ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"], need: "an Anthropic API key or a Claude plan token under Settings → Keys and connections" },
   "native-codex": { name: "Codex", keys: ["OPENAI_API_KEY", "CODEX_AUTH_JSON"], need: "an OpenAI API key or a ChatGPT sign-in under Settings → Keys and connections" },
   "gemini-acp": { name: "Gemini CLI", keys: ["GEMINI_API_KEY"], need: "a Gemini API key under Settings → Keys and connections" },
 };

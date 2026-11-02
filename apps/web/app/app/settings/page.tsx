@@ -144,7 +144,7 @@ export default function SettingsPage() {
                 </div>
                 <p className="hint">
                   At 80% you get a banner and one email. At 100% new runs are refused. A turn that&apos;s already running
-                  finishes first; Claude Agent stops itself at 25% over, and Codex and Gemini can go over by that one turn.
+                  finishes first; Claude Code stops itself at 25% over, and Codex and Gemini can go over by that one turn.
                 </p>
               </div>
               <div className="field">

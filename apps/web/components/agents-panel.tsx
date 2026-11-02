@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowCircleUp, ArrowSquareOut, ArrowsClockwise, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { api, ApiError, type AgentRow, type AgentsSettings, type CatalogItem, type RegistryItem } from "@/lib/api";
 import { AgentLogo, MaskIcon } from "@/components/agent-logo";
+import { catalogIconPath } from "@repo/shared/providers";
 import { useApp } from "@/components/app-context";
 import { HARNESSES, costLabel } from "@/lib/harness";
 
@@ -436,7 +437,7 @@ function AddAgentDialog({ settings, onClose, onAdded }: { settings: AgentsSettin
                 const isAdded = r.added;
                 return (
                   <div key={r.id} className="registry-row">
-                    {r.icon ? <MaskIcon src={r.icon} size={20} /> : <Circle size={20} />}
+                    {(r.catalogId && catalogIconPath(r.catalogId)) || r.icon ? <MaskIcon src={(r.catalogId && catalogIconPath(r.catalogId)) || r.icon!} size={20} /> : <Circle size={20} />}
                     <div className="registry-meta">
                       <div className="name">
                         {r.name} <span className="mono dim">{r.version}</span>
@@ -642,7 +643,7 @@ export function AgentsPanel() {
       <header>
         <h2 id="agents-h">Agents</h2>
         <p>
-          Claude Agent, Codex and Gemini CLI are built in. Add Cursor, Grok, OpenCode and more, from the ACP registry or a command of your own. Each is installed into the sandbox image, and its keys reach the sandbox only as placeholders.
+          Claude Code, Codex and Gemini CLI are built in. Add Cursor, Grok, OpenCode and more, from the ACP registry or a command of your own. Each is installed into the sandbox image, and its keys reach the sandbox only as placeholders.
         </p>
       </header>
       <div className="set-body">

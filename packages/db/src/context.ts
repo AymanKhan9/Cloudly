@@ -18,7 +18,7 @@ export const CONTEXT_LIMITS = {
 };
 
 const HARNESS_NAMES: Record<string, string> = {
-  "native-claude": "Claude Agent",
+  "native-claude": "Claude Code",
   "native-codex": "Codex",
   "gemini-acp": "Gemini CLI",
 };

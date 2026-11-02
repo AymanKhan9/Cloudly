@@ -12,14 +12,14 @@ The quickest way is to name the agents in your question, after a word like "use"
 Use claude, chatgpt, opencode, gemini and pi for this research work: what changed in AI coding agents in the last three months?
 ```
 
-The new-session page turns that into a council of those agents as you type: it switches to **Council** and picks them as members. Agents go by the names you'd use: "chatgpt", "codex" and "gpt" are Codex, "claude" is Claude Agent, and agents you added are also known by the names you gave them. Names that aren't a request for agents ("use the openai and anthropic SDKs") are left alone.
+The new-session page turns that into a council of those agents as you type: it switches to **Council** and picks them as members. Agents go by the names you'd use: "chatgpt", "codex" and "gpt" are Codex, "claude" is Claude Code, and agents you added are also known by the names you gave them. Names that aren't a request for agents ("use the openai and anthropic SDKs") are left alone.
 
 Before anything starts, Cloudly checks that each named agent can run. One that can't is listed under the question, with the reason (it needs a key, its plan sign-in isn't set, it isn't added under **Settings → Agents**, or it's still being installed), and the council goes ahead with the ones that can, if there are at least two. You can change the members and chair before you press **Enter**.
 
 You can also set it up by hand. On the new-session page, click **Council**, then:
 
 1. **Pick the members**: two or more agents, built in or [added](/docs/agents#add-more-agents), each once. There's no limit beyond the agents you've set up; an agent that can't run yet is greyed out, with the reason when you point at it.
-2. **Pick the chair**, who writes the report. Claude Agent by default; the chair can also be a member.
+2. **Pick the chair**, who writes the report. Claude Code by default; the chair can also be a member.
 3. **Pick the rounds** (three by default):
    - **1 round**: research only, then the report.
    - **2 rounds**: research, then cross-review.
@@ -50,7 +50,7 @@ While it runs, the council page shows each member's progress live. Type a note b
 
 ## Cost
 
-A council is several ordinary agent turns: members × rounds, plus the chair's report. A three-member, three-round council is ten turns, and web research turns are the expensive kind. Every turn counts toward your [spend limit](/docs/spend-limit) as usual; turns on a Claude or ChatGPT plan cost nothing extra. The council stops at its cap after the round in which it's reached, with a report made from what it has. Claude Agent also stops itself mid-turn at the cap; Codex and Gemini can go over by that one turn.
+A council is several ordinary agent turns: members × rounds, plus the chair's report. A three-member, three-round council is ten turns, and web research turns are the expensive kind. Every turn counts toward your [spend limit](/docs/spend-limit) as usual; turns on a Claude or ChatGPT plan cost nothing extra. The council stops at its cap after the round in which it's reached, with a report made from what it has. Claude Code also stops itself mid-turn at the cap; Codex and Gemini can go over by that one turn.
 
 Turns run one at a time unless `WORKER_CONCURRENCY` is higher, so on a small VM a council takes a while. With more concurrency, the members of a round work in parallel.
 

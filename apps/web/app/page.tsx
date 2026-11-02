@@ -19,7 +19,7 @@ export default function Landing() {
             <section className="hero">
               <h1>Coding agents you own, end to end.</h1>
               <p className="sub">
-                Run Claude Agent, Codex, Gemini CLI or any ACP agent on your GitHub repos from a VM in your own cloud. Close the
+                Run Claude Code, Codex, Gemini CLI or any ACP agent on your GitHub repos from a VM in your own cloud. Close the
                 laptop, get a pull request.
               </p>
               <div className="hero-actions">
@@ -39,7 +39,7 @@ export default function Landing() {
             <div className="section-head">
               <h2>Set a limit. It actually stops.</h2>
               <p>
-                Claude Agent reports exact cost per run. Codex and Gemini report tokens, priced from a table you control
+                Claude Code reports exact cost per run. Codex and Gemini report tokens, priced from a table you control
                 and marked as estimates. Runs on your Claude or ChatGPT plan don&apos;t count.
               </p>
             </div>

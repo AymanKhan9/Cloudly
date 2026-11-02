@@ -86,7 +86,7 @@ See [Desktop and previews](/docs/desktop-and-previews). The installer sets the f
 
 ## Prices
 
-Used to estimate Codex and Gemini cost, in US dollars per million tokens. Claude Agent reports exact cost and ignores these.
+Used to estimate Codex and Gemini cost, in US dollars per million tokens. Claude Code reports exact cost and ignores these.
 
 | Variable | Example |
 |---|---|

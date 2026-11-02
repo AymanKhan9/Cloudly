@@ -71,7 +71,7 @@ test("sessions read each other and talk: a message runs in the other session, an
     const toParser = await prisma.run.findMany({ where: { threadId: parser.id, status: "queued" } });
     expect(toParser).toHaveLength(1);
     expect(toParser[0]).toMatchObject({ fromThreadId: api.id, fromRunId: sentRun.id, hops: 1, replyToThreadId: api.id, harness: "gemini-acp" });
-    expect(toParser[0]!.prompt).toContain(`"Add the invoices API" (Claude Agent)`);
+    expect(toParser[0]!.prompt).toContain(`"Add the invoices API" (Claude Code)`);
     expect(toParser[0]!.prompt).toContain("Does parse() handle time zones?");
     expect(await prisma.run.count({ where: { threadId: elsewhere.id } })).toBe(0);
     const sentEvent = await prisma.runEvent.findFirst({ where: { runId: sentRun.id, kind: "status" }, orderBy: { seq: "desc" } });

@@ -1,5 +1,5 @@
 /**
- * Agents added under Settings > Agents, beyond the three built in (Claude Agent,
+ * Agents added under Settings > Agents, beyond the three built in (Claude Code,
  * Codex, Gemini CLI). Every one of them speaks the Agent Client Protocol, so the
  * runner drives them all with one adapter. They come from three places, the same
  * way T3 Code offers them: Cloudly's own catalog (known agents with their keys
@@ -97,6 +97,8 @@ export interface CatalogEntry {
   authMethodId?: string;
   homeFiles?: Record<string, string>;
   pipes?: boolean;
+  /** Its mark in the web app's public/logos/agents, when not "<id without acp->.svg" (a colour mark ends in -color.svg). */
+  iconFile?: string;
   /**
    * What it can do beyond plain ACP, checked against its source: resume its own
    * session across turns (session/load), and report what its turns cost
@@ -154,6 +156,8 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
     name: "Antigravity",
     blurb: "Google's Antigravity agent, on a Gemini API key.",
     registryId: "antigravity-acp",
+    // Google's colour mark (via LobeHub's icon set, MIT), not the registry's one-colour one.
+    iconFile: "antigravity-color.svg",
     // The server is a Python archive: unbuffered, or its replies sit in a pipe buffer
     // and the turn hangs (tried live). It runs the harness the archive ships next to it.
     env: {
@@ -208,12 +212,19 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
 /** The built-in agents, shown in the same picker so the list matches T3 Code's. */
 export const BUILTIN_AGENTS = [
   { id: "native-codex", name: "Codex", blurb: "OpenAI's Codex, on an API key or your ChatGPT plan." },
-  { id: "native-claude", name: "Claude", blurb: "Claude Agent, on an API key or your Claude plan." },
+  { id: "native-claude", name: "Claude Code", blurb: "Anthropic's coding agent, on an API key or your Claude plan." },
   { id: "gemini-acp", name: "Gemini CLI", blurb: "Google's Gemini CLI, on a Gemini API key." },
 ] as const;
 
 export function catalogEntry(id: string): CatalogEntry | undefined {
   return PROVIDER_CATALOG.find((e) => e.id === id);
+}
+
+/** A catalog agent's mark, served by the web app; null for one Cloudly can't run. */
+export function catalogIconPath(id: string): string | null {
+  const entry = catalogEntry(id);
+  if (!entry || entry.unavailable) return null;
+  return `/logos/agents/${entry.iconFile ?? `${id.replace(PROVIDER_PREFIX, "")}.svg`}`;
 }
 
 /** What an added agent can do beyond plain ACP; nothing for one added by command. */

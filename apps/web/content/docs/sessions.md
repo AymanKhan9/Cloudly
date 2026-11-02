@@ -99,13 +99,13 @@ Limits keep two agents from keeping each other busy on your money:
 
 ## Subagents
 
-Agents can hand part of a task to subagents, and Cloudly runs them in the same sandbox as the main agent. They get the same placeholder keys and network rules, and their changes land in the same commit and pull request. On Claude Agent, the turn's cost includes its subagents.
+Agents can hand part of a task to subagents, and Cloudly runs them in the same sandbox as the main agent. They get the same placeholder keys and network rules, and their changes land in the same commit and pull request. On Claude Code, the turn's cost includes its subagents.
 
 Each subagent shows as one row in the turn, with its task and type. Click it to see its own tool activity and the report it handed back. While it works, the row shows that it's running.
 
 | Agent | Subagents | Notes |
 |---|---|---|
-| Claude Agent | Its built-in subagents and any defined in your repo's `.claude/agents/` | |
+| Claude Code | Its built-in subagents and any defined in your repo's `.claude/agents/` | |
 | Codex | Spawned with its own multi-agent tools | Each subagent gets a nickname, shown as its type. |
 | Gemini CLI | Its built-in agents, such as `codebase_investigator` | Gemini's own policy may refuse some agents, such as its general-purpose one. |
 
@@ -121,7 +121,7 @@ Click the stop button in the chat box. The agent stops, and whatever it had alre
 
 Type `/` in the chat box to see the commands the agent announced, and use the arrow keys and **Enter** (or **Tab**) to pick one. Commands go to the agent as typed, so `/compact`, `/context` and the skills in your repo work as they do on your own machine.
 
-- **Claude Agent** and **Gemini CLI** announce their commands at the start of each turn.
+- **Claude Code** and **Gemini CLI** announce their commands at the start of each turn.
 - **Codex** has no `/` commands when it runs headless; anything starting with `/` goes to it as an ordinary message.
 - **`/model`** is handled by Cloudly for every agent. See [Agents and models](/docs/agents#choose-a-model).
 
@@ -133,5 +133,5 @@ Type `/` in the chat box to see the commands the agent announced, and use the ar
 | Effort | How hard the agent thinks. See [Agents and models](/docs/agents#set-the-effort). |
 | Agent | The session's agent. |
 | Other sessions | Which of your other sessions the agent can read and message. See [Sessions that talk to each other](#sessions-that-talk-to-each-other). |
-| Context ring | How full the agent's context window is. `/compact` frees it up on Claude Agent. |
+| Context ring | How full the agent's context window is. `/compact` frees it up on Claude Code. |
 | Cost | The session's total, with `~` when it is estimated. |

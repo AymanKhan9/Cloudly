@@ -1,6 +1,6 @@
 # MCP servers
 
-Connect MCP servers once, in **Settings → MCP servers**, and every agent can use their tools: Claude Agent, Codex, Gemini CLI and the agents you add alike. Linear, Notion, Sentry, a server on your own network, anything that speaks MCP over HTTP.
+Connect MCP servers once, in **Settings → MCP servers**, and every agent can use their tools: Claude Code, Codex, Gemini CLI and the agents you add alike. Linear, Notion, Sentry, a server on your own network, anything that speaks MCP over HTTP.
 
 ## Add a server
 
@@ -33,4 +33,4 @@ Nowhere near the agent. A run sees each server as an address on Cloudly's key ga
 ## Limits
 
 - Servers that use the newer "streamable HTTP" transport work everywhere. The older SSE transport may not, since its message URLs point back at the server's own host.
-- A repo's own `.mcp.json` still works as before for Claude Agent: the servers you add here come on top.
+- A repo's own `.mcp.json` still works as before for Claude Code: the servers you add here come on top.

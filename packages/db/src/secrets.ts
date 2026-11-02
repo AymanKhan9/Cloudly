@@ -23,7 +23,7 @@ export const SETTINGS: SettingSpec[] = [
   { name: "GITHUB_CLIENT_SECRET", label: "GitHub App client secret", secret: true, group: "github" , token: true },
   { name: "GITHUB_APP_PRIVATE_KEY", label: "GitHub App private key", secret: true, group: "github" },
   { name: "GITHUB_WEBHOOK_SECRET", label: "GitHub webhook secret", secret: true, group: "github", token: true },
-  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Agent)", secret: true, group: "models" , token: true },
+  { name: "ANTHROPIC_API_KEY", label: "Anthropic API key (Claude Code)", secret: true, group: "models" , token: true },
   { name: "OPENAI_API_KEY", label: "OpenAI API key (Codex)", secret: true, group: "models" , token: true },
   { name: "GEMINI_API_KEY", label: "Gemini API key (Gemini CLI)", secret: true, group: "models" , token: true },
   { name: "CLAUDE_CODE_OAUTH_TOKEN", label: "Claude plan token (from `claude setup-token`; used instead of the API key)", secret: true, group: "models" , token: true },

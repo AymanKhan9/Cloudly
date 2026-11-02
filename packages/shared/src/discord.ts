@@ -52,7 +52,7 @@ export function inviteUrl(applicationId: string): string {
 }
 
 const AGENT_CHOICES = [
-  { name: "Claude Agent", value: "native-claude" },
+  { name: "Claude Code", value: "native-claude" },
   { name: "Codex", value: "native-codex" },
   { name: "Gemini CLI", value: "gemini-acp" },
 ];

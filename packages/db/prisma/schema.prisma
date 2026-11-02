@@ -475,7 +475,7 @@ model RepoSettings {
   reviewRounds    Int      @default(2)
   /// Post the reviewer's findings to the pull request as a review.
   reviewPostToGitHub Boolean @default(true)
-  /// GitHub triggers. The agent new sessions from GitHub use; null is Claude Agent.
+  /// GitHub triggers. The agent new sessions from GitHub use; null is Claude Code.
   triggerHarness  String?
   /// Labelling an issue with this starts a session for it.
   issueLabel      String   @default("cloudly")

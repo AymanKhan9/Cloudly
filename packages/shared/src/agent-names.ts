@@ -81,7 +81,7 @@ export function agentsAskedFor(text: string, added: NamedAgent[] = []): string[]
 /** A known name for an agent id, for messages about agents that aren't added. */
 export function knownAgentName(id: string): string | undefined {
   const names: Record<string, string> = {
-    "native-claude": "Claude Agent", "native-codex": "Codex", "gemini-acp": "Gemini CLI", "acp-cursor": "Cursor", "acp-grok": "Grok",
+    "native-claude": "Claude Code", "native-codex": "Codex", "gemini-acp": "Gemini CLI", "acp-cursor": "Cursor", "acp-grok": "Grok",
     "acp-opencode": "OpenCode", "acp-antigravity": "Antigravity", "acp-pi": "Pi", "acp-fx": "fx", "acp-muse": "Muse Code",
   };
   return names[id];

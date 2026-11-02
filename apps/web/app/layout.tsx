@@ -10,7 +10,7 @@ const geistMono = localFont({ src: "./fonts/GeistMonoVF.woff", variable: "--font
 export const metadata: Metadata = {
   title: "Cloudly: cloud coding agents you own end to end",
   description:
-    "Run Claude Agent, Codex or Gemini against your GitHub repos on a VM in your own cloud account, on your API keys or your Claude or ChatGPT plan. Your server, database, keys and spend limit. Free and MIT-licensed.",
+    "Run Claude Code, Codex or Gemini against your GitHub repos on a VM in your own cloud account, on your API keys or your Claude or ChatGPT plan. Your server, database, keys and spend limit. Free and MIT-licensed.",
 };
 
 export const viewport: Viewport = {

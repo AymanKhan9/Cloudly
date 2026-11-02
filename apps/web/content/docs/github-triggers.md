@@ -38,7 +38,7 @@ When events start arriving, the settings page lists the latest, and what Cloudly
 
 Under **Settings → GitHub triggers**, pick a repository to choose:
 
-- **Agent for new sessions**: which agent works on labelled issues and mentions. Claude Agent by default. Sessions that already exist keep their agent.
+- **Agent for new sessions**: which agent works on labelled issues and mentions. Claude Code by default. Sessions that already exist keep their agent.
 - **Labelled issues**, and the label (`cloudly` by default).
 - **`@cloudly` in comments.**
 - **Reviews on Cloudly's pull requests.**
