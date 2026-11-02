@@ -24,6 +24,7 @@ export const RunSchema = z.object({
   userId: z.string().nullable().optional(),
   threadId: z.string().nullable().optional(),
   councilId: z.string().nullable().optional(),
+  kind: z.string().optional(),
   councilRound: z.number().nullable().optional(),
   councilRole: z.string().nullable().optional(),
   status: RunStatusSchema,

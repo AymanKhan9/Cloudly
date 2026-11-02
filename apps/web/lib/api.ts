@@ -112,6 +112,19 @@ export interface Turn {
   from?: { threadId: string; title: string | null } | null;
   /** Its answer goes back to this session. */
   replyToThreadId?: string | null;
+  /** turn, or fix: Cloudly asked the agent to fix the checks its last change broke. */
+  kind?: "turn" | "fix";
+  /** The repo's checks after the turn's changes. */
+  checkStatus?: "passed" | "failed" | "error" | "skipped" | null;
+  checkCommand?: string | null;
+  checkOutput?: string | null;
+  checkMs?: number | null;
+}
+
+export interface RepoCheckSettings {
+  repo: string;
+  settings: { checks: "auto" | "custom" | "off"; checkCommand: string | null; fixAttempts: number; checkTimeoutSec: number };
+  last: { checkCommand: string | null; checkStatus: string; createdAt: string } | null;
 }
 
 export interface ThreadView {

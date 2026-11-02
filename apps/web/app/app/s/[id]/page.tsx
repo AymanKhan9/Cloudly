@@ -43,6 +43,7 @@ import { FilesPanel } from "@/components/files-panel";
 import { PreviewPanel } from "@/components/preview-panel";
 import { DesktopViewer } from "@/components/desktop-viewer";
 import { ContextPanel } from "@/components/context-panel";
+import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -199,6 +200,9 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
 
   return (
     <article className="turn">
+      {turn.kind === "fix" ? (
+        <FixRequest turn={turn} agent={h.name} />
+      ) : (
       <div className="msg-user">
         {turn.from ? (
           <Link className="msg-from" href={`/app/s/${turn.from.threadId}`}>
@@ -209,6 +213,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
         ) : null}
         <div>{turn.prompt}</div>
       </div>
+      )}
 
       <div className="msg-agent">
         <Blocks blocks={blocks} live={active} />
@@ -240,6 +245,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
               {h.cost === "estimated" ? " est." : ""}
             </span>
           ) : null}
+          <ChecksBadge turn={turn} events={events} active={active} />
           {turn.filesChanged ? (
             <span className="num diffstat" title={`${turn.filesChanged} file${turn.filesChanged === 1 ? "" : "s"} changed`}>
               <span className="add">+{turn.additions ?? 0}</span> <span className="del">−{turn.deletions ?? 0}</span>
@@ -259,6 +265,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
             </a>
           ) : null}
         </footer>
+        <ChecksDetail turn={turn} events={events} />
       </div>
     </article>
   );

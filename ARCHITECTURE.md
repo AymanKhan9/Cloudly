@@ -65,7 +65,7 @@ flowchart TB
     end
 
     ExportC["Export container 🚧<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
-    CheckC["Check container 🚧<br/>run clone mounted, no output-folder mount<br/>no model keys, no network"]
+    CheckC["Check container ✅<br/>run clone mounted, no output-folder mount<br/>no model keys, network via the egress proxy"]
 
     GitHub["GitHub<br/>repo + PR"]
     Egress["Allowlisting egress proxy 🚧<br/>model API + registries only<br/>(not yet built — see §8)"]
@@ -459,8 +459,8 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   It's stored durably by run id as soon as it's validated.
 - The check command runs *after* the patch is already captured, in its own container with no
   mount to the output folder — it can neither pollute the diff with its own side effects nor
-  tamper with a patch it has no path to. (Its lack of network access is a known, currently
-  accepted limitation — see §11.)
+  tamper with a patch it has no path to. It reaches the network through the egress proxy under
+  the same allowlist as the run (see §11).
 - The publish clone explicitly checks out `base_sha` before applying anything, rather than
   whatever the mirror's default branch currently is — the patch might not even apply otherwise,
   and the commit's parent would differ between retries.
@@ -686,14 +686,14 @@ ends with a stored patch available, not with its work silently discarded. What c
 opening the PR: the run ends `cancelled`, not `succeeded` with a branch pushed nobody asked to
 land.
 
-**The check container having no network is an open trade-off, not a settled one.** Plenty of real
-repos' check commands need network access — fetching dependencies, hitting a mocked or live
-service in a test. With no egress at all, those checks fail for reasons that have nothing to do
-with whether the agent's work is any good, and nothing in this design yet distinguishes that from
-a real failure. Two ways to resolve it, neither implemented: treat the check result as
-informational only for now (surfaced to the user, not gating anything), or give the check
-container the run's own environment-level egress allowlist once environments (§12) exist. Worker
-v0 takes the first option by default, simply because the second doesn't exist yet to take.
+**The check container reaches the network the way the run does.** Real repos' checks install
+dependencies and sometimes call services, so a network-less check failed for reasons unrelated to
+the agent's work. The check container (`apps/worker/src/checks.ts`) now joins the sandbox network
+behind the egress proxy, with the run's allowlist and secret placeholders and no model keys. It
+still runs after the patch is captured and has no path to it, so the network can't change what's
+committed. A failing result is reported (chat, PR description) and, up to a per-repo number of
+times in a row, handed back to the same agent as a fix turn; a check that couldn't run at all (exit
+127, a missing Python test runner, Docker refusing) is reported as such and never triggers a fix.
 
 **What this section claims is only as good as what's tested.** Every defense above is a design
 description until it has a test proving it holds. The tests worker v0 ships alongside this
@@ -759,6 +759,7 @@ design, not after it:
 | Sessions that talk to each other, like T3 Code's threads: `list_sessions`, `read_session` and `send_to_session` tools for every agent. The worker writes the sessions a turn may see (this repo's by default, `Thread.peers`) to `/sessions` before the turn and reads `/sessions/outbox.jsonl` back after it like the patch, checking each message against the scope again; a message becomes a queued Run in the target session (`fromThreadId`, `fromRunId`, `hops`), and with a reply asked for (`replyToThreadId`) its answer is queued back to the asker once the turn ends. Delivered at the end of the turn, not live, since `WORKER_CONCURRENCY` is 1 by default and the target couldn't run sooner anyway. `(fromRunId, threadId)` is unique so a retried turn can't send twice; 3 messages a turn, chains capped at 4 hops | `packages/shared/src/sessions.ts`, `apps/worker/src/peer-sessions.ts`, `packages/runner/src/sessions-mcp.ts`, `apps/api/src/index.ts`, chat page | ✅ worker test through `processRun` with stand-in agents (one session reads another and asks it; the message runs there; its answer comes back; malformed, duplicate and out-of-scope messages and a symlinked outbox ignored; scope and hop cap); the tools' own test; the MCP server run inside the sandbox image; API test; chat page checked in a browser. Not yet run with live agents |
 | Sidebar actions like T3 Code's thread menu: pin, settle, snooze (back unread when it runs out), rename, mark read and unread, filter by repo, copy, archive (also out of other sessions' reach), delete (not while a turn runs; the branch and PR stay on GitHub). New activity un-settles, un-snoozes and unarchives. Unread is a turn that ended after `Thread.seenAt` (`Run.updatedAt`); an upgrade marks existing sessions seen. "Needs you": the agent's `ask_user` tool writes `/ask/question.json`, read back after the turn like the patch, into `Thread.needsInput` until the user replies. Agents still never wait on permission prompts: every adapter approves its own tool use, since the sandbox, egress allowlist and placeholder credentials are the boundary | `apps/web/components/session-list.tsx`, `apps/api/src/index.ts`, `apps/worker/src/ask.ts`, `packages/runner/src/ask-mcp.ts` | ✅ API test of every action and the unread rules; worker test of ask_user through `processRun` (a symlinked question file ignored); the tool's own test; every action checked in a browser. Not yet run with live agents |
 | Councils of any size, started from a message: no cap on members beyond the agents set up (each once). "Use claude, chatgpt, opencode, gemini and pi for …" is read by `agentsAskedFor` (a list of agent names right after a word like "use" or "ask", not one followed by "SDK" and the like), which switches the composer to Council and picks them. `agentReadiness` says whether each can run (a key or plan sign-in; for an added agent, on, its keys set and installed) and why not; the composer lists those that can't, and the API refuses a council with any of them, naming each | `packages/shared/src/agent-names.ts`, `packages/db/src/providers.ts`, `apps/api/src/council-routes.ts`, `apps/web/app/app/page.tsx` | ✅ tests for the name matcher (false positives included), the API (a council of five, and the reasons for a signed-out, an unadded and an unavailable agent), and the worker (a council of five through every round); the composer checked in a browser with the example message |
+| Checks and fix-until-green: the repo's checks (detected from its files, or a command per repo) run after every changing turn in their own container behind the egress proxy; a failure becomes a fix turn for the same agent, up to N in a row, then the session needs the user | `apps/worker/src/checks.ts`, `apps/api/src/repo-settings-routes.ts`, `apps/web/components/checks*.tsx` | ✅ worker tests with real check containers: pass, fail → two fix turns → "Needs you", a new message resets the count, a missing tool reports and doesn't fix, checks off, a question isn't checked, a hang stopped at the time limit; detection from repo files, symlinks not followed; API tests. Not yet run against a live agent |
 | Environments (recipes, cached images) | — | 🚧 planned |
 | Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
 | Firecracker microVM backend | — | 🚧 planned |

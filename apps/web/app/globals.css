@@ -5122,3 +5122,80 @@ button.agent-tile:hover:not(:disabled) {
 .council-asked li + li {
   margin-top: 2px;
 }
+
+/* ---------- Checks ---------- */
+.checks-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.checks-badge[data-s="passed"] {
+  color: var(--ok);
+}
+
+.checks-badge[data-s="failed"] {
+  color: var(--danger);
+}
+
+.checks-badge[data-s="error"] {
+  color: var(--warn);
+}
+
+.checks-out summary code {
+  margin-left: 6px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50ch;
+}
+
+.checks-out pre {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.msg-system {
+  justify-self: end;
+  max-width: min(640px, 92%);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-bubble);
+  padding: 8px 14px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.msg-system summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.msg-system summary::-webkit-details-marker {
+  display: none;
+}
+
+.msg-system[open] .chev {
+  transform: rotate(90deg);
+}
+
+.msg-system pre {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.checks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  align-items: start;
+}

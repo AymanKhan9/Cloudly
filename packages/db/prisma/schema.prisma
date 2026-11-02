@@ -268,6 +268,14 @@ model Run {
   hops         Int      @default(0)
   /// When it finishes, its reply goes back to this session as a new turn.
   replyToThreadId String?
+  /// turn | fix (Cloudly asked the agent to fix the checks its last change broke)
+  kind         String   @default("turn")
+  /// The repo's checks after the turn's changes: passed | failed | error (couldn't run) | skipped.
+  checkStatus  String?
+  checkCommand String?
+  /// The end of the checks' output.
+  checkOutput  String?
+  checkMs      Int?
   /// Its last change; once it has ended, when it ended. Unread sessions compare against it.
   updatedAt  DateTime @default(now()) @updatedAt
   events     RunEvent[]
@@ -396,4 +404,16 @@ model Council {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs       Run[]
   @@index([userId, createdAt])
+}
+
+/// How Cloudly treats a repo's turns. One row per repo; no row means the defaults.
+model RepoSettings {
+  repo            String   @id
+  /// auto (detected from the repo) | custom | off
+  checks          String   @default("auto")
+  checkCommand    String?
+  /// Fix turns Cloudly may start in a row when checks fail; 0 turns that off.
+  fixAttempts     Int      @default(2)
+  checkTimeoutSec Int      @default(600)
+  updatedAt       DateTime @updatedAt
 }

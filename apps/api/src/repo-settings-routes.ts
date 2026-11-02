@@ -1,0 +1,50 @@
+import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+import { prisma } from "@repo/db";
+import type { AuthEnv } from "./middleware/auth_middleware";
+
+// How Cloudly treats a repo's turns: its checks, and how many times the agent
+// may try to fix them. No row means the defaults; the worker reads the same row.
+
+export const repoSettings = new Hono<AuthEnv>();
+
+const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const DEFAULTS = { checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600 };
+
+function repoOf(c: { req: { param: (k: string) => string } }) {
+  const repo = `${c.req.param("owner")}/${c.req.param("name")}`;
+  return SLUG.test(repo) ? repo : null;
+}
+
+repoSettings.get("/:owner/:name", async (c) => {
+  const repo = repoOf(c);
+  if (!repo) return c.json({ message: "Expected owner/repo" }, 400);
+  const row = await prisma.repoSettings.findUnique({ where: { repo } });
+  // What the checks last ran as, so "Auto" shows what it found.
+  const last = await prisma.run.findFirst({
+    where: { repo, checkStatus: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { checkCommand: true, checkStatus: true, createdAt: true },
+  });
+  const { updatedAt: _u, repo: _r, ...settings } = row ?? { repo, updatedAt: null, ...DEFAULTS };
+  return c.json({ repo, settings, last });
+});
+
+const SettingsSchema = z
+  .object({
+    checks: z.enum(["auto", "custom", "off"]),
+    checkCommand: z.string().trim().max(2000).nullable().optional(),
+    fixAttempts: z.number().int().min(0).max(5),
+    checkTimeoutSec: z.number().int().min(60).max(3600),
+  })
+  .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });
+
+repoSettings.put("/:owner/:name", zValidator("json", SettingsSchema), async (c) => {
+  const repo = repoOf(c);
+  if (!repo) return c.json({ message: "Expected owner/repo" }, 400);
+  const body = c.req.valid("json");
+  const data = { ...body, checkCommand: body.checkCommand || null };
+  await prisma.repoSettings.upsert({ where: { repo }, update: data, create: { repo, ...data } });
+  return c.json({ ok: true });
+});

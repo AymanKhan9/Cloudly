@@ -19,6 +19,7 @@ import { arenas } from './arena-routes';
 import { live } from './live-routes';
 import { context, tokens, mcpEndpoint } from './context-routes';
 import { councils } from './council-routes';
+import { repoSettings } from './repo-settings-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -70,6 +71,7 @@ app.route('/files', repoFiles)
 app.route('/arenas', arenas)
 app.route('/context', context)
 app.route('/councils', councils)
+app.route('/settings/repos', repoSettings)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
@@ -197,6 +199,7 @@ const TURN_FIELDS = {
   id: true, prompt: true, status: true, createdAt: true, costUsd: true, onPlan: true,
   prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
   desktopPassword: true, fromThreadId: true, replyToThreadId: true, hops: true,
+  kind: true, checkStatus: true, checkCommand: true, checkOutput: true, checkMs: true,
 } as const;
 
 async function threadView(threadId: string, userId: string) {

@@ -12,6 +12,7 @@ import { EnvPanel } from "@/components/env-panel";
 import { FilesPanel } from "@/components/files-panel";
 import { ContextSettings } from "@/components/context-settings";
 import { AgentsPanel } from "@/components/agents-panel";
+import { ChecksSettings } from "@/components/checks-settings";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
@@ -173,6 +174,8 @@ export default function SettingsPage() {
       </Suspense>
 
       <EnvPanel />
+
+      <ChecksSettings />
 
       <RepoFilesSection />
 

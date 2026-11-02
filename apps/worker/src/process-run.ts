@@ -28,6 +28,7 @@ import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./s
 import { processCouncilTurn } from "./council";
 import { prepareSessions, collectOutbox, deliverMessages, sendReply, destroySessions, type SessionsDir } from "./peer-sessions";
 import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
+import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } from "./checks";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -71,6 +72,13 @@ export async function threadHome(threadId: string): Promise<string> {
   const dir = path.join(process.env.CLOUDLY_DATA_DIR ?? path.join(homedir(), ".cloudly"), "threads", threadId, "home");
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+/** The checks' result, for a pull request's description. */
+export function checkLine(check: CheckResult | null): string {
+  if (!check || check.status === "skipped" || !check.command) return "";
+  const what = check.status === "passed" ? "passed" : check.status === "failed" ? "failed" : "couldn't run";
+  return `\n\n**Checks** ${what}: \`${check.command.split("\n")[0]!.slice(0, 200)}\``;
 }
 
 export function prTitle(prompt: string): string {
@@ -348,6 +356,32 @@ export async function processRun(
       return;
     }
 
+    // The repo's checks on the changed code, before it's committed (see checks.ts).
+    // A cancelled turn or a /command isn't checked: nobody asked for it to be done.
+    let check: CheckResult | null = null;
+    let fixAttempts = 0;
+    if (!cancelled && !isCommand(run.prompt)) {
+      const settings = await repoSettings(run.repo);
+      fixAttempts = settings.fixAttempts;
+      const command = await checkCommandFor(settings, ws.runDir);
+      if (command) {
+        await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks", status: "running", command } }]);
+        check = await runChecks({
+          runId: run.id, runDir: ws.runDir, command, image: containerOptions.image!, timeoutSec: settings.checkTimeoutSec,
+          homeDir: containerOptions.homeDir, filesDir: files.dir, env: containerOptions.env,
+        });
+        await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks", status: check.status, command: check.command, ms: check.ms } }]);
+      } else {
+        // Recorded on the turn, but not logged: a repo without checks shouldn't say so every turn.
+        check = { status: "skipped", command: null, ms: 0, output: settings.checks === "off" ? "Checks are off for this repo." : "No check command found in the repo. Set one under Settings > Checks." };
+      }
+      await prisma.run.updateMany({
+        where: { id: run.id, workerId, leaseGen: run.leaseGen },
+        data: { checkStatus: check.status, checkCommand: check.command, checkOutput: check.output, checkMs: check.ms },
+      });
+      if (leaseLost) return;
+    }
+
     const commitInfo: CommitInfo = {
       branch: thread?.branch,
       runId: run.id,
@@ -374,7 +408,7 @@ export async function processRun(
           baseBranch: run.baseBranch,
           branch: publishResult.branch,
           title: prTitle(thread?.title ?? run.prompt),
-          body: `Opened by Cloudly for run \`${run.id}\` (${run.harness}).\n\n**Task**\n\n${run.prompt}`,
+          body: `Opened by Cloudly for run \`${run.id}\` (${run.harness}).\n\n**Task**\n\n${run.prompt}${checkLine(check)}`,
         });
         prUrl = pr.url;
         if (thread) await prisma.thread.update({ where: { id: thread.id }, data: { prUrl: pr.url } });
@@ -395,6 +429,19 @@ export async function processRun(
       },
     });
     if (context) await shareTurn(context, { summary: lastText, prUrl: prUrl ?? thread?.prUrl, stats });
+
+    // Failing checks: the same agent gets another turn to fix them, a few times
+    // in a row at most; after that the session asks the user.
+    if (check?.status === "failed" && thread) {
+      const fix = await queueFix(run, check, fixAttempts).catch((err) => (console.error(`run ${run.id}: couldn't queue a fix:`, err), null));
+      if (fix?.queued) {
+        await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks.fix", attempt: fix.attempt, of: fix.of } }]);
+      } else if (fix?.reason === "attempts used up" || fix?.reason === "the monthly spend limit is reached") {
+        const why = fix.reason === "attempts used up" ? `after ${fix.of} fix attempt${fix.of === 1 ? "" : "s"}` : "and the monthly spend limit is reached, so no fix was attempted";
+        await prisma.thread.update({ where: { id: thread.id }, data: { needsInput: `The checks (${check.command}) still fail ${why}. Look at the output, then reply with what to do.`, settledAt: null } });
+        await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks.gave_up", reason: fix.reason } }]);
+      }
+    }
   } catch (err) {
     await prisma.run.updateMany({
       where: { id: run.id, workerId, leaseGen: run.leaseGen },
