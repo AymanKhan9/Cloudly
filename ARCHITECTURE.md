@@ -55,7 +55,7 @@ flowchart TB
 
     subgraph SandboxLayer["Sandbox (per run)"]
         direction TB
-        Container["Run container / microVM<br/>infra/images/base ✅ (Docker) · Firecracker 🚧<br/>run clone (--no-hardlinks), agent-writable"]
+        Container["Run container / microVM<br/>infra/images/base ✅ (Docker) · Firecracker 🚧<br/>run clone (borrows mirror objects, read-only mount), agent-writable"]
         Runner["Runner<br/>packages/runner ✅<br/>picks a RunAdapter, normalizes events"]
         ClaudeAdapter["ClaudeAdapter ✅<br/>@anthropic-ai/claude-agent-sdk<br/>(spawns claude CLI subprocess)"]
         CodexAdapter["CodexAdapter ✅<br/>@openai/codex-sdk<br/>(spawns codex CLI subprocess)"]
@@ -127,7 +127,7 @@ sequenceDiagram
     end
     DB-->>Worker: claimed Run row
 
-    Worker->>Worker: prepare run clone<br/>(bare mirror -> git clone --no-hardlinks<br/>record base_sha - never a linked worktree)
+    Worker->>Worker: prepare run clone<br/>(repo cache -> fetch -> bare mirror (hardlinked)<br/>-> git clone --shared, objects mounted read-only<br/>record base_sha - never a linked worktree)
     Worker->>Sandbox: docker run (uid 1000, resource limits)<br/>mount run clone, write /control/config.json
 
     activate Sandbox
@@ -446,8 +446,19 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
 **Fixed in this design already:**
 - Finalize (check, patch export) always runs inside fresh, network-less containers — never on the
   host, and never as a `docker exec` into an already-stopped run container.
-- Each run gets a standalone clone (`--no-hardlinks`), not a linked worktree — git actually works
-  inside the sandbox, and the clone shares no on-disk state with the shared mirror.
+- Each run gets a standalone clone, not a linked worktree — git actually works inside the sandbox.
+  The clone borrows its history from the turn's mirror through git alternates pointing at
+  `/cloudly/git-objects`, which every container that mounts the clone gets **read-only**; the
+  agent's own new objects go into its clone. Nothing in the clone is a hardlink, so nothing the
+  agent writes or chmods reaches the mirror.
+- The turn's mirror is a hardlinked local clone of a per-repo cache (`~/.cloudly/repo-cache`),
+  updated with an incremental fetch each turn (`+refs/heads/*`, `+refs/tags/*`, `--prune`, HEAD
+  from `ls-remote --symref`). The cache and the mirror are host-only and never mounted writable;
+  git never rewrites object files in place, so the hardlinks can't carry a change between turns.
+  The fetch URL is passed on the command line, never stored as a remote, and `--no-write-fetch-head`
+  keeps it out of `FETCH_HEAD`, so the cache holds no token. A per-repo lock (in-process chain plus
+  a lock directory across workers) serialises fetches; caches unused for 14 days are evicted. Any
+  cache failure falls back to a full clone, and a cache that a full clone succeeds past is dropped.
 - The host never runs git inside anything the agent could have written to. The run clone (mounted,
   agent-writable) and the publish clone (host-only, never mounted, created fresh at finalize) are
   two different directories; only the publish clone ever has a commit applied and pushed from it.

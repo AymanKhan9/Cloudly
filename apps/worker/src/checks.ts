@@ -4,6 +4,7 @@ import { prisma, budgetStatus, harnessUsesPlan } from "@repo/db";
 import { readRegular } from "./repo-files";
 import { ensureEgress, EGRESS_FLAGS, sandboxTrustFlags } from "./egress";
 import { SANDBOX_LIMITS, envFlags, sandboxUser } from "./docker";
+import { workspaceMounts } from "./workspace";
 
 // The repo's checks (its tests, usually), run after every turn that changes code.
 // They run in a container of their own on the run clone, after the patch has been
@@ -81,6 +82,8 @@ export async function checkCommandFor(settings: { checks: string; checkCommand: 
 export interface CheckRun {
   runId: string;
   runDir: string;
+  /** The mirror's objects the run clone borrows; see workspaceMounts. */
+  objectsDir?: string;
   command: string;
   image: string;
   timeoutSec: number;
@@ -106,7 +109,7 @@ export async function runChecks(c: CheckRun): Promise<CheckResult> {
     [
       "docker", "run", "--rm", "--name", name,
       ...SANDBOX_LIMITS, ...EGRESS_FLAGS, ...(await sandboxTrustFlags()), "--init",
-      "-v", `${c.runDir}:/workspace`, "-w", "/workspace",
+      ...workspaceMounts(c), "-w", "/workspace",
       ...(c.filesDir ? ["-v", `${c.filesDir}:/files:ro`] : []),
       ...(c.homeDir ? ["-v", `${c.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
       // Test runners skip watch mode and colour codes in CI.

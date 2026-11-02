@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir, totalmem, homedir } from "node:os";
 import path from "node:path";
 
-import { type Workspace } from "./workspace";
+import { type Workspace, workspaceMounts } from "./workspace";
 import { type RunEvent } from "@repo/shared/run-event";
 import { isProviderHarness, launcherPath } from "@repo/shared/providers";
 import { config, enabledProvider, providerRunCredentials, providerEnvProblem } from "@repo/db";
@@ -304,8 +304,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             "--label",
             `run_id=${runId}`,
 
-            "-v",
-            `${workspace.runDir}:/workspace`,
+            ...workspaceMounts(workspace),
 
             ...runnerMountFlags(process.cwd()),
 

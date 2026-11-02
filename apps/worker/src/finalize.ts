@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { runContainerCommand, sandboxUser } from "./docker";
 import { validatePatch } from "./patch";
-import { type Workspace } from "./workspace";
+import { type Workspace, workspaceMounts } from "./workspace";
 import { authenticatedCloneUrl, createPullRequest, parseRepoSlug } from "./github";
 
 const MAX_PATCH_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -23,7 +23,7 @@ export async function exportPatch(workspace: Workspace): Promise<string> {
   try {
     await writeFile(path.join(outputDir, "excludes"), RUN_ARTIFACTS + "\n");
     const { exitCode, stderr } = await runContainerCommand([
-      "-v", `${workspace.runDir}:/workspace`,
+      ...workspaceMounts(workspace),
       "-v", `${outputDir}:/output`,
       "--network", "none",
       "--user", sandboxUser(),

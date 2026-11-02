@@ -367,7 +367,7 @@ export async function processRun(
       if (command) {
         await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks", status: "running", command } }]);
         check = await runChecks({
-          runId: run.id, runDir: ws.runDir, command, image: containerOptions.image!, timeoutSec: settings.checkTimeoutSec,
+          runId: run.id, runDir: ws.runDir, objectsDir: ws.objectsDir, command, image: containerOptions.image!, timeoutSec: settings.checkTimeoutSec,
           homeDir: containerOptions.homeDir, filesDir: files.dir, env: containerOptions.env,
         });
         await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks", status: check.status, command: check.command, ms: check.ms } }]);

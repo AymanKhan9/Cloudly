@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
 import { prisma, relayKey, secretsForRepo } from "@repo/db";
-import { createWorkspace } from "./workspace";
+import { createWorkspace, workspaceMounts } from "./workspace";
 import { resolveCloneSource } from "./github";
 import { ensureEgress, EGRESS_FLAGS, SANDBOX_NETWORK, sandboxTrustFlags } from "./egress";
 import { SANDBOX_LIMITS, envFlags, runnerMountFlags, sandboxUser } from "./docker";
@@ -103,7 +103,7 @@ export async function startPreview(id: string): Promise<void> {
       "--label", `preview_id=${id}`,
       // Where its scratch folders are, so whichever worker stops it can clean up.
       "--label", `cloudly_dirs=${dirs.join(",")}`,
-      "-v", `${ws.runDir}:/workspace`,
+      ...workspaceMounts(ws),
       "-v", `${files.dir}:/files:ro`,
       ...runnerMountFlags(process.cwd()),
       "-w", "/repo/packages/runner",

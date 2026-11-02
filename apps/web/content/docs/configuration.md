@@ -59,6 +59,16 @@ These are normally entered in the browser. A value in `.env` is only used when n
 | `WORKER_CONCURRENCY` | Turns that run at the same time. Keep `1` on a 1 GB VM. |
 | `SANDBOX_MEMORY` | Memory per run container. Default: the VM's RAM minus 768 MB, at least 512 MB. |
 | `SANDBOX_PIDS` | Process limit per run container. Default `2048`. |
+| `CLOUDLY_REPO_CACHE` | Where the worker keeps a copy of each repo so turns start fast. Default `~/.cloudly/repo-cache`; `off` clones the whole repo every turn. |
+| `CLOUDLY_REPO_CACHE_DAYS` | A repo's copy is removed after this many days without a turn. Default `14`. |
+
+### Fast starts
+
+Each turn needs its own copy of the repo. Cloning a big repo from GitHub every time is slow (about a minute for [t3code](https://github.com/pingdotgg/t3code)), so the worker keeps one copy of each repo on the VM. A turn fetches only what changed since the last one, makes its copy from that, and borrows the history instead of copying it. The agent still gets a normal git repo with the full history and every branch.
+
+On t3code, a turn's workspace takes about 7 seconds instead of 58 once the repo has been used once. The first turn on a repo is as slow as before.
+
+The copy only holds what's on GitHub, never your token. If it's ever damaged, the turn clones in full and the copy is rebuilt.
 
 ## Desktops and previews
 
