@@ -14,6 +14,7 @@ const DEFAULTS = {
   checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600,
   reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
   triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
+  autoMerge: false, mergeMethod: "squash",
 };
 
 function repoOf(c: { req: { param: (k: string) => string } }) {
@@ -56,6 +57,9 @@ const SettingsSchema = z
     onPrReview: z.boolean().optional(),
     fixCi: z.boolean().optional(),
     ciFixAttempts: z.number().int().min(0).max(5).optional(),
+    // New sessions start with merge-when-ready on, and how it merges.
+    autoMerge: z.boolean().optional(),
+    mergeMethod: z.enum(["squash", "merge", "rebase"]).optional(),
   })
   .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });
 

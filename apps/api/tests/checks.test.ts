@@ -5,7 +5,7 @@ import { hashToken, SESSION_COOKIE_NAME } from "../src/session";
 
 process.env.WEB_ORIGIN = "https://cloudly.test";
 const repo = "acme/checks-api";
-const TRIGGER_DEFAULTS = { triggerHarness: null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2 };
+const TRIGGER_DEFAULTS = { triggerHarness: null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2, autoMerge: false, mergeMethod: "squash" };
 let cookie = "";
 let userId = "";
 

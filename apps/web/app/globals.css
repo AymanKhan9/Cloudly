@@ -5664,3 +5664,154 @@ div.msg-system {
     order: 3;
   }
 }
+
+/* ---------- Merge when ready ---------- */
+
+.merge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merge-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merge-chip[data-merged] {
+  color: #8250df;
+  border-color: rgba(130, 80, 223, 0.35);
+  background: rgba(130, 80, 223, 0.08);
+}
+
+/* ---------- Schedules ---------- */
+
+.page-head.with-action {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-head.with-action .btn {
+  flex: none;
+}
+
+.when-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.when-row .select,
+.when-row .input {
+  width: auto;
+  max-width: 100%;
+}
+
+.when-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.schedule-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin-top: 16px;
+}
+
+.schedule {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+}
+
+.schedule[data-paused] {
+  opacity: 0.7;
+}
+
+.schedule-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.schedule-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.schedule-prompt {
+  font-size: 13.5px;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.schedule-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-ink);
+}
+
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+.empty-schedules {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+  color: var(--text-3);
+}
+
+@media (max-width: 640px) {
+  .schedule {
+    flex-direction: column;
+  }
+
+  .schedule-actions {
+    justify-content: flex-start;
+  }
+
+  .page-head.with-action {
+    flex-direction: column;
+  }
+}

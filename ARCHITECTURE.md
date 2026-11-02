@@ -653,6 +653,28 @@ review comments, check runs, annotations, job logs) are behind a `GitHubPort` so
 GitHub. New GitHub Apps get the webhook, these events, and `issues: write`, `checks: read`,
 `actions: read` from the manifest; older ones are upgraded by hand (Settings → GitHub triggers).
 
+### Merge when ready, and schedules
+
+`Thread.autoMerge` (defaulted from `RepoSettings.autoMerge`) is evaluated by the worker's
+`maybeMerge` (`merge.ts`) every minute for every such open session, and straight away when a
+`check_suite` webhook reports success on its branch. Cloudly's side must hold first: no active run,
+no `needsInput`, the latest committing run's checks not failed, and, with a reviewer, a review run
+newer than that commit with no blocking finding left undismissed. Then GitHub's: the PR open and
+not a draft, every check run and commit status on its head commit passing (with no checks at all,
+a two-minute grace after the commit so CI that hasn't started isn't mistaken for none), and
+`mergeable_state` clean. `behind` calls `update-branch` with `expected_head_sha`; `dirty` sets
+`needsInput`; `blocked` (rules, approvals) waits. The merge passes `sha` = the head it checked, so a
+push in between makes GitHub refuse it. What it's waiting for is kept in `Thread.mergeStatus`.
+
+`Schedule` rows hold a wall-clock spec (`frequency`, `minuteOfDay`, `weekday`, IANA `timeZone`);
+`nextRun` (`@repo/shared/schedule`) converts it with `Intl`, trying the zone's offsets on both sides
+of a change so DST neither skips nor doubles a run. The worker's schedule loop claims a due firing
+by compare-and-setting `nextRunAt` from its old value, so two workers can't both fire it, and counts
+the next run from now, so downtime yields one catch-up run, not a burst. A firing creates an
+ordinary thread (or, in `continue` mode, the next run in the schedule's thread, skipped while that
+thread is busy), with `trigger.type = "schedule"` and a `triggerKey` per firing. The spend limit is
+checked before anything is created.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

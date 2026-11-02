@@ -22,6 +22,7 @@ import { councils } from './council-routes';
 import { repoSettings } from './repo-settings-routes';
 import { reviewRoutes } from './review-routes';
 import { webhooks, webhookSettings } from './webhook-routes';
+import { schedules } from './schedule-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -38,7 +39,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -56,6 +57,8 @@ const NewThreadSchema = CreateRunSchema.extend({
   desktop: z.boolean().optional(),
   /** "audit": the agent reviews the whole repo and lists findings instead of changing it. */
   mode: z.enum(['chat', 'audit']).optional(),
+  /** Merge the pull request once it's ready. Left out: the repo's default. */
+  autoMerge: z.boolean().optional(),
 });
 const MessageSchema = z.object({ prompt: z.string().trim().min(1).max(8000) });
 
@@ -82,6 +85,7 @@ app.route('/settings/repos', repoSettings)
 app.route('/threads', reviewRoutes)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
+app.route('/schedules', schedules)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
@@ -268,7 +272,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness, effort, desktop, mode } = c.req.valid('json');
+  const { repo, baseBranch, prompt, harness, effort, desktop, mode, autoMerge } = c.req.valid('json');
   const audit = mode === 'audit';
   if (effort && !effortLevels(harness).includes(effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
@@ -281,6 +285,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
       model: modelCommand(prompt) ?? undefined,
       effort: effort ?? undefined,
       desktop: desktop ?? false,
+      autoMerge: autoMerge ?? (await prisma.repoSettings.findUnique({ where: { repo }, select: { autoMerge: true } }))?.autoMerge ?? false,
       branch: `agent/thread-${id.slice(0, 8)}`,
       runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id, kind: audit ? 'audit' : 'turn' } },
     },
@@ -310,12 +315,14 @@ const ThreadSettingsSchema = z.object({
   snoozeUntil: z.iso.datetime().nullable().optional(),
   /** true: read now; false: mark unread. */
   seen: z.boolean().optional(),
+  /** Merge the pull request once it's ready (see the worker's merge.ts). */
+  autoMerge: z.boolean().optional(),
 });
 
 app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) => {
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
   if (!thread) return c.json({ message: 'Session not found' }, 404);
-  const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen } = c.req.valid('json');
+  const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen, autoMerge } = c.req.valid('json');
   const now = new Date();
   if (effort && !effortLevels(thread.harness).includes(effort)) {
     return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
@@ -333,6 +340,7 @@ app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) =>
       ...(archived !== undefined ? { archivedAt: archived ? now : null } : {}),
       ...(snoozeUntil !== undefined ? { snoozedUntil: snoozeUntil ? new Date(snoozeUntil) : null } : {}),
       ...(seen !== undefined ? { seenAt: seen ? now : null } : {}),
+      ...(autoMerge !== undefined ? { autoMerge, mergeStatus: autoMerge ? 'Checking' : null } : {}),
     },
   });
   return c.json({ ok: true });

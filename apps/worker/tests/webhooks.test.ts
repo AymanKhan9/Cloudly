@@ -2,6 +2,7 @@ import { test, expect, beforeAll, afterAll } from "bun:test";
 import { prisma } from "@repo/db";
 import { processDeliveries, handleDelivery, ciFixPrompt, mentionPattern } from "../src/webhooks";
 import type { GitHubPort, FailedCheck } from "../src/github";
+import { fakeGitHub as fake } from "./fake-github";
 
 const stamp = Date.now();
 const repo = `acme/hooks-${stamp}`;
@@ -21,19 +22,7 @@ afterAll(async () => {
   await prisma.webhookDelivery.deleteMany({ where: { id: { startsWith: `t-${stamp}` } } });
 });
 
-/** A stand-in for GitHub that records what Cloudly asked of it. */
-function fakeGitHub(over: Partial<GitHubPort> = {}) {
-  const calls: string[] = [];
-  const gh: GitHubPort = {
-    comment: async (_o, _r, n, body) => void calls.push(`comment #${n}: ${body}`),
-    react: async (_o, _r, id, c) => void calls.push(`react ${id} ${c}`),
-    pullRequest: async (_o, _r, n) => ({ number: n, url: `https://github.com/${repo}/pull/${n}`, title: "Their PR", headRef: "feature/x", headRepo: repo, baseRef: "main", state: "open" }),
-    reviewComments: async () => [{ path: "src/a.ts", line: 3, body: "Use a constant here." }],
-    failedChecks: async () => [],
-    ...over,
-  };
-  return { gh, calls };
-}
+const fakeGitHub = (over: Partial<GitHubPort> = {}) => fake(repo, over);
 
 const base = { repository: { full_name: repo, default_branch: "main" } };
 const issue = (n: number) => ({ number: n, title: `Crash on empty input ${n}`, body: "Steps: call parse('')", html_url: `https://github.com/${repo}/issues/${n}` });

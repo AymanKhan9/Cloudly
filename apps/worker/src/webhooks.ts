@@ -2,6 +2,7 @@ import { prisma, config, budgetStatus, harnessUsesPlan } from "@repo/db";
 
 import { github as realGitHub, type GitHubPort, type FailedCheck } from "./github";
 import { repoSettings } from "./checks";
+import { maybeMerge } from "./merge";
 
 // GitHub triggers. The API stores each signed webhook delivery; this turns them
 // into sessions and turns:
@@ -118,6 +119,7 @@ async function startSession(opts: {
         title: opts.title.replace(/\s+/g, " ").slice(0, 120) || "GitHub issue",
         branch: opts.branch ?? (opts.issueNumber ? `agent/issue-${opts.issueNumber}-${id.slice(0, 6)}` : `agent/thread-${id.slice(0, 8)}`),
         issueNumber: opts.issueNumber ?? null,
+        autoMerge: settings.autoMerge,
         prUrl: opts.prUrl ?? null,
         runs: {
           create: {
@@ -288,7 +290,17 @@ async function onCheckSuite(d: Delivery, gh: GitHubPort): Promise<Outcome> {
   const p = d.payload;
   const repo: string = p.repository?.full_name;
   const suite = p.check_suite;
-  if (!["failure", "timed_out"].includes(suite?.conclusion)) return { status: "ignored", note: `conclusion ${suite?.conclusion}` };
+  if (!["failure", "timed_out"].includes(suite?.conclusion)) {
+    // Green CI may be the last thing a session waiting to merge needed.
+    if (suite?.conclusion === "success") {
+      const waiting = await prisma.thread.findFirst({ where: { repo, branch: suite.head_branch, autoMerge: true, mergedAt: null } });
+      if (waiting) {
+        const r = await maybeMerge(waiting.id, gh);
+        if (r) return { status: "done", note: `merge when ready: ${r.status}` };
+      }
+    }
+    return { status: "ignored", note: `conclusion ${suite?.conclusion}` };
+  }
   const settings = await repoSettings(repo);
   if (!settings.fixCi) return { status: "ignored", note: "CI fixes are off for this repo" };
   const thread = await prisma.thread.findFirst({ where: { repo, branch: suite.head_branch }, orderBy: { updatedAt: "desc" } });

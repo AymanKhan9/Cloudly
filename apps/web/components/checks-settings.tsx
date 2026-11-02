@@ -21,6 +21,8 @@ export function ChecksSettings() {
   const [reviewer, setReviewer] = useState("");
   const [rounds, setRounds] = useState(2);
   const [postToGitHub, setPostToGitHub] = useState(true);
+  const [autoMerge, setAutoMerge] = useState(false);
+  const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [agents, setAgents] = useState<Harness[]>(HARNESSES);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -51,6 +53,8 @@ export function ChecksSettings() {
         setReviewer(v.settings.reviewer ?? "");
         setRounds(v.settings.reviewRounds);
         setPostToGitHub(v.settings.reviewPostToGitHub);
+        setAutoMerge(v.settings.autoMerge);
+        setMergeMethod(v.settings.mergeMethod);
       })
       .catch((e: Error) => setMessage({ ok: false, text: e.message }));
   }, [repo]);
@@ -65,6 +69,7 @@ export function ChecksSettings() {
         body: JSON.stringify({
           checks: mode, checkCommand: mode === "custom" ? command : command || null, fixAttempts: fixes, checkTimeoutSec: minutes * 60,
           reviewer: reviewer || null, reviewRounds: rounds, reviewPostToGitHub: postToGitHub,
+          autoMerge, mergeMethod,
         }),
       });
       setMessage({ ok: true, text: "Saved. Applies from the next turn." });
@@ -217,6 +222,27 @@ export function ChecksSettings() {
                   </div>
                 </div>
               ) : null}
+              <div className="panel-row checks-grid">
+                <div className="field">
+                  <span className="label">Merge when ready</span>
+                  <label className="check-row">
+                    <input type="checkbox" checked={autoMerge} onChange={(e) => setAutoMerge(e.target.checked)} />
+                    On for new sessions
+                  </label>
+                  <p className="hint">Merges once the checks pass, the reviewer finds nothing blocking, CI is green and GitHub allows it. Each session can switch it.</p>
+                </div>
+                <div className="field">
+                  <label className="label" htmlFor="merge-method">
+                    Merge with
+                  </label>
+                  <select id="merge-method" className="select" value={mergeMethod} onChange={(e) => setMergeMethod(e.target.value as typeof mergeMethod)}>
+                    <option value="squash">Squash and merge</option>
+                    <option value="merge">A merge commit</option>
+                    <option value="rebase">Rebase and merge</option>
+                  </select>
+                  <p className="hint">The repo has to allow it on GitHub.</p>
+                </div>
+              </div>
               <div className="panel-row form-foot">
                 <span className="msg" role="status" data-tone={message && !message.ok ? "danger" : undefined}>
                   {message?.text ?? "Each fix attempt and each review is a turn, and costs like one."}

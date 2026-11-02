@@ -200,11 +200,82 @@ export interface GitHubPort {
     pullRequest(owner: string, repo: string, number: number): Promise<{ number: number; url: string; title: string; headRef: string; headRepo: string | null; baseRef: string; state: string }>;
     reviewComments(owner: string, repo: string, number: number, reviewId: number): Promise<{ path: string; line: number | null; body: string }[]>;
     failedChecks(owner: string, repo: string, suiteId: number): Promise<FailedCheck[]>;
+    /** For merge-when-ready (merge.ts). */
+    prStatus(owner: string, repo: string, number: number): Promise<PrStatus>;
+    /** Every check run and commit status on a commit, by outcome. */
+    commitChecks(owner: string, repo: string, sha: string): Promise<{ pending: string[]; failed: string[]; passed: number }>;
+    merge(owner: string, repo: string, number: number, sha: string, method: string): Promise<{ merged: boolean; message: string }>;
+    updateBranch(owner: string, repo: string, number: number, headSha: string): Promise<void>;
+}
+
+export interface PrStatus {
+    state: string;
+    merged: boolean;
+    draft: boolean;
+    /** null while GitHub is still working it out. */
+    mergeable: boolean | null;
+    /** clean | unstable | behind | dirty | blocked | has_hooks | draft | unknown */
+    mergeableState: string;
+    headSha: string;
+    baseRef: string;
 }
 
 const LOG_TAIL = 8000;
 
+const PASSING = new Set(["success", "neutral", "skipped"]);
+
 export const github: GitHubPort = {
+    async prStatus(owner, repo, number) {
+        const client = await getOctokit();
+        const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: number });
+        return {
+            state: data.state, merged: data.merged, draft: Boolean(data.draft), mergeable: data.mergeable,
+            mergeableState: data.mergeable_state, headSha: data.head.sha, baseRef: data.base.ref,
+        };
+    },
+    async commitChecks(owner, repo, sha) {
+        const client = await getOctokit();
+        const pending: string[] = [];
+        const failed: string[] = [];
+        let passed = 0;
+        const runs = await client.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", { owner, repo, ref: sha, filter: "latest", per_page: 100 });
+        for (const r of runs.data.check_runs) {
+            if (r.status !== "completed") pending.push(r.name);
+            else if (PASSING.has(r.conclusion ?? "")) passed++;
+            else failed.push(r.name);
+        }
+        // Commit statuses (older CI services). Needs "Commit statuses: read"; without it there are none to see.
+        try {
+            const st = await client.request("GET /repos/{owner}/{repo}/commits/{ref}/status", { owner, repo, ref: sha });
+            for (const x of st.data.statuses) {
+                if (x.state === "pending") pending.push(x.context);
+                else if (x.state === "success") passed++;
+                else failed.push(x.context);
+            }
+        } catch (error) {
+            if (!(error instanceof RequestError) || (error.status !== 403 && error.status !== 404)) throw error;
+        }
+        return { pending, failed, passed };
+    },
+    async merge(owner, repo, number, sha, method) {
+        const client = await getOctokit();
+        try {
+            const { data } = await client.request("PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge", {
+                owner, repo, pull_number: number, sha, merge_method: method as "merge" | "squash" | "rebase",
+            });
+            return { merged: data.merged, message: data.message };
+        } catch (error) {
+            // 405: not mergeable (rules, conflicts); 409: the head moved since we looked.
+            if (error instanceof RequestError && (error.status === 405 || error.status === 409 || error.status === 422)) {
+                return { merged: false, message: (error.response?.data as { message?: string } | undefined)?.message ?? error.message };
+            }
+            throw error;
+        }
+    },
+    async updateBranch(owner, repo, number, headSha) {
+        const client = await getOctokit();
+        await client.request("PUT /repos/{owner}/{repo}/pulls/{pull_number}/update-branch", { owner, repo, pull_number: number, expected_head_sha: headSha });
+    },
     async comment(owner, repo, issueNumber, body) {
         const client = await getOctokit();
         await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { owner, repo, issue_number: issueNumber, body });

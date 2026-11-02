@@ -28,7 +28,7 @@ export function buildManifest(suffix: string) {
     // GitHub triggers: labelled issues, @cloudly mentions, reviews and CI on Cloudly's pull requests.
     hook_attributes: { url: `${api}/webhooks/github`, active: true },
     default_events: ["issues", "issue_comment", "pull_request_review", "check_suite"],
-    default_permissions: { contents: "write", pull_requests: "write", metadata: "read", issues: "write", checks: "read", actions: "read" },
+    default_permissions: { contents: "write", pull_requests: "write", metadata: "read", issues: "write", checks: "read", actions: "read", statuses: "read" },
   };
 }
 

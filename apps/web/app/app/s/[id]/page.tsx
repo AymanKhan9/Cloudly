@@ -19,6 +19,7 @@ import {
   Notebook,
   GitBranch,
   GitDiff,
+  GitMerge,
   GitPullRequest,
   GithubLogo,
   Globe,
@@ -510,7 +511,7 @@ export default function SessionPage() {
 
   // Saved on the session, not sent as a message: the next turn picks it up.
   // Saved on the session, not sent as a message: the next turn picks it up.
-  async function saveSetting(field: "model" | "effort" | "desktop" | "peers", value: string | boolean | null) {
+  async function saveSetting(field: "model" | "effort" | "desktop" | "peers" | "autoMerge", value: string | boolean | null) {
     const before = view!.thread[field] ?? null;
     setView((v) => (v ? { ...v, thread: { ...v.thread, [field]: value } } : v));
     setActionError(null);
@@ -595,6 +596,12 @@ export default function SessionPage() {
             <FolderSimple size={15} />
             <span className="hide-sm">Files</span>
           </button>
+          {thread.prUrl && (thread.mergedAt || thread.autoMerge) ? (
+            <span className="merge-chip" data-merged={thread.mergedAt ? true : undefined} title={thread.mergedAt ? "Merged by Cloudly when it was ready" : "Merge when ready is on"}>
+              <GitMerge size={14} weight="bold" />
+              <span className="hide-sm">{thread.mergedAt ? "Merged" : thread.mergeStatus ?? "Merge when ready"}</span>
+            </span>
+          ) : null}
           {thread.prUrl ? (
             <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
               <GitPullRequest size={15} weight="bold" style={{ color: "var(--ok)" }} />
@@ -764,6 +771,23 @@ export default function SessionPage() {
               note="Which of your sessions this one's agent may read and send messages to. Applies from the next turn."
               onChange={(v) => saveSetting("peers", v)}
             />
+            <button
+              type="button"
+              className="pill"
+              aria-pressed={Boolean(thread.autoMerge)}
+              disabled={Boolean(thread.mergedAt)}
+              onClick={() => saveSetting("autoMerge", !thread.autoMerge)}
+              title={
+                thread.mergedAt
+                  ? "Merged"
+                  : thread.autoMerge
+                    ? `Cloudly merges the pull request once checks, review and CI pass. ${thread.mergeStatus ?? ""}`.trim()
+                    : "Merge the pull request once checks, review and CI pass"
+              }
+            >
+              <GitMerge size={14} />
+              <span className="pill-text">{thread.mergedAt ? "Merged" : "Merge when ready"}</span>
+            </button>
             {caps?.desktop || thread.desktop ? (
               <button
                 type="button"

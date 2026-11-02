@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = {
   checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600,
   reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
   triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
+  autoMerge: false, mergeMethod: "squash",
 };
 const OUTPUT_CHARS = 12_000;
 /** Bash's exit code for a command that isn't installed: "couldn't run", not a failing test. */

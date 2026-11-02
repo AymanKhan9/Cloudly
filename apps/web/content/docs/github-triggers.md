@@ -28,7 +28,7 @@ GitHub needs to reach your Cloudly, so it has to be on a public address.
 
 1. Copy the webhook URL, and press **Make a secret**. The secret is shown once.
 2. Open the app's settings on GitHub. Under **Webhook**, tick **Active**, and paste the URL and the secret.
-3. Under **Permissions**, give it **Issues: read and write**, **Checks: read** and **Actions: read**.
+3. Under **Permissions**, give it **Issues: read and write**, **Checks: read**, **Actions: read** and **Commit statuses: read**.
 4. Under **Subscribe to events**, tick **Issues**, **Issue comment**, **Pull request review** and **Check suite**, and save.
 5. Whoever installed the app accepts the new permissions (GitHub asks them by email and on the installation's page).
 

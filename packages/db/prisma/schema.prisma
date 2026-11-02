@@ -21,6 +21,7 @@ model User {
   sessions    Session[]
   runs        Run[]
   threads     Thread[]
+  schedules   Schedule[]
   arenas      Arena[]
   previews    Preview[]
   tokens      AccessToken[]
@@ -74,6 +75,13 @@ model Thread {
   diffBase       String?
   /// The GitHub issue the session was started from (a label or an @cloudly mention).
   issueNumber    Int?
+  /// Merge the pull request once it's ready: checks, review and CI green, nothing in the way.
+  autoMerge      Boolean  @default(false)
+  /// What merge-when-ready is waiting for, or what happened, for the session's header.
+  mergeStatus    String?
+  mergedAt       DateTime?
+  /// The schedule that started the session, if one did.
+  scheduleId     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -447,6 +455,10 @@ model RepoSettings {
   /// Failing CI on a pull request Cloudly opened: the agent gets turns to fix it.
   fixCi           Boolean  @default(true)
   ciFixAttempts   Int      @default(2)
+  /// New sessions on this repo start with merge-when-ready on.
+  autoMerge       Boolean  @default(false)
+  /// squash | merge | rebase
+  mergeMethod     String   @default("squash")
   updatedAt       DateTime @updatedAt
 }
 
@@ -489,4 +501,39 @@ model WebhookDelivery {
   receivedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt
   @@index([status, receivedAt])
+}
+
+/// A task that runs on its own at set times: a new session each time, or the
+/// next turn of the same one.
+model Schedule {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  repo       String
+  baseBranch String
+  harness    String
+  prompt     String
+  /// turn | audit
+  kind       String    @default("turn")
+  /// hourly | daily | weekdays | weekly
+  frequency  String
+  /// Minutes after midnight (or, for hourly, after the hour), in timeZone.
+  minuteOfDay Int
+  /// 0 = Sunday, for weekly.
+  weekday    Int?
+  timeZone   String
+  /// new: a session each time. continue: the next turn of one session.
+  mode       String    @default("new")
+  threadId   String?
+  enabled    Boolean   @default(true)
+  nextRunAt  DateTime
+  lastRunAt  DateTime?
+  /// What the last firing did, or why it didn't start anything.
+  lastNote   String?
+  lastThreadId String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([enabled, nextRunAt])
+  @@index([userId])
 }

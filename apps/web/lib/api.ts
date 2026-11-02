@@ -90,6 +90,12 @@ export interface ThreadSummary {
   unread?: boolean;
   /** Hidden until snoozedUntil. */
   snoozed?: boolean;
+  /** Merge the pull request once it's ready, what that's waiting for, and when it merged. */
+  autoMerge?: boolean;
+  mergeStatus?: string | null;
+  mergedAt?: string | null;
+  /** The schedule that started it. */
+  scheduleId?: string | null;
 }
 
 export interface Turn {
@@ -119,7 +125,7 @@ export interface Turn {
    */
   kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix";
   /** What on GitHub started the turn, when something did. */
-  trigger?: { type: "issue" | "mention" | "pr_review" | "ci"; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
+  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule"; name?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */
   harness?: string;
   /** A review's or audit's findings, as text. */
@@ -148,6 +154,8 @@ export interface RepoCheckSettings {
     onPrReview: boolean;
     fixCi: boolean;
     ciFixAttempts: number;
+    autoMerge: boolean;
+    mergeMethod: "squash" | "merge" | "rebase";
   };
   last: { checkCommand: string | null; checkStatus: string; createdAt: string } | null;
 }
@@ -387,4 +395,27 @@ export interface AgentsSettings {
   catalog: CatalogItem[];
   builtin: { id: string; name: string; blurb: string }[];
   image: { status: "pending" | "building" | "ready" | "failed"; updatedAt: string } | null;
+}
+
+export interface Schedule {
+  id: string;
+  name: string;
+  repo: string;
+  baseBranch: string;
+  harness: string;
+  prompt: string;
+  kind: "turn" | "audit";
+  mode: "new" | "continue";
+  frequency: "hourly" | "daily" | "weekdays" | "weekly";
+  minuteOfDay: number;
+  weekday: number | null;
+  timeZone: string;
+  enabled: boolean;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  lastNote: string | null;
+  lastThreadId: string | null;
+  lastThreadTitle: string | null;
+  /** "Weekdays at 09:00". */
+  description: string;
 }

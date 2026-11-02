@@ -90,7 +90,7 @@ function WebhookSetup() {
               Under <b>Webhook</b>, tick <b>Active</b>, paste the URL above, and the secret {status.secretSet && !secret ? "you saved (or make a new one)" : "from the button below"}.
             </li>
             <li>
-              Under <b>Permissions</b>, give it <b>Issues: read and write</b>, <b>Checks: read</b> and <b>Actions: read</b>.
+              Under <b>Permissions</b>, give it <b>Issues: read and write</b>, <b>Checks: read</b>, <b>Actions: read</b> and <b>Commit statuses: read</b>.
             </li>
             <li>
               Under <b>Subscribe to events</b>, tick <b>Issues</b>, <b>Issue comment</b>, <b>Pull request review</b> and <b>Check suite</b>. Save.

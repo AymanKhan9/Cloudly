@@ -1,6 +1,7 @@
 "use client";
 
-import { CaretRight, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
+import Link from "next/link";
+import { CalendarBlank, CaretRight, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import type { Turn } from "@/lib/api";
 import type { StreamEvent } from "@/lib/events";
 
@@ -74,6 +75,14 @@ export function ReviewResult({ turn, events, onOpen }: { turn: Turn; events: Str
 export function TriggerNote({ turn }: { turn: Turn }) {
   const t = turn.trigger;
   if (!t || t.type === "ci") return null;
+  if (t.type === "schedule") {
+    return (
+      <Link className="msg-from" href="/app/schedules">
+        <CalendarBlank size={14} />
+        Scheduled: {t.name ?? "a schedule"}
+      </Link>
+    );
+  }
   const by = t.by ? `@${t.by}` : "Someone";
   const text =
     t.type === "issue"
