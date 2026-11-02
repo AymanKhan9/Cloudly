@@ -14,7 +14,7 @@ import { ContextSettings } from "@/components/context-settings";
 import { AgentsPanel } from "@/components/agents-panel";
 import { ChecksSettings } from "@/components/checks-settings";
 import { GitHubTriggers } from "@/components/github-triggers";
-import { DiscordSettings, NotificationSettings } from "@/components/discord-settings";
+import { DiscordSettings, NotificationSettings, SlackSettings } from "@/components/discord-settings";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
@@ -181,6 +181,7 @@ export default function SettingsPage() {
       <GitHubTriggers />
       <NotificationSettings />
       <DiscordSettings />
+      <SlackSettings />
 
       <RepoFilesSection />
 

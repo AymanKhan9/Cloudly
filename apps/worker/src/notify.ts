@@ -1,5 +1,6 @@
 import { prisma, config, unseal } from "@repo/db";
 import { discordApi, sessionMessage, slackMessage, DISCORD_WEBHOOK, SLACK_WEBHOOK, type NotifyKind } from "@repo/shared/discord";
+import { slackApi, slackBlocks } from "@repo/shared/slack";
 import { replyText } from "./transcript";
 
 // Notifications: when a session settles (its last automatic turn is done), needs
@@ -64,11 +65,17 @@ export async function notifyTurnEnd(runId: string): Promise<void> {
 export interface NotifyPort {
   discord(method: string, path: string, body?: unknown): Promise<any>;
   webhook(url: string, body: unknown): Promise<void>;
+  slack(method: string, body: Record<string, unknown>): Promise<any>;
 }
 
 async function realPort(): Promise<NotifyPort | null> {
   const token = await config("DISCORD_BOT_TOKEN");
+  const slackToken = await config("SLACK_BOT_TOKEN");
   return {
+    slack: (method, body) => {
+      if (!slackToken) throw new Error("No Slack bot token");
+      return slackApi(slackToken, method, body);
+    },
     discord: (method, path, body) => {
       if (!token) throw new Error("No Discord bot token");
       return discordApi(token, method, path, body);
@@ -84,7 +91,7 @@ async function realPort(): Promise<NotifyPort | null> {
 
 /** Makes the Discord thread for each session started from Discord, on the bot's first reply. */
 export async function setupDiscordThreads(port: NotifyPort, now = Date.now()): Promise<number> {
-  const waiting = await prisma.thread.findMany({ where: { discordToken: { not: null } }, take: 20 });
+  const waiting = await prisma.thread.findMany({ where: { discordToken: { not: null } }, orderBy: { createdAt: "asc" }, take: 20 });
   if (waiting.length === 0) return 0;
   const appId = await config("DISCORD_APPLICATION_ID");
   for (const t of waiting) {
@@ -104,6 +111,26 @@ export async function setupDiscordThreads(port: NotifyPort, now = Date.now()): P
   return waiting.length;
 }
 
+/** Posts the "Started" message for each session started from Slack; its updates are threaded under it. */
+export async function setupSlackThreads(port: NotifyPort): Promise<number> {
+  const waiting = await prisma.thread.findMany({ where: { slackChannelId: { not: null }, slackThreadTs: null }, orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { createdAt: "asc" }, take: 1, select: { prompt: true } } }, take: 20 });
+  for (const t of waiting) {
+    let ts = "-";
+    try {
+      const posted = await port.slack("chat.postMessage", {
+        channel: t.slackChannelId,
+        ...slackBlocks({ kind: "started", title: t.title, body: clip(t.runs[0]?.prompt ?? "", 1500), url: sessionUrl(t.id), repo: t.repo }, t.id, { reply: false, cancel: true }),
+      });
+      ts = posted.ts;
+    } catch (err) {
+      // A channel the bot can't post in: updates go to the user's DMs instead.
+      console.warn(`[notify] no Slack thread for session ${t.id}: ${(err as Error).message}`);
+    }
+    await prisma.thread.update({ where: { id: t.id }, data: { slackThreadTs: ts } });
+  }
+  return waiting.length;
+}
+
 const dmChannels = new Map<string, string>();
 
 /** Sends every notification waiting. Returns how many it finished with. */
@@ -111,15 +138,17 @@ export async function sendNotifications(port: NotifyPort): Promise<number> {
   const pending = await prisma.notification.findMany({ where: { sentAt: null }, orderBy: { createdAt: "asc" }, take: 50 });
   if (pending.length === 0) return 0;
   const botReady = Boolean(await config("DISCORD_BOT_TOKEN"));
+  const slackReady = Boolean(await config("SLACK_BOT_TOKEN"));
   let finished = 0;
   for (const n of pending) {
     const [user, settings, thread] = await Promise.all([
-      prisma.user.findUnique({ where: { id: n.userId }, select: { discordUserId: true } }),
+      prisma.user.findUnique({ where: { id: n.userId }, select: { discordUserId: true, slackUserId: true } }),
       prisma.notifySettings.findUnique({ where: { userId: n.userId } }),
-      n.threadId ? prisma.thread.findUnique({ where: { id: n.threadId }, select: { id: true, repo: true, prUrl: true, discordThreadId: true, discordToken: true } }) : null,
+      n.threadId ? prisma.thread.findUnique({ where: { id: n.threadId }, select: { id: true, repo: true, prUrl: true, discordThreadId: true, discordToken: true, slackChannelId: true, slackThreadTs: true } }) : null,
     ]);
     // Its Discord thread isn't made yet: next time round.
-    if (thread?.discordToken) continue;
+    if (thread?.discordToken || (thread?.slackChannelId && !thread.slackThreadTs)) continue;
+    const slackThread = thread?.slackChannelId && thread.slackThreadTs && thread.slackThreadTs !== "-" ? { channel: thread.slackChannelId, ts: thread.slackThreadTs } : null;
     const wanted = n.kind === "test" || ({ needs_you: settings?.onNeedsYou, done: settings?.onDone, failed: settings?.onFailed, merged: settings?.onMerged } as Record<string, boolean | undefined>)[n.kind] !== false;
     const message = { kind: n.kind as NotifyKind, title: n.title, body: n.body, url: n.url, prUrl: thread?.prUrl ?? null, repo: thread?.repo ?? null };
     const discordBody = sessionMessage(message, thread?.id ?? null, { reply: n.kind !== "merged" });
@@ -127,6 +156,8 @@ export async function sendNotifications(port: NotifyPort): Promise<number> {
     const targets: [string, () => Promise<void>][] = [];
     // The session's own Discord thread is its conversation: every update goes there.
     if (thread?.discordThreadId && botReady) targets.push(["discord-thread", () => port.discord("POST", `/channels/${thread.discordThreadId}/messages`, discordBody)]);
+    const slackBody = slackBlocks(message, thread?.id ?? null, { reply: n.kind !== "merged" });
+    if (slackThread && slackReady) targets.push(["slack-thread", () => port.slack("chat.postMessage", { channel: slackThread.channel, thread_ts: slackThread.ts, ...slackBody })]);
     if (wanted) {
       if ((settings?.discordDm ?? true) && user?.discordUserId && botReady && !thread?.discordThreadId) {
         targets.push(["discord-dm", async () => {
@@ -136,6 +167,12 @@ export async function sendNotifications(port: NotifyPort): Promise<number> {
             dmChannels.set(user.discordUserId!, channel);
           }
           await port.discord("POST", `/channels/${channel}/messages`, discordBody);
+        }]);
+      }
+      if ((settings?.slackDm ?? true) && user?.slackUserId && slackReady && !slackThread) {
+        targets.push(["slack-dm", async () => {
+          const opened = await port.slack("conversations.open", { users: user.slackUserId });
+          await port.slack("chat.postMessage", { channel: opened.channel.id, ...slackBody });
         }]);
       }
       const discordHook = await unseal(settings?.discordWebhookUrl);
@@ -171,6 +208,7 @@ export async function runNotifyLoop(signal: AbortSignal, intervalMs = 3000): Pro
       const port = await realPort();
       if (port) {
         await setupDiscordThreads(port);
+        if (await config("SLACK_BOT_TOKEN")) await setupSlackThreads(port);
         await sendNotifications(port);
       }
     } catch (err) {

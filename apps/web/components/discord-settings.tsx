@@ -15,6 +15,7 @@ interface DiscordStatus {
 
 interface NotifyStatus {
   discordDm: boolean;
+  slackDm: boolean;
   discordWebhook: string | null;
   slackWebhook: string | null;
   onNeedsYou: boolean;
@@ -261,6 +262,7 @@ export function NotificationSettings() {
             </div>
             <div className="panel-row trigger-list">
               {toggle("discordDm", "Discord DMs.", "From the bot, once your account is linked under Discord. Sessions started from Discord post in their own thread instead.")}
+              {toggle("slackDm", "Slack DMs.", "From the Slack app, once your account is linked under Slack. Sessions started from Slack post in their own thread instead.")}
             </div>
             <form
               className="panel-row field"
@@ -340,6 +342,154 @@ export function NotificationSettings() {
               </button>
             </div>
           </div>
+        ) : (
+          <div className="skeleton" style={{ width: "40%" }} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+interface SlackStatus {
+  signingSecretSet: boolean;
+  botTokenSet: boolean;
+  commandsUrl: string;
+  interactionsUrl: string;
+  manifest: object;
+  linked: boolean;
+}
+
+/** The Slack app: made from a manifest, then its secret and token pasted here. */
+export function SlackSettings() {
+  const [s, setS] = useState<SlackStatus | null>(null);
+  const [signing, setSigning] = useState("");
+  const [token, setToken] = useState("");
+  const [code, setCode] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api<SlackStatus>("/settings/slack").then(setS).catch((e: Error) => setMessage({ ok: false, text: e.message }));
+  useEffect(() => {
+    load();
+  }, []);
+
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await fn();
+      setMessage({ ok: true, text: ok });
+      await load();
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof ApiError ? err.message : "Something went wrong." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const configured = Boolean(s?.signingSecretSet && s.botTokenSet);
+
+  return (
+    <section className="set-sec" aria-labelledby="slack-h" id="slack">
+      <header>
+        <h2 id="slack-h">Slack</h2>
+        <p>
+          The same as the Discord bot, in Slack: <code className="mono">/cloudly fix the flaky test repo:owner/repo</code> starts a session, and its updates go in a thread with Reply and
+          Cancel buttons.
+        </p>
+      </header>
+      <div className="set-body">
+        {s ? (
+          <form
+            className="panel"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(
+                () =>
+                  api("/settings/slack", { method: "PUT", body: JSON.stringify({ signingSecret: signing.trim() || undefined, botToken: token.trim() || undefined }) }).then(() => {
+                    setSigning("");
+                    setToken("");
+                  }),
+                "Saved.",
+              );
+            }}
+          >
+            <div className="panel-row field">
+              <span className="label">1. Make the Slack app from this manifest</span>
+              <p className="hint">
+                At{" "}
+                <a href="https://api.slack.com/apps?new_app=1" target="_blank" rel="noreferrer">
+                  api.slack.com/apps
+                </a>
+                , choose From a manifest, pick your workspace, and paste this. It has Cloudly&apos;s addresses filled in. Then Install to Workspace.
+              </p>
+              <CopyText value={JSON.stringify(s.manifest)} label="Slack app manifest" />
+            </div>
+            <div className="panel-row checks-grid">
+              <div className="field">
+                <label className="label" htmlFor="sl-signing">
+                  Signing secret
+                </label>
+                <input
+                  id="sl-signing"
+                  className="input mono"
+                  type="password"
+                  value={signing}
+                  onChange={(e) => setSigning(e.target.value)}
+                  placeholder={s.signingSecretSet ? "Saved" : "From Basic Information"}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="sl-token">
+                  Bot token
+                </label>
+                <input
+                  id="sl-token"
+                  className="input mono"
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder={s.botTokenSet ? "Saved" : "xoxb-…"}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div className="panel-row field">
+              <span className="label">2. Link your account</span>
+              {s.linked ? (
+                <div className="row-actions">
+                  <span className="hint">Your Slack account is linked.</span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => run(() => api("/settings/slack/link", { method: "DELETE" }), "Unlinked.")}>
+                    Unlink
+                  </button>
+                </div>
+              ) : code ? (
+                <>
+                  <p className="hint">Run this in Slack within ten minutes:</p>
+                  <CopyText value={`/cloudly link ${code}`} label="Link command" />
+                </>
+              ) : (
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!configured}
+                    onClick={() => api<{ code: string }>("/settings/slack/link-code", { method: "POST" }).then((r) => setCode(r.code)).catch(() => setMessage({ ok: false, text: "Couldn't make a code." }))}
+                  >
+                    Make a link code
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="panel-row form-foot">
+              <span className="msg" role="status" data-tone={message ? (message.ok ? "ok" : "danger") : undefined}>
+                {message?.text ?? (configured ? "Set up." : "Nothing is sent to Slack until this is set up.")}
+              </span>
+              <button type="submit" className="btn btn-primary" disabled={busy || (!signing.trim() && !token.trim())}>
+                Save
+              </button>
+            </div>
+          </form>
         ) : (
           <div className="skeleton" style={{ width: "40%" }} />
         )}

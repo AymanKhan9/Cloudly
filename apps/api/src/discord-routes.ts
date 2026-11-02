@@ -21,14 +21,14 @@ const ACTIVE = ["queued", "running", "finalizing"];
 const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const HARNESSES = ["native-claude", "native-codex", "gemini-acp"];
 
-function webOrigin() {
+export function webOrigin() {
   return (process.env.WEB_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
 }
 export function interactionsUrl() {
   const api = (process.env.API_ORIGIN ?? `${webOrigin()}/api`).replace(/\/$/, "");
   return `${api}/discord/interactions`;
 }
-const sessionUrl = (id: string) => `${webOrigin()}/app/s/${id}`;
+export const sessionUrl = (id: string) => `${webOrigin()}/app/s/${id}`;
 
 // The repos the GitHub App can see, for autocomplete and default branches.
 // Cached, and given up on quickly: Discord waits three seconds at most.
@@ -39,7 +39,7 @@ export function setRepoLister(fn: () => Promise<InstallationRepo[]>) {
   lister = fn;
   repoCache = null;
 }
-async function knownRepos(): Promise<InstallationRepo[]> {
+export async function knownRepos(): Promise<InstallationRepo[]> {
   if (repoCache && Date.now() - repoCache.at < 5 * 60_000) return repoCache.repos;
   try {
     const repos = await Promise.race([lister(), new Promise<never>((_, no) => setTimeout(() => no(new Error("timeout")), 1500))]);
@@ -67,14 +67,14 @@ const say = (content: string, ephemeral = true) => ({ type: CHANNEL_MESSAGE, dat
 const NOT_LINKED = "Link your Discord account first: in Cloudly, open Settings > Discord, make a code, then run `/cloudly link` with it.";
 
 /** Starts a turn in a session, or says why it can't. */
-async function queueTurn(thread: { id: string; repo: string; baseBranch: string; harness: string; userId: string }, prompt: string, by: string) {
+export async function queueTurn(thread: { id: string; repo: string; baseBranch: string; harness: string; userId: string }, prompt: string, by: string, via: "discord" | "slack" = "discord") {
   if (await prisma.run.count({ where: { threadId: thread.id, status: { in: ACTIVE as never } } })) return "The agent is still working. Reply again once this turn ends, or cancel it.";
   const budget = await budgetStatus(thread.userId);
   if (budget.state === "storm" && !(await harnessUsesPlan(thread.harness))) return "Your monthly spend limit is reached. Raise it in Cloudly's settings to continue.";
   await prisma.run.create({
     data: {
       repo: thread.repo, baseBranch: thread.baseBranch, harness: thread.harness, userId: thread.userId, threadId: thread.id,
-      status: "queued", prompt, trigger: { type: "discord", by } as never,
+      status: "queued", prompt, trigger: { type: via, by } as never,
     },
   });
   await prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date(), settledAt: null, snoozedUntil: null, archivedAt: null, needsInput: null } });
@@ -88,11 +88,11 @@ async function onCommand(i: Interaction, discordUser: DiscordUser) {
   if (sub?.name === "link") {
     const code = (opt("code") ?? "").toUpperCase();
     const row = await prisma.discordLinkCode.findUnique({ where: { code } });
-    if (!row || row.expiresAt < new Date()) return say("That code isn't valid any more. Make a new one under Settings > Discord.");
+    if (!row || row.provider !== "discord" || row.expiresAt < new Date()) return say("That code isn't valid any more. Make a new one under Settings > Discord.");
     await prisma.$transaction([
       prisma.user.updateMany({ where: { discordUserId: discordUser.id }, data: { discordUserId: null } }),
       prisma.user.update({ where: { id: row.userId }, data: { discordUserId: discordUser.id } }),
-      prisma.discordLinkCode.deleteMany({ where: { userId: row.userId } }),
+      prisma.discordLinkCode.deleteMany({ where: { userId: row.userId, provider: "discord" } }),
     ]);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: row.userId } });
     return say(`Linked to **${user.login}** on Cloudly. Try \`/cloudly task\`.`);
@@ -291,8 +291,8 @@ discordSettings.post("/discord/commands", async (c) => {
 discordSettings.post("/discord/link-code", async (c) => {
   const userId = c.get("user").id;
   const code = randomBytes(5).toString("base64url").replace(/[-_]/g, "").slice(0, 6).toUpperCase().padEnd(6, "X");
-  await prisma.discordLinkCode.deleteMany({ where: { userId } });
-  await prisma.discordLinkCode.create({ data: { code, userId, expiresAt: new Date(Date.now() + 10 * 60_000) } });
+  await prisma.discordLinkCode.deleteMany({ where: { userId, provider: "discord" } });
+  await prisma.discordLinkCode.create({ data: { code, userId, provider: "discord", expiresAt: new Date(Date.now() + 10 * 60_000) } });
   return c.json({ code, command: `/cloudly link code:${code}` });
 });
 
@@ -307,6 +307,7 @@ discordSettings.get("/notifications", async (c) => {
   const s = await prisma.notifySettings.findUnique({ where: { userId: c.get("user").id } });
   return c.json({
     discordDm: s?.discordDm ?? true,
+    slackDm: s?.slackDm ?? true,
     discordWebhook: mask(await unseal(s?.discordWebhookUrl)),
     slackWebhook: mask(await unseal(s?.slackWebhookUrl)),
     onNeedsYou: s?.onNeedsYou ?? true,
@@ -320,6 +321,7 @@ discordSettings.put(
   "/notifications",
   zValidator("json", z.object({
     discordDm: z.boolean().optional(),
+    slackDm: z.boolean().optional(),
     // A URL sets it, "" clears it, left out keeps it.
     discordWebhookUrl: z.union([z.literal(""), z.string().trim().regex(DISCORD_WEBHOOK, "That isn't a Discord webhook URL.")]).optional(),
     slackWebhookUrl: z.union([z.literal(""), z.string().trim().regex(SLACK_WEBHOOK, "That isn't a Slack incoming webhook URL.")]).optional(),

@@ -75,11 +75,11 @@ export function ReviewResult({ turn, events, onOpen }: { turn: Turn; events: Str
 export function TriggerNote({ turn }: { turn: Turn }) {
   const t = turn.trigger;
   if (!t || t.type === "ci") return null;
-  if (t.type === "discord") {
+  if (t.type === "discord" || t.type === "slack") {
     return (
       <span className="msg-from">
         <ChatsCircle size={14} />
-        From Discord{t.by ? `, @${t.by}` : ""}
+        From {t.type === "slack" ? "Slack" : "Discord"}{t.by ? `, @${t.by}` : ""}
       </span>
     );
   }

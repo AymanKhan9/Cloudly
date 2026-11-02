@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { prisma, seal } from "@repo/db";
-import { notifyTurnEnd, setupDiscordThreads, sendNotifications, notify, type NotifyPort } from "../src/notify";
+import { notifyTurnEnd, setupDiscordThreads, setupSlackThreads, sendNotifications, notify, type NotifyPort } from "../src/notify";
 
 const stamp = Date.now();
 const repo = `acme/notify-${stamp}`;
@@ -14,7 +14,7 @@ beforeAll(async () => {
   userId = (await prisma.user.create({ data: { githubId: Math.floor(Math.random() * 1e9), login: `notify-${stamp}`, discordUserId: `d${stamp}` } })).id;
 });
 afterAll(async () => {
-  for (const k of ["DISCORD_BOT_TOKEN", "DISCORD_APPLICATION_ID", "WEB_ORIGIN"]) env[k] === undefined ? delete process.env[k] : (process.env[k] = env[k]);
+  for (const k of ["DISCORD_BOT_TOKEN", "DISCORD_APPLICATION_ID", "WEB_ORIGIN", "SLACK_BOT_TOKEN"]) env[k] === undefined ? delete process.env[k] : (process.env[k] = env[k]);
   await prisma.user.delete({ where: { id: userId } });
 });
 
@@ -29,6 +29,12 @@ function fakePort(fail: (what: string) => boolean = () => false) {
       if (path.endsWith("@original")) return { id: "msg-1" };
       if (path.endsWith("/threads")) return { id: "dthread-1" };
       return {};
+    },
+    async slack(method, body) {
+      calls.push({ what: `slack ${method}`, body });
+      if (fail(`slack ${method}`)) throw new Error("Slack said no");
+      if (method === "conversations.open") return { channel: { id: "D-dm" } };
+      return { ts: "1700000000.000100" };
     },
     async webhook(url, body) {
       calls.push({ what: `webhook ${url.includes("slack") ? "slack" : "discord"}`, body });
@@ -148,4 +154,47 @@ test("personal notifications go to a DM and to webhooks, as chosen, and a failed
   for (let i = 0; i < 5; i++) await sendNotifications(down.port);
   expect(await prisma.notification.findFirstOrThrow({ where: { key: `fail-${t.id}` } })).toMatchObject({ attempts: 5, sentTo: [] });
   expect((await prisma.notification.findFirstOrThrow({ where: { key: `fail-${t.id}` } })).sentAt).toBeInstanceOf(Date);
+});
+
+test("a session started from Slack gets a Started message and its updates in that thread; others go to Slack DMs", async () => {
+  process.env.SLACK_BOT_TOKEN = "xoxb-test";
+  const other = await prisma.user.create({ data: { githubId: Math.floor(Math.random() * 1e9), login: `slack-${stamp}`, slackUserId: `U${stamp}` } });
+  try {
+    const mk = (extra: object) =>
+      prisma.thread.create({ data: { userId: other.id, repo, baseBranch: "main", harness: "native-claude", title: `Slack ${++n}`, branch: `agent/s-${stamp}-${n}`, runs: { create: { repo, baseBranch: "main", harness: "native-claude", prompt: "Fix the build", status: "queued", userId: other.id } }, ...extra } });
+    const fromSlack = await mk({ slackChannelId: "C1" });
+    const blocked = await mk({ slackChannelId: "C-private" });
+    const fromWeb = await mk({});
+
+    const { port, calls } = fakePort((what) => what === "slack chat.postMessage" && calls.at(-1)?.body.channel === "C-private");
+    await notify({ userId: other.id, threadId: fromSlack.id, kind: "done", title: fromSlack.title, body: "Fixed.", key: `s-${fromSlack.id}` });
+    // Waits for its Started message.
+    await sendNotifications(port);
+    expect(calls).toEqual([]);
+
+    await setupSlackThreads(port);
+    expect(calls.map((c) => [c.what, c.body.channel])).toEqual([["slack chat.postMessage", "C1"], ["slack chat.postMessage", "C-private"]]);
+    expect(calls[0]!.body.blocks[0].text.text).toContain("*Started: ");
+    expect(calls[0]!.body.blocks.at(-1).elements.map((e: any) => e.action_id)).toEqual(["cancel", "open"]);
+    expect((await prisma.thread.findUniqueOrThrow({ where: { id: fromSlack.id } })).slackThreadTs).toBe("1700000000.000100");
+    expect((await prisma.thread.findUniqueOrThrow({ where: { id: blocked.id } })).slackThreadTs).toBe("-");
+
+    calls.length = 0;
+    await notify({ userId: other.id, threadId: blocked.id, kind: "needs_you", title: blocked.title, body: "Which one?", key: `s-${blocked.id}` });
+    await notify({ userId: other.id, threadId: fromWeb.id, kind: "done", title: fromWeb.title, body: "Done.", key: `s-${fromWeb.id}` });
+    await sendNotifications(port);
+    expect(calls.map((c) => [c.what, c.body.channel, c.body.thread_ts ?? null])).toEqual([
+      // Its own thread only.
+      ["slack chat.postMessage", "C1", "1700000000.000100"],
+      // No thread to post in: a DM, for each of the other two.
+      ["slack conversations.open", undefined, null],
+      ["slack chat.postMessage", "D-dm", null],
+      ["slack conversations.open", undefined, null],
+      ["slack chat.postMessage", "D-dm", null],
+    ]);
+    expect(calls[1]!.body).toEqual({ users: `U${stamp}` });
+  } finally {
+    delete process.env.SLACK_BOT_TOKEN;
+    await prisma.user.delete({ where: { id: other.id } });
+  }
 });

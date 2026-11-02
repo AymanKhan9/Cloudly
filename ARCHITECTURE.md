@@ -691,11 +691,20 @@ A thread started from Discord keeps the interaction token (`Thread.discordToken`
 worker's notifier has fetched the reply message and made a Discord thread on it (falling back to
 the channel in DMs, without permission, or once the 15-minute token has expired).
 
+Slack works the same way over HTTP: `/slack/commands` and `/slack/interactions` verify
+`X-Slack-Signature` (HMAC-SHA256 of `v0:<timestamp>:<body>` with `SLACK_SIGNING_SECRET`, constant-time
+compare, timestamps older than five minutes refused), linking uses the same one-time codes with
+`provider = "slack"`, and button replies go through `response_url` only when it's on
+`hooks.slack.com`. A Slack-started thread has `slackChannelId`; the worker posts its Started message
+with `chat.postMessage` and threads updates under that `ts` (`"-"` when it couldn't post, and the
+user's DMs are used instead). All Slack text is escaped, so nothing the agent writes becomes a
+mention or a link.
+
 Notifications are an outbox: `Notification` rows with a unique `key` per event, written when a
 session settles (`notifyTurnEnd` after every turn, skipped while another run is queued in the
 thread, so an automatic chain is one message), on merge, on merge conflicts, and when CI fixes run
-out. The notifier loop sends each to the session's Discord thread (always) and, per the user's
-`NotifySettings`, to a Discord DM, a Discord webhook and a Slack webhook. `sentTo` records each
+out. The notifier loop sends each to the session's Discord or Slack thread (always) and, per the user's
+`NotifySettings`, to a Discord or Slack DM, a Discord webhook and a Slack webhook. `sentTo` records each
 delivery so a retry only sends the rest; five failed attempts give up. Webhook URLs are sealed with
 the instance key and must match the Discord or Slack webhook URL patterns both when saved and
 before each send (redirects refused), so they can't point the worker at other hosts. Bot messages

@@ -24,6 +24,7 @@ import { reviewRoutes } from './review-routes';
 import { webhooks, webhookSettings } from './webhook-routes';
 import { schedules } from './schedule-routes';
 import { discord, discordSettings } from './discord-routes';
+import { slack, slackSettings } from './slack-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -89,6 +90,8 @@ app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
 app.route('/discord', discord)
 app.route('/settings', discordSettings)
+app.route('/slack', slack)
+app.route('/settings', slackSettings)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.

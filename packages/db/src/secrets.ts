@@ -34,6 +34,8 @@ export const SETTINGS: SettingSpec[] = [
   { name: "DISCORD_APPLICATION_ID", label: "Discord application ID", secret: false, group: "discord", token: true },
   { name: "DISCORD_PUBLIC_KEY", label: "Discord public key", secret: false, group: "discord", token: true },
   { name: "DISCORD_BOT_TOKEN", label: "Discord bot token", secret: true, group: "discord", token: true },
+  { name: "SLACK_SIGNING_SECRET", label: "Slack signing secret", secret: true, group: "discord", token: true },
+  { name: "SLACK_BOT_TOKEN", label: "Slack bot token", secret: true, group: "discord", token: true },
 ];
 
 export function settingSpec(name: string): SettingSpec | undefined {

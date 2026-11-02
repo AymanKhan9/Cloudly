@@ -1,4 +1,4 @@
-# Discord and notifications
+# Discord, Slack and notifications
 
 ## Notifications
 
@@ -16,6 +16,7 @@ You hear once a session **settles**, when its last automatic turn is done. A tur
 Where:
 
 - **Discord DMs** from the bot, once your Discord account is linked (below).
+- **Slack DMs** from the Slack app, once your Slack account is linked (below).
 - **A Discord channel**, through a webhook: in the channel's settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. No bot needed.
 - **Slack**, through an incoming webhook from a Slack app.
 
@@ -46,3 +47,28 @@ The bot runs over HTTP: Discord sends each command to Cloudly, signed, and Cloud
 6. Press **Make a link code**, and run the `/cloudly link` command it shows in Discord.
 
 The bot doesn't read messages, so it doesn't need Discord's Message Content intent. Replies go through the **Reply** button.
+
+## The Slack app
+
+The same in Slack, with one command:
+
+| Command | |
+|---|---|
+| `/cloudly <what to do> [repo:owner/repo] [agent:claude\|codex\|gemini] [branch:name]` | Starts a session. Cloudly posts a **Started** message in the channel and threads the session's updates under it, with **Reply**, **Cancel turn** and **Open in Cloudly** buttons. |
+| `/cloudly repo owner/repo` | Sets the channel's default repository. |
+| `/cloudly status` | Your recent sessions, only shown to you. |
+| `/cloudly link CODE` | Links your Slack account to Cloudly. |
+| `/cloudly help` | The list above. |
+
+`repo:`, `agent:` and `branch:` can go anywhere in the message. In a channel the app can't post in, the updates come to you as DMs instead.
+
+### Setting it up
+
+Like the Discord bot, it runs over HTTP: Slack sends each command and button press to Cloudly, signed with the app's signing secret, and requests more than five minutes old are refused.
+
+1. Under **Settings → Slack** in Cloudly, copy the **manifest**. It has Cloudly's addresses filled in.
+2. At [api.slack.com/apps](https://api.slack.com/apps?new_app=1), choose **From a manifest**, pick your workspace, paste it, and create the app. Then **Install to Workspace**.
+3. Paste the app's **signing secret** (Basic Information, App Credentials) and its **bot token** (`xoxb-…`, from OAuth & Permissions) into Cloudly, and save.
+4. Press **Make a link code**, and run the `/cloudly link` command it shows in Slack.
+
+The app asks only for `commands`, `chat:write`, `chat:write.public` (to post in public channels it hasn't been added to) and `im:write` (for DMs).

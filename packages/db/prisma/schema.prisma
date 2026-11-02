@@ -19,6 +19,8 @@ model User {
   avatarUrl   String?
   /// The Discord account linked to this user (with /cloudly link): only linked accounts can use the bot.
   discordUserId String? @unique
+  /// The Slack account linked to this user (with /cloudly link).
+  slackUserId   String? @unique
   createdAt   DateTime   @default(now())
   sessions    Session[]
   runs        Run[]
@@ -91,6 +93,10 @@ model Thread {
   discordThreadId  String?
   /// The interaction's token, kept only until the Discord thread is made (it expires after 15 minutes).
   discordToken     String?
+  /// Started from Slack: the channel, and the ts of the message its updates are threaded under
+  /// ("-" when that message couldn't be posted).
+  slackChannelId   String?
+  slackThreadTs    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -551,6 +557,8 @@ model Schedule {
 model DiscordLinkCode {
   code      String   @id
   userId    String
+  /// discord | slack
+  provider  String   @default("discord")
   expiresAt DateTime
 }
 
@@ -567,6 +575,7 @@ model DiscordChannel {
 model NotifySettings {
   userId            String  @id
   discordDm         Boolean @default(true)
+  slackDm           Boolean @default(true)
   discordWebhookUrl String?
   slackWebhookUrl   String?
   onNeedsYou        Boolean @default(true)
@@ -596,4 +605,12 @@ model Notification {
   sentTo    String[]  @default([])
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([sentAt, createdAt])
+}
+
+/// A Slack channel's default repo for /cloudly.
+model SlackChannel {
+  channelId  String   @id
+  repo       String
+  baseBranch String?
+  updatedAt  DateTime @updatedAt
 }
