@@ -142,3 +142,41 @@ export async function createPullRequest(
         return { url: pr.html_url, number: pr.number, alreadyExisted: true };
     }
 }
+
+export interface PullRequestReviewParams {
+    owner: string;
+    repo: string;
+    pullNumber: number;
+    /** The commit the line numbers are on. */
+    commitId: string;
+    body: string;
+    comments: { path: string; line: number; side: "RIGHT"; body: string }[];
+}
+
+/**
+ * Posts a review (a comment, never an approval or a request for changes) on a
+ * pull request. GitHub rejects the whole review when any comment's line isn't
+ * in the diff, so on that 422 it's posted again with the comments in the body.
+ */
+export async function postPullRequestReview(params: PullRequestReviewParams): Promise<{ url: string; lineComments: number }> {
+    const client = await getOctokit();
+    const post = (body: string, comments: PullRequestReviewParams["comments"]) =>
+        client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
+            owner: params.owner,
+            repo: params.repo,
+            pull_number: params.pullNumber,
+            commit_id: params.commitId,
+            event: "COMMENT",
+            body,
+            comments,
+        });
+    try {
+        const r = await post(params.body, params.comments);
+        return { url: r.data.html_url, lineComments: params.comments.length };
+    } catch (error) {
+        if (!(error instanceof RequestError) || error.status !== 422 || params.comments.length === 0) throw error;
+        const inline = params.comments.map((c) => `- \`${c.path}:${c.line}\` ${c.body.replace(/\n+/g, " ")}`).join("\n");
+        const r = await post(`${params.body}\n\n${inline}`, []);
+        return { url: r.data.html_url, lineComments: 0 };
+    }
+}

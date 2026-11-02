@@ -4,13 +4,16 @@ import { z } from "zod";
 import { prisma } from "@repo/db";
 import type { AuthEnv } from "./middleware/auth_middleware";
 
-// How Cloudly treats a repo's turns: its checks, and how many times the agent
-// may try to fix them. No row means the defaults; the worker reads the same row.
+// How Cloudly treats a repo's turns: its checks, how many times the agent may
+// try to fix them, and the agent that reviews each change. No row means the defaults; the worker reads the same row.
 
 export const repoSettings = new Hono<AuthEnv>();
 
 const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const DEFAULTS = { checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600 };
+const DEFAULTS = {
+  checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600,
+  reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
+};
 
 function repoOf(c: { req: { param: (k: string) => string } }) {
   const repo = `${c.req.param("owner")}/${c.req.param("name")}`;
@@ -37,6 +40,10 @@ const SettingsSchema = z
     checkCommand: z.string().trim().max(2000).nullable().optional(),
     fixAttempts: z.number().int().min(0).max(5),
     checkTimeoutSec: z.number().int().min(60).max(3600),
+    // The agent that reviews each change; null for none. Left out keeps what's saved.
+    reviewer: z.string().regex(/^[a-z0-9-]{1,80}$/).nullable().optional(),
+    reviewRounds: z.number().int().min(0).max(5).optional(),
+    reviewPostToGitHub: z.boolean().optional(),
   })
   .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat } from "@phosphor-icons/react";
+import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat, MagnifyingGlass } from "@phosphor-icons/react";
 import { api, ApiError, type AgentReadiness, type Capabilities, type Repo } from "@/lib/api";
 import { agentsAskedFor } from "@repo/shared/agent-names";
 import { isProviderHarness } from "@repo/shared/providers";
@@ -24,7 +24,7 @@ const COUNCIL_STARTERS = [
   "What changed in AI coding agents in the last three months that matters to a small team?",
 ];
 
-type Mode = "session" | "compare" | "council";
+type Mode = "session" | "compare" | "council" | "audit";
 
 interface Estimate {
   turns: number;
@@ -46,6 +46,9 @@ export default function NewSessionPage() {
   const [mode, setMode] = useState<Mode>("session");
   const compare = mode === "compare";
   const council = mode === "council";
+  // Audit: the agent reviews the whole repo and lists findings; nothing changes until you pick some.
+  const audit = mode === "audit";
+  const single = mode === "session" || audit;
   const [rivals, setRivals] = useState<string[]>(["native-claude", "native-codex"]);
   const [chair, setChair] = useState<string>("native-claude");
   const [rounds, setRounds] = useState(3);
@@ -112,7 +115,7 @@ export default function NewSessionPage() {
   const stopped = budget?.state === "storm";
   const needsRepo = !council || onRepo;
   const ready =
-    !submitting && !stopped && Boolean(prompt.trim()) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (mode === "session" || rivals.length >= 2);
+    !submitting && !stopped && (audit || Boolean(prompt.trim())) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (single || rivals.length >= 2);
   const h = harnesses.find((x) => x.id === harness) ?? harnesses[0]!;
 
   async function submit(e?: React.FormEvent) {
@@ -147,7 +150,11 @@ export default function NewSessionPage() {
       }
       const { id } = await api<{ id: string }>("/threads", {
         method: "POST",
-        body: JSON.stringify({ repo, baseBranch: branch, prompt, harness, effort, desktop }),
+        body: JSON.stringify(
+          audit
+            ? { repo, baseBranch: branch, prompt: prompt.trim() ? `Audit the repository: ${prompt.trim()}` : "Audit the repository", harness, effort, mode: "audit" }
+            : { repo, baseBranch: branch, prompt, harness, effort, desktop },
+        ),
       });
       router.push(`/app/s/${id}`);
     } catch (err) {
@@ -168,11 +175,13 @@ export default function NewSessionPage() {
 
   return (
     <div className="start">
-      <h1>{council ? "What should the council answer?" : "What should the agent work on?"}</h1>
+      <h1>{council ? "What should the council answer?" : audit ? "Audit a repository" : "What should the agent work on?"}</h1>
       <p>
         {council
           ? "Each agent researches on its own, then they review each other's findings and give final positions. The chair writes the report."
-          : "Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward."}
+          : audit
+            ? "The agent reads the whole repo and lists what's wrong, most important first. It changes nothing: pick the findings you want fixed and they go to the agent as a turn."
+            : "Everything in a session lands on one branch and one pull request. You can keep talking to the agent afterward."}
       </p>
 
       <form onSubmit={submit}>
@@ -194,7 +203,9 @@ export default function NewSessionPage() {
               }
             }}
             placeholder={
-              council
+              audit
+                ? "Optional: what to focus on, like security, error handling or the API layer"
+                : council
                 ? "What's the state of the job market for software engineers right now? Where is hiring growing, where is it shrinking, and what's driving it?"
                 : "Add per-key rate limiting to POST /invoices, 60 requests a minute, and cover the 429 path with a test."
             }
@@ -231,7 +242,7 @@ export default function NewSessionPage() {
             </label>
             </>
             ) : null}
-            {mode !== "session" ? (
+            {!single ? (
               <span className="rivals" role="group" aria-label={council ? "Council members" : "Agents to compare"}>
                 {harnesses.map((x) => {
                   const on = rivals.includes(x.id);
@@ -274,7 +285,7 @@ export default function NewSessionPage() {
               }}
             />
             )}
-            {mode === "session" ? <EffortControl harness={harness} value={effort} onChange={setEffort} /> : null}
+            {single ? <EffortControl harness={harness} value={effort} onChange={setEffort} /> : null}
             {council ? (
               <>
                 <Picker
@@ -303,6 +314,10 @@ export default function NewSessionPage() {
                 </label>
               </>
             ) : null}
+            <button type="button" className="pill" aria-pressed={audit} onClick={() => setMode(audit ? "session" : "audit")} title="Review the whole repo for bugs and problems, then pick what to fix">
+              <MagnifyingGlass size={14} />
+              <span className="pill-text">Audit</span>
+            </button>
             <button type="button" className="pill" aria-pressed={compare} onClick={() => setMode(compare ? "session" : "compare")} title="Give the same task to several agents and pick the best result">
               <Scales size={14} />
               <span className="pill-text">Compare</span>
@@ -311,7 +326,7 @@ export default function NewSessionPage() {
               <UsersThree size={14} />
               <span className="pill-text">Council</span>
             </button>
-            {caps?.desktop && !council ? (
+            {caps?.desktop && !council && !audit ? (
               <button type="button" className="pill" aria-pressed={desktop} onClick={() => setDesktop((d) => !d)} title="Give the agent a virtual desktop and browser">
                 <Monitor size={14} />
                 <span className="pill-text">Desktop</span>
@@ -324,7 +339,7 @@ export default function NewSessionPage() {
           </div>
         </div>
 
-        {asked && mode !== "session" ? (
+        {asked && !single ? (
           <div className="council-asked" role="status">
             {(() => {
               const ok = asked.checked.filter((r) => r.ready);
@@ -360,6 +375,8 @@ export default function NewSessionPage() {
                 ? rivals.length < 2
                   ? "Pick at least two agents for the council."
                   : `${estimate ? `${estimate.turns} turns` : "Several turns"}${estimate?.usd != null ? `, about $${estimate.usd.toFixed(2)} from your recent turns` : ""}${estimate?.onPlan.length ? ` (${estimate.onPlan.join(" and ")} on your plan)` : ""}. Stops at the cap.`
+                : audit
+                ? `${h.name} reviews the repo read-only and writes up findings. Costs like one turn.`
                 : compare
                 ? rivals.length < 2
                   ? "Pick at least two agents to compare."
@@ -376,7 +393,7 @@ export default function NewSessionPage() {
         </div>
       </form>
 
-      {prompt.trim() ? null : (
+      {prompt.trim() || audit ? null : (
         <div className="starters">
           <h2>Or start from</h2>
           {(council ? COUNCIL_STARTERS : STARTERS).map((s) => (

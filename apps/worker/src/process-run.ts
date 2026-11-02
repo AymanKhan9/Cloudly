@@ -29,6 +29,7 @@ import { processCouncilTurn } from "./council";
 import { prepareSessions, collectOutbox, deliverMessages, sendReply, destroySessions, type SessionsDir } from "./peer-sessions";
 import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
 import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } from "./checks";
+import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { modelCommand } from "@repo/shared/model-command";
 import { findCodexRollout, codexContext, findGeminiChat, geminiContext } from "./context-usage";
 import { sandboxImage, setupScript } from "./sandbox-image";
@@ -103,6 +104,8 @@ export async function processRun(
 ): Promise<void> {
   // A council member's or chair's turn: an answer, not a change to commit.
   if (run.councilId) return processCouncilTurn(run, workerId, runContainer, heartbeatIntervalMs);
+  // A review of the session's change, or an audit of the repo: findings, not a commit.
+  if (run.kind === "review" || run.kind === "audit") return processReviewTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
   let cancelled = false;
 
@@ -353,6 +356,10 @@ export async function processRun(
         data: { status: cancelled ? "cancelled" : "succeeded", error: stopNote && "Stopped at the spend-limit ceiling before it changed any files." },
       });
       if (context) await shareTurn(context, { summary: lastText });
+      // Asked to fix the reviewer's findings and changed nothing: the user decides.
+      if (run.kind === "review_fix" && thread && !cancelled) {
+        await prisma.thread.update({ where: { id: thread.id }, data: { needsInput: "The agent didn't change anything for the reviewer's findings. Read its reply, then say what to do.", settledAt: null } });
+      }
       return;
     }
 
@@ -390,6 +397,13 @@ export async function processRun(
     };
     publishResult = await publishCommit(ws, patch, commitInfo);
     const stats = patchStats(patch);
+
+    // Everything the session has changed so far, for its Changes tab and its reviewer.
+    if (thread) {
+      const gitDir = path.join(publishResult.publishDir, ".git");
+      const session = await branchDiff(gitDir, await baseRef(gitDir, run.baseBranch, false), "HEAD").catch(() => null);
+      if (session) await prisma.thread.update({ where: { id: thread.id }, data: { diff: session.diff, diffBase: session.base } });
+    }
 
     if (leaseLost) return;
 
@@ -441,6 +455,10 @@ export async function processRun(
         await prisma.thread.update({ where: { id: thread.id }, data: { needsInput: `The checks (${check.command}) still fail ${why}. Look at the output, then reply with what to do.`, settledAt: null } });
         await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "checks.gave_up", reason: fix.reason } }]);
       }
+    } else if (thread && !cancelled && !isCommand(run.prompt)) {
+      // Checks passed (or there are none): the repo's reviewer, if it has one, looks at the change.
+      const queued = await queueReview(run).catch((err) => (console.error(`run ${run.id}: couldn't queue the review:`, err), false));
+      if (queued) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "review.queued" } }]);
     }
   } catch (err) {
     await prisma.run.updateMany({

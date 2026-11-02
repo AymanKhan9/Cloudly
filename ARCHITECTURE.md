@@ -66,6 +66,7 @@ flowchart TB
 
     ExportC["Export container 🚧<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
     CheckC["Check container ✅<br/>run clone mounted, no output-folder mount<br/>no model keys, network via the egress proxy"]
+    ReviewC["Review / audit turn ✅<br/>reviewer agent on the session branch<br/>diff + task in /workspace/.cloudly-review<br/>findings.json read back with readRegular, never committed"]
 
     GitHub["GitHub<br/>repo + PR"]
     Egress["Allowlisting egress proxy 🚧<br/>model API + registries only<br/>(not yet built — see §8)"]
@@ -597,6 +598,37 @@ What's fixed in the design above (§11 has the mechanism for each), and what's s
   `AymanKhan9/Cloudly` repo produced an actual PR (#2) with the correct branch and title, closed
   and cleaned up afterward. Not yet built: user-facing GitHub login / repo picker — this covers the
   mechanics only, per an explicit scoping decision to build push+PR before any UX around it.
+
+### Review loop (checks → reviewer → fixes)
+
+A turn that commits a change records the session's cumulative diff on the thread (`Thread.diff`,
+`diffBase`), computed host-side in the publish clone as `git diff --no-ext-diff --no-textconv -M
+merge-base(origin/<base>, HEAD) HEAD`, capped at 1 MB on a file boundary. When the checks didn't
+fail and the repo has a reviewer (`RepoSettings.reviewer`), a `kind: "review"` run is queued for
+that harness. `processReviewTurn` (worker `review.ts`) runs it like a council turn: it never
+commits, never resumes or overwrites the author's agent session, and gets no MCP servers or
+secrets. The diff comes from the turn's mirror (the branch as pushed) or, when the branch isn't on
+the remote, from `Thread.diff`. The reviewer writes `findings.json` into a host temp dir mounted at
+`/workspace/.cloudly-review`; it's read with `readRegular` (no symlinks, FIFOs or oversize files)
+and validated by `parseFindings` in `@repo/shared/diff` (max 50, fields capped, severities
+normalised). Findings are stored as `ReviewFinding` rows in the same transaction that marks the run
+succeeded under its lease fence.
+
+Blocking findings queue a `kind: "review_fix"` run for the session's own harness, at most
+`reviewRounds` since the last user turn (`kind` `turn` or `audit`); that run goes through the
+normal pipeline (checks, commit, push, then another review). Out of rounds, out of budget, or a fix
+turn that changes nothing sets `Thread.needsInput`. Every hop in the chain is a separate queued run
+on the same thread, so the per-thread claim order and cancel still apply, and a user message in
+between ends the chain (`a newer message is waiting`).
+
+With a PR open and `reviewPostToGitHub`, findings on lines inside the diff become review comments
+(`POST /pulls/{n}/reviews`, `event: COMMENT`, `commit_id` = the branch head the lines refer to);
+the rest go in the body. A 422 is retried once with everything in the body.
+
+An audit is a thread whose first run has `kind: "audit"`: the same turn over the whole repo, with
+the user's focus in `task.md`, no diff, and no automatic fixes. The user ticks findings in the
+Changes tab; `POST /threads/:id/feedback` turns them (plus line comments and a note) into one
+ordinary turn via `feedbackPrompt`.
 
 ## 11. How finalize works
 

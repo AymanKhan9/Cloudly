@@ -18,6 +18,7 @@ import {
   Scales,
   Notebook,
   GitBranch,
+  GitDiff,
   GitPullRequest,
   GithubLogo,
   Globe,
@@ -44,6 +45,8 @@ import { PreviewPanel } from "@/components/preview-panel";
 import { DesktopViewer } from "@/components/desktop-viewer";
 import { ContextPanel } from "@/components/context-panel";
 import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
+import { ReviewRequest, ReviewResult } from "@/components/review";
+import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -187,7 +190,9 @@ function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
   );
 }
 
-function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEvent[]; harness: string; now: number }) {
+function TurnView({ turn, events, harness: sessionHarness, now, onOpenChanges }: { turn: Turn; events: StreamEvent[]; harness: string; now: number; onOpenChanges: () => void }) {
+  // A review runs with the repo's reviewer, not the session's agent.
+  const harness = turn.harness ?? sessionHarness;
   const h = harnessById(harness);
   const blocks = useMemo(() => buildBlocks(events, harness), [events, harness]);
   const active = ACTIVE.includes(turn.status);
@@ -202,6 +207,8 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
     <article className="turn">
       {turn.kind === "fix" ? (
         <FixRequest turn={turn} agent={h.name} />
+      ) : turn.kind === "review" || turn.kind === "review_fix" ? (
+        <ReviewRequest turn={turn} agent={harnessById(sessionHarness).name} reviewer={h.name} />
       ) : (
       <div className="msg-user">
         {turn.from ? (
@@ -210,6 +217,12 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
             From session {turn.from.title ? `"${turn.from.title}"` : "(removed)"}
             {turn.replyToThreadId ? ", which asked for a reply" : ""}
           </Link>
+        ) : null}
+        {turn.kind === "audit" ? (
+          <span className="msg-from">
+            <MagnifyingGlass size={14} />
+            Audit of the whole repo
+          </span>
         ) : null}
         <div>{turn.prompt}</div>
       </div>
@@ -266,6 +279,7 @@ function TurnView({ turn, events, harness, now }: { turn: Turn; events: StreamEv
           ) : null}
         </footer>
         <ChecksDetail turn={turn} events={events} />
+        {turn.kind === "review" || turn.kind === "audit" ? <ReviewResult turn={turn} events={events} onOpen={onOpenChanges} /> : null}
       </div>
     </article>
   );
@@ -300,7 +314,7 @@ export default function SessionPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pick, setPick] = useState(0);
-  const [panel, setPanel] = useState<"files" | "preview" | "desktop" | "context" | null>(null);
+  const [panel, setPanel] = useState<"changes" | "files" | "preview" | "desktop" | "context" | null>(null);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -449,6 +463,9 @@ export default function SessionPage() {
   const desktopLive = Boolean(latest && latest.status === "running" && latest.desktop);
   const toggle = (p: NonNullable<typeof panel>) => setPanel((cur) => (cur === p ? null : p));
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
+  // The latest review's findings, as a count on the Changes button.
+  const lastReview = [...turns].reverse().find((t) => t.kind === "review" || t.kind === "audit");
+  const openFindings = lastReview?.status === "succeeded" && lastReview.output ? Number(/(\d+) blocking/.exec(lastReview.output)?.[1] ?? 0) + Number(/(\d+) suggestions?/.exec(lastReview.output)?.[1] ?? 0) : 0;
 
   // A /word the agent didn't announce isn't a command in this mode (interactive-only
   // ones like /stats or /plan): it would go to the model as text, which then improvises.
@@ -558,6 +575,11 @@ export default function SessionPage() {
               <span className="hide-sm">Desktop</span>
             </button>
           ) : null}
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "changes"} onClick={() => toggle("changes")} title="What this session changed, the reviewer's findings, and your comments" aria-label="Changes">
+            <GitDiff size={15} />
+            <span className="hide-sm">Changes</span>
+            {openFindings ? <span className="count num">{openFindings}</span> : null}
+          </button>
           <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title="Run this branch's app" aria-label="Preview">
             <AppWindow size={15} />
             <span className="hide-sm">Preview</span>
@@ -580,8 +602,17 @@ export default function SessionPage() {
       </header>
 
       {panel ? (
-        <section className="side-panel" aria-label={panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : "Desktop"}>
-          {panel === "context" ? (
+        <section
+          className="side-panel"
+          data-wide={panel === "changes" || undefined}
+          aria-label={panel === "changes" ? "Changes" : panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : "Desktop"}
+        >
+          {panel === "changes" ? (
+            <>
+              <h2>Changes</h2>
+              <ChangesPanel threadId={thread.id} agent={h.name} busy={busy} version={`${turns.length}:${latest?.status ?? ""}`} audit={turns[0]?.kind === "audit"} />
+            </>
+          ) : panel === "context" ? (
             <>
               <h2>
                 Shared context for <span className="mono">{thread.repo}</span>
@@ -611,7 +642,17 @@ export default function SessionPage() {
 
       <div className="thread">
         {turns.map((t) => (
-          <TurnView key={t.id} turn={t} events={events[t.id] ?? []} harness={thread.harness} now={now} />
+          <TurnView
+            key={t.id}
+            turn={t}
+            events={events[t.id] ?? []}
+            harness={thread.harness}
+            now={now}
+            onOpenChanges={() => {
+              setPanel("changes");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
         ))}
       </div>
 

@@ -46,10 +46,14 @@ export async function promptWithHistory(
   const runs = await prisma.run.findMany({
     where: { threadId, id: { not: currentRunId }, status: { in: ["succeeded", "failed", "cancelled"] } },
     orderBy: { createdAt: "asc" },
-    select: { prompt: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
+    select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: "text" }, orderBy: { seq: "asc" }, select: { data: true } } },
   });
 
-  const prior = runs.map((r) => ({ prompt: r.prompt, reply: replyText(r.events, harness) }));
+  // A review or audit turn's reply is its findings, not the reviewer's working notes.
+  const prior = runs.map((r) => ({
+    prompt: r.prompt,
+    reply: (r.kind === "review" || r.kind === "audit") && r.output ? r.output : replyText(r.events, r.harness ?? harness),
+  }));
   return formatTranscript(prior, prompt);
 }
 

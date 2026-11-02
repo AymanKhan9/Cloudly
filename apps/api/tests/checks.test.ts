@@ -30,14 +30,14 @@ const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {
 
 test("a repo's checks: defaults until set, a custom command needs one, limits are enforced", async () => {
   const fresh = await (await call(`/settings/repos/${repo}`)).json();
-  expect(fresh.settings).toEqual({ checks: "auto", checkCommand: null, fixAttempts: 2, checkTimeoutSec: 600 });
+  expect(fresh.settings).toEqual({ checks: "auto", checkCommand: null, fixAttempts: 2, checkTimeoutSec: 600, reviewer: null, reviewRounds: 2, reviewPostToGitHub: true });
   expect(fresh.last).toBeNull();
 
   expect((await call(`/settings/repos/${repo}`, { method: "PUT", json: { checks: "custom", checkCommand: "", fixAttempts: 2, checkTimeoutSec: 600 } })).status).toBe(400);
   expect((await call(`/settings/repos/${repo}`, { method: "PUT", json: { checks: "auto", fixAttempts: 9, checkTimeoutSec: 600 } })).status).toBe(400);
   expect((await call(`/settings/repos/${repo}`, { method: "PUT", json: { checks: "custom", checkCommand: "bun test", fixAttempts: 3, checkTimeoutSec: 300 } })).status).toBe(200);
   const saved = await (await call(`/settings/repos/${repo}`)).json();
-  expect(saved.settings).toEqual({ checks: "custom", checkCommand: "bun test", fixAttempts: 3, checkTimeoutSec: 300 });
+  expect(saved.settings).toEqual({ checks: "custom", checkCommand: "bun test", fixAttempts: 3, checkTimeoutSec: 300, reviewer: null, reviewRounds: 2, reviewPostToGitHub: true });
 });
 
 test("a session's turns carry their checks and whether Cloudly started them", async () => {

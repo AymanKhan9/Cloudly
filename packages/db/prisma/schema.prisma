@@ -68,12 +68,17 @@ model Thread {
   seenAt         DateTime?
   /// The question the agent asked with ask_user, until the user answers.
   needsInput     String?
+  /// Everything the session has changed so far, base branch to its branch, after its last commit.
+  diff           String?
+  /// The commit that diff starts from.
+  diffBase       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   arena          Arena?   @relation(fields: [arenaId], references: [id], onDelete: SetNull)
   runs           Run[]
   previews       Preview[]
+  findings       ReviewFinding[]
   @@index([userId, updatedAt])
   @@index([arenaId])
 }
@@ -279,6 +284,7 @@ model Run {
   /// Its last change; once it has ended, when it ended. Unread sessions compare against it.
   updatedAt  DateTime @default(now()) @updatedAt
   events     RunEvent[]
+  findings   ReviewFinding[]
   user       User?    @relation(fields: [userId],references: [id],onDelete: Cascade)
   thread     Thread?  @relation(fields: [threadId],references: [id],onDelete: Cascade)
   council    Council? @relation(fields: [councilId],references: [id],onDelete: Cascade)
@@ -415,5 +421,34 @@ model RepoSettings {
   /// Fix turns Cloudly may start in a row when checks fail; 0 turns that off.
   fixAttempts     Int      @default(2)
   checkTimeoutSec Int      @default(600)
+  /// The agent that reviews each change (a harness id), or null for no reviewer.
+  reviewer        String?
+  /// Turns the author gets to fix blocking findings before the session asks the user.
+  reviewRounds    Int      @default(2)
+  /// Post the reviewer's findings to the pull request as a review.
+  reviewPostToGitHub Boolean @default(true)
   updatedAt       DateTime @updatedAt
+}
+
+/// What a reviewer (or an audit) found. Blocking findings go back to the author
+/// automatically; the rest wait for the user to send or dismiss them.
+model ReviewFinding {
+  id        String   @id @default(uuid())
+  /// The review or audit turn that found it.
+  runId     String
+  threadId  String
+  /// Repo-relative path and line on the changed side, when it points at one.
+  file      String?
+  line      Int?
+  /// blocking | suggestion | nit
+  severity  String
+  title     String
+  body      String
+  /// open | sent (to the agent) | dismissed
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  @@index([threadId, createdAt])
+  @@index([runId])
 }

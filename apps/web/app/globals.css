@@ -4931,7 +4931,7 @@ button.agent-tile:hover:not(:disabled) {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow);
 }
 
 .ctx-item {
@@ -5198,4 +5198,359 @@ button.agent-tile:hover:not(:disabled) {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   align-items: start;
+}
+
+/* ---------- Changes tab: the session's diff, findings and line comments ---------- */
+
+.side-panel[data-wide] {
+  max-width: var(--max);
+}
+
+.btn .count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 11.5px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.changes {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.changes-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 13.5px;
+}
+
+.changes-bar .spacer,
+.finding-head .spacer,
+.my-comment .spacer,
+.review-counts .spacer {
+  flex: 1;
+}
+
+.findings-general {
+  display: grid;
+  gap: 8px;
+}
+
+.findings-general h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.diff-file {
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--bg);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.diff-file > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  background: var(--surface-2);
+  position: sticky;
+  top: 0;
+}
+
+.diff-file > summary::-webkit-details-marker {
+  display: none;
+}
+
+.diff-file > summary .path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.diff-file > summary .spacer {
+  flex: 1;
+}
+
+.diff-file[open] > summary .chev {
+  transform: rotate(90deg);
+}
+
+.diff-file .file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+.diff-note {
+  padding: 10px 12px;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 1.55;
+  display: block;
+  overflow-x: auto;
+}
+
+.diff-table tbody {
+  display: table;
+  width: 100%;
+}
+
+.diff-table .hunk td {
+  padding: 4px 12px;
+  color: var(--text-3);
+  background: var(--surface-2);
+  white-space: pre;
+}
+
+.diff-table .ln {
+  width: 1%;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--text-3);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.diff-table .code {
+  padding: 0 12px 0 4px;
+  white-space: pre;
+}
+
+.diff-table .sign {
+  display: inline-block;
+  width: 1.4ch;
+  color: var(--text-3);
+  user-select: none;
+}
+
+.diff-table .line[data-type="add"] {
+  background: var(--ok-soft);
+}
+
+.diff-table .line[data-type="del"] {
+  background: var(--danger-soft);
+}
+
+.diff-table .add-btn {
+  width: 22px;
+  padding: 0;
+}
+
+.diff-table .add-btn button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.diff-table .line:hover .add-btn button,
+.diff-table .add-btn button:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .diff-table .add-btn button {
+    opacity: 0.55;
+  }
+}
+
+.diff-table .inline td {
+  padding: 8px 12px;
+  background: var(--surface);
+  border-block: 1px solid var(--border);
+  white-space: normal;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+}
+
+.diff-table .inline td > * + * {
+  margin-top: 8px;
+}
+
+.finding {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-sans);
+  max-width: 820px;
+}
+
+.finding[data-severity="blocking"] {
+  border-left-color: var(--danger);
+}
+
+.finding[data-severity="suggestion"] {
+  border-left-color: var(--warn);
+}
+
+.finding[data-status="dismissed"] {
+  opacity: 0.6;
+}
+
+.finding[data-status="dismissed"] strong {
+  text-decoration: line-through;
+}
+
+.finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13.5px;
+}
+
+.finding-head input {
+  accent-color: var(--accent);
+}
+
+.sev {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.finding[data-severity="blocking"] .sev,
+.sev[data-severity="blocking"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.finding[data-severity="suggestion"] .sev,
+.sev[data-severity="suggestion"] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.finding-body {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.finding-body p + p {
+  margin-top: 6px;
+}
+
+.finding-body code {
+  font-size: 12.5px;
+}
+
+.my-comment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 820px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.comment-form {
+  display: grid;
+  gap: 6px;
+  max-width: 820px;
+}
+
+.comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.changes-send {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.changes-send textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+
+@media (max-width: 640px) {
+  .changes-send {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.review-result {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+
+.review-result[data-clean] {
+  border-color: var(--ok-soft);
+}
+
+.review-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 13.5px;
+}
+
+div.msg-system {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  min-height: 36px;
+}
+
+.check-row input {
+  accent-color: var(--accent);
 }

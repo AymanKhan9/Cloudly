@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, type Repo, type RepoCheckSettings } from "@/lib/api";
-import { relativeTime } from "@/lib/harness";
+import { relativeTime, HARNESSES, type Harness } from "@/lib/harness";
 
 type Mode = RepoCheckSettings["settings"]["checks"];
 
@@ -18,6 +18,10 @@ export function ChecksSettings() {
   const [command, setCommand] = useState("");
   const [fixes, setFixes] = useState(2);
   const [minutes, setMinutes] = useState(10);
+  const [reviewer, setReviewer] = useState("");
+  const [rounds, setRounds] = useState(2);
+  const [postToGitHub, setPostToGitHub] = useState(true);
+  const [agents, setAgents] = useState<Harness[]>(HARNESSES);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -28,6 +32,9 @@ export function ChecksSettings() {
         setRepo(r.repos[0]?.fullName ?? "");
       })
       .catch(() => setRepos([]));
+    api<{ harnesses: Harness[] }>("/harnesses")
+      .then((r) => r.harnesses.length && setAgents(r.harnesses))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -41,6 +48,9 @@ export function ChecksSettings() {
         setCommand(v.settings.checkCommand ?? "");
         setFixes(v.settings.fixAttempts);
         setMinutes(Math.round(v.settings.checkTimeoutSec / 60));
+        setReviewer(v.settings.reviewer ?? "");
+        setRounds(v.settings.reviewRounds);
+        setPostToGitHub(v.settings.reviewPostToGitHub);
       })
       .catch((e: Error) => setMessage({ ok: false, text: e.message }));
   }, [repo]);
@@ -52,7 +62,10 @@ export function ChecksSettings() {
     try {
       await api(`/settings/repos/${repo}`, {
         method: "PUT",
-        body: JSON.stringify({ checks: mode, checkCommand: mode === "custom" ? command : command || null, fixAttempts: fixes, checkTimeoutSec: minutes * 60 }),
+        body: JSON.stringify({
+          checks: mode, checkCommand: mode === "custom" ? command : command || null, fixAttempts: fixes, checkTimeoutSec: minutes * 60,
+          reviewer: reviewer || null, reviewRounds: rounds, reviewPostToGitHub: postToGitHub,
+        }),
       });
       setMessage({ ok: true, text: "Saved. Applies from the next turn." });
     } catch (err) {
@@ -67,10 +80,10 @@ export function ChecksSettings() {
   return (
     <section className="set-sec" aria-labelledby="checks-h" id="checks">
       <header>
-        <h2 id="checks-h">Checks</h2>
+        <h2 id="checks-h">Checks and review</h2>
         <p>
           After every turn that changes code, Cloudly runs the repo&apos;s checks (its tests, usually) before committing. When they fail, the agent gets another turn to fix
-          them. The result goes in the chat and the pull request.
+          them. Once they pass, a second agent can review the change: blocking findings go back to the first one, and the rest wait for you in the session&apos;s Changes tab.
         </p>
       </header>
       <div className="set-body">
@@ -162,9 +175,51 @@ export function ChecksSettings() {
                   </div>
                 </div>
               ) : null}
+              <div className="panel-row field">
+                <label className="label" htmlFor="review-agent">
+                  Reviewer
+                </label>
+                <select id="review-agent" className="select" value={reviewer} onChange={(e) => setReviewer(e.target.value)} style={{ maxWidth: 360 }}>
+                  <option value="">None</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="hint">
+                  {reviewer
+                    ? "Reviews what the session changed, not the whole repo. A different agent from the one doing the work catches more."
+                    : "No automatic review. You can still start one from a session's Changes tab."}
+                </p>
+              </div>
+              {reviewer ? (
+                <div className="panel-row checks-grid">
+                  <div className="field">
+                    <label className="label" htmlFor="review-rounds">
+                      Fix rounds
+                    </label>
+                    <select id="review-rounds" className="select" value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
+                      {[0, 1, 2, 3, 4, 5].map((n) => (
+                        <option key={n} value={n}>
+                          {n === 0 ? "None: just report" : `${n} round${n === 1 ? "" : "s"}`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="hint">For blocking findings. Then the session waits for you.</p>
+                  </div>
+                  <div className="field">
+                    <span className="label">Pull request</span>
+                    <label className="check-row">
+                      <input type="checkbox" checked={postToGitHub} onChange={(e) => setPostToGitHub(e.target.checked)} />
+                      Post the findings as a review, with comments on the lines
+                    </label>
+                  </div>
+                </div>
+              ) : null}
               <div className="panel-row form-foot">
                 <span className="msg" role="status" data-tone={message && !message.ok ? "danger" : undefined}>
-                  {message?.text ?? "Each fix attempt is a turn, and costs like one."}
+                  {message?.text ?? "Each fix attempt and each review is a turn, and costs like one."}
                 </span>
                 <button type="submit" className="btn btn-primary" disabled={busy || !repo || (mode === "custom" && !command.trim())}>
                   Save

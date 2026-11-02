@@ -20,6 +20,7 @@ import { live } from './live-routes';
 import { context, tokens, mcpEndpoint } from './context-routes';
 import { councils } from './council-routes';
 import { repoSettings } from './repo-settings-routes';
+import { reviewRoutes } from './review-routes';
 import { agents } from './agent-routes';
 
 const app = new Hono<AuthEnv>()
@@ -49,7 +50,12 @@ const CreateRunSchema = z.object({
   harness: HarnessId,
 });
 
-const NewThreadSchema = CreateRunSchema.extend({ effort: z.string().nullable().optional(), desktop: z.boolean().optional() });
+const NewThreadSchema = CreateRunSchema.extend({
+  effort: z.string().nullable().optional(),
+  desktop: z.boolean().optional(),
+  /** "audit": the agent reviews the whole repo and lists findings instead of changing it. */
+  mode: z.enum(['chat', 'audit']).optional(),
+});
 const MessageSchema = z.object({ prompt: z.string().trim().min(1).max(8000) });
 
 const BudgetSchema = z.object({
@@ -72,6 +78,7 @@ app.route('/arenas', arenas)
 app.route('/context', context)
 app.route('/councils', councils)
 app.route('/settings/repos', repoSettings)
+app.route('/threads', reviewRoutes)
 app.route('/settings/tokens', tokens)
 app.route('/settings/agents', agents)
 // For local editors (Cursor, Claude Code): a bearer token, not the session cookie.
@@ -200,6 +207,7 @@ const TURN_FIELDS = {
   prUrl: true, error: true, cancelRequested: true, filesChanged: true, additions: true, deletions: true,
   desktopPassword: true, fromThreadId: true, replyToThreadId: true, hops: true,
   kind: true, checkStatus: true, checkCommand: true, checkOutput: true, checkMs: true,
+  harness: true, output: true,
 } as const;
 
 async function threadView(threadId: string, userId: string) {
@@ -257,7 +265,8 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness, effort, desktop } = c.req.valid('json');
+  const { repo, baseBranch, prompt, harness, effort, desktop, mode } = c.req.valid('json');
+  const audit = mode === 'audit';
   if (effort && !effortLevels(harness).includes(effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
   }
@@ -265,12 +274,12 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   await prisma.thread.create({
     data: {
       id, userId: user.id, repo, baseBranch, harness,
-      title: threadTitle(prompt),
+      title: audit ? `Audit: ${threadTitle(prompt)}` : threadTitle(prompt),
       model: modelCommand(prompt) ?? undefined,
       effort: effort ?? undefined,
       desktop: desktop ?? false,
       branch: `agent/thread-${id.slice(0, 8)}`,
-      runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id } },
+      runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id, kind: audit ? 'audit' : 'turn' } },
     },
   });
   return c.json({ id }, 201);

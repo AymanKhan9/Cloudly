@@ -112,8 +112,16 @@ export interface Turn {
   from?: { threadId: string; title: string | null } | null;
   /** Its answer goes back to this session. */
   replyToThreadId?: string | null;
-  /** turn, or fix: Cloudly asked the agent to fix the checks its last change broke. */
-  kind?: "turn" | "fix";
+  /**
+   * turn; fix: Cloudly asked the agent to fix the checks its last change broke;
+   * review: the reviewer looked at the session's change; review_fix: the author
+   * was sent the reviewer's blocking findings; audit: the whole repo was reviewed.
+   */
+  kind?: "turn" | "fix" | "review" | "review_fix" | "audit";
+  /** The agent that ran the turn; a review's is the reviewer. */
+  harness?: string;
+  /** A review's or audit's findings, as text. */
+  output?: string | null;
   /** The repo's checks after the turn's changes. */
   checkStatus?: "passed" | "failed" | "error" | "skipped" | null;
   checkCommand?: string | null;
@@ -123,8 +131,36 @@ export interface Turn {
 
 export interface RepoCheckSettings {
   repo: string;
-  settings: { checks: "auto" | "custom" | "off"; checkCommand: string | null; fixAttempts: number; checkTimeoutSec: number };
+  settings: {
+    checks: "auto" | "custom" | "off";
+    checkCommand: string | null;
+    fixAttempts: number;
+    checkTimeoutSec: number;
+    reviewer: string | null;
+    reviewRounds: number;
+    reviewPostToGitHub: boolean;
+  };
   last: { checkCommand: string | null; checkStatus: string; createdAt: string } | null;
+}
+
+export interface ReviewFinding {
+  id: string;
+  runId: string;
+  file: string | null;
+  line: number | null;
+  severity: "blocking" | "suggestion" | "nit";
+  title: string;
+  body: string;
+  status: "open" | "sent" | "dismissed";
+  createdAt: string;
+}
+
+export interface SessionChanges {
+  diff: string;
+  diffBase: string | null;
+  findings: ReviewFinding[];
+  /** The repo's reviewer, or null when it has none. */
+  reviewer: string | null;
 }
 
 export interface ThreadView {

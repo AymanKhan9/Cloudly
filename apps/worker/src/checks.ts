@@ -22,7 +22,10 @@ export interface CheckResult {
   ms: number;
 }
 
-export const DEFAULT_SETTINGS = { checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600 };
+export const DEFAULT_SETTINGS = {
+  checks: "auto", checkCommand: null as string | null, fixAttempts: 2, checkTimeoutSec: 600,
+  reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
+};
 const OUTPUT_CHARS = 12_000;
 /** Bash's exit code for a command that isn't installed: "couldn't run", not a failing test. */
 const NOT_FOUND = 127;
