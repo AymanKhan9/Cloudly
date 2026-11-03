@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS = {
   reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
   triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
   autoMerge: false, mergeMethod: "squash",
+  screenshots: false, screenshotCommand: null as string | null, screenshotPort: 3000, screenshotPaths: ["/"] as string[],
 };
 const OUTPUT_CHARS = 12_000;
 /** Bash's exit code for a command that isn't installed: "couldn't run", not a failing test. */

@@ -107,6 +107,7 @@ model Thread {
   planId           String?
   /// Brought in from an agent run elsewhere (see SessionImport).
   imported         SessionImport?
+  artifacts        Artifact[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -505,6 +506,13 @@ model RepoSettings {
   autoMerge       Boolean  @default(false)
   /// squash | merge | rebase
   mergeMethod     String   @default("squash")
+  /// After a turn that changes UI files: start the app before and after the
+  /// change, screenshot these pages, and show them side by side (needs the
+  /// sandbox's desktop tools, for Chromium).
+  screenshots       Boolean  @default(false)
+  screenshotCommand String?
+  screenshotPort    Int      @default(3000)
+  screenshotPaths   String[] @default(["/"])
   updatedAt       DateTime @updatedAt
 }
 
@@ -720,4 +728,28 @@ model SessionImport {
   resumed   Boolean  @default(false)
   createdAt DateTime @default(now())
   thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+/// Something an agent made for the user to look at (see @repo/shared/artifacts):
+/// a file it wrote to /artifacts. One row per version; a session's artifacts are
+/// keyed by name.
+model Artifact {
+  id         String   @id @default(uuid())
+  threadId   String
+  /// The turn that wrote this version.
+  runId      String
+  name       String
+  /// html | svg | image | markdown | mermaid | csv | pdf | text
+  kind       String
+  mime       String
+  content    Bytes
+  size       Int
+  sha256     String
+  version    Int
+  /// Anyone with the link can view it (see the API's shared routes).
+  shareToken String?  @unique
+  createdAt  DateTime @default(now())
+  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  @@unique([threadId, name, version])
+  @@index([runId])
 }

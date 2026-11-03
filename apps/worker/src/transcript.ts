@@ -52,7 +52,7 @@ export async function promptWithHistory(
   const turns = (where: object) =>
     prisma.run.findMany({
       // Rewound turns were undone; rewinds and forks are Cloudly's own bookkeeping.
-      where: { ...where, id: { not: currentRunId }, rewoundAt: null, kind: { notIn: ["rewind", "fork", "import"] }, status: { in: ["succeeded", "failed", "cancelled"] } },
+      where: { ...where, id: { not: currentRunId }, rewoundAt: null, kind: { notIn: ["rewind", "fork", "import", "screenshots"] }, status: { in: ["succeeded", "failed", "cancelled"] } },
       orderBy: { createdAt: "asc" },
       select: { prompt: true, kind: true, output: true, harness: true, events: { where: { kind: { in: ["text", "tool_call"] } }, orderBy: { seq: "asc" }, select: { kind: true, data: true } } },
     });

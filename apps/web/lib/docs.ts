@@ -17,6 +17,7 @@ export const DOCS: DocPage[] = [
   { slug: "merge-and-schedules", title: "Merging and schedules", group: "Using Cloudly" },
   { slug: "plans", title: "Plans", group: "Using Cloudly" },
   { slug: "import", title: "Importing sessions", group: "Using Cloudly" },
+  { slug: "artifacts", title: "Artifacts and screenshots", group: "Using Cloudly" },
   { slug: "discord-and-notifications", title: "Discord, Slack and notifications", group: "Using Cloudly" },
   { slug: "arena", title: "Comparing agents", group: "Using Cloudly" },
   { slug: "council", title: "Agent council", group: "Using Cloudly" },

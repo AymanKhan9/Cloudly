@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { RichMarkdown } from "@/components/rich-markdown";
 import { useCallback, useEffect, useState } from "react";
 import { CaretRight, CloudSlash, Crown, DownloadSimple, GithubLogo, Globe, Stop, WarningCircle } from "@phosphor-icons/react";
 import { api, ApiError, type CouncilTurn, type CouncilView } from "@/lib/api";
@@ -83,7 +82,7 @@ function TurnCard({ turn }: { turn: CouncilTurn }) {
             Answer
           </summary>
           <div className="reply">
-            <Markdown remarkPlugins={[remarkGfm]}>{turn.output}</Markdown>
+            <RichMarkdown>{turn.output}</RichMarkdown>
           </div>
         </details>
       ) : null}
@@ -225,7 +224,7 @@ export default function CouncilPage() {
             </a>
           </header>
           <div className="reply prose">
-            <Markdown remarkPlugins={[remarkGfm]}>{council.report}</Markdown>
+            <RichMarkdown>{council.report}</RichMarkdown>
           </div>
         </section>
       ) : null}

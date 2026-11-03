@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { prisma } from "@repo/db";
+import { prisma, config, hasDesktop } from "@repo/db";
 import type { AuthEnv } from "./middleware/auth_middleware";
 
 // How Cloudly treats a repo's turns: its checks, how many times the agent may
@@ -15,6 +15,7 @@ const DEFAULTS = {
   reviewer: null as string | null, reviewRounds: 2, reviewPostToGitHub: true,
   triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
   autoMerge: false, mergeMethod: "squash",
+  screenshots: false, screenshotCommand: null as string | null, screenshotPort: 3000, screenshotPaths: ["/"] as string[],
 };
 
 function repoOf(c: { req: { param: (k: string) => string } }) {
@@ -33,7 +34,11 @@ repoSettings.get("/:owner/:name", async (c) => {
     select: { checkCommand: true, checkStatus: true, createdAt: true },
   });
   const { updatedAt: _u, repo: _r, ...settings } = row ?? { repo, updatedAt: null, ...DEFAULTS };
-  return c.json({ repo, settings, last });
+  // Screenshots need Chromium, which comes with the sandbox's desktop tools.
+  const desktopTools = hasDesktop(((await config("SANDBOX_SETUP_SCRIPT")) ?? "").trim());
+  // The command a preview of this repo last ran, as a starting point.
+  const preview = await prisma.preview.findFirst({ where: { thread: { repo } }, orderBy: { createdAt: "desc" }, select: { command: true, port: true } });
+  return c.json({ repo, settings, last, desktopTools, preview });
 });
 
 const SettingsSchema = z
@@ -60,6 +65,11 @@ const SettingsSchema = z
     // New sessions start with merge-when-ready on, and how it merges.
     autoMerge: z.boolean().optional(),
     mergeMethod: z.enum(["squash", "merge", "rebase"]).optional(),
+    // Before-and-after screenshots of UI changes.
+    screenshots: z.boolean().optional(),
+    screenshotCommand: z.string().trim().max(2000).nullable().optional(),
+    screenshotPort: z.number().int().min(1).max(65535).optional(),
+    screenshotPaths: z.array(z.string().trim().regex(/^\/[\w\-./?=&%#~]*$/, "A page starts with /")).min(1).max(6).optional(),
   })
   .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });
 

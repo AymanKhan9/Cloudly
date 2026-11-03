@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import Markdown from "react-markdown";
+import { RichMarkdown } from "@/components/rich-markdown";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowSquareOut, CloudSlash, GitBranch, GitPullRequest, GithubLogo, Trophy, WarningCircle } from "@phosphor-icons/react";
 import { api, ApiError, type ArenaEntry, type ArenaView } from "@/lib/api";
@@ -94,7 +94,7 @@ function Entry({
       ) : null}
 
       <div className="arena-summary reply">
-        {r?.summary ? <Markdown>{r.summary}</Markdown> : <p className="hint">{active ? "Working on it." : "No summary from the agent."}</p>}
+        {r?.summary ? <RichMarkdown>{r.summary}</RichMarkdown> : <p className="hint">{active ? "Working on it." : "No summary from the agent."}</p>}
       </div>
 
       <footer>

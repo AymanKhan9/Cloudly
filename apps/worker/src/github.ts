@@ -326,3 +326,19 @@ export const github: GitHubPort = {
         return out;
     },
 };
+
+/**
+ * Rewrites a pull request's description with `edit` (e.g. to put in a section
+ * Cloudly keeps up to date). Reads the current body first, so the author's own
+ * edits stay.
+ */
+export async function updatePullRequestSection(prUrl: string, edit: (body: string) => string): Promise<void> {
+    const m = /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(prUrl);
+    if (!m) throw new Error(`Not a pull request URL: ${prUrl}`);
+    const [, owner, repo, num] = m as unknown as [string, string, string, string];
+    const client = await getOctokit();
+    const pr = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: Number(num) });
+    const body = edit(pr.data.body ?? "");
+    if (body === (pr.data.body ?? "")) return;
+    await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { owner, repo, pull_number: Number(num), body });
+}

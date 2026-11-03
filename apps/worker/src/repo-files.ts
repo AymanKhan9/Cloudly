@@ -44,7 +44,7 @@ export async function readRegular(full: string, max = REPO_FILE_MAX_BYTES): Prom
 }
 
 /** Every regular file under `dir`, by relative path; symlinks and special files are skipped, never followed. */
-async function walk(dir: string, rel = "", out: string[] = [], depth = 0): Promise<string[]> {
+export async function walk(dir: string, rel = "", out: string[] = [], depth = 0): Promise<string[]> {
   if (depth > 16 || out.length > REPO_FILES_MAX_COUNT * 2) return out;
   for (const name of await readdir(path.join(dir, rel)).catch(() => [] as string[])) {
     const child = rel ? `${rel}/${name}` : name;

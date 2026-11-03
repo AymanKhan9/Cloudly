@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Markdown from "react-markdown";
+import { RichMarkdown } from "@/components/rich-markdown";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
@@ -33,7 +33,7 @@ import {
   WarningCircle,
   Wrench,
 } from "@phosphor-icons/react";
-import { api, ApiError, type Capabilities, type ThreadView, type Turn } from "@/lib/api";
+import { type ArtifactMeta, api, ApiError, type Capabilities, type ThreadView, type Turn } from "@/lib/api";
 import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus } from "@/lib/harness";
 import { buildBlocks, type Block, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
@@ -48,6 +48,7 @@ import { ContextPanel } from "@/components/context-panel";
 import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
 import { ReviewRequest, ReviewResult, TriggerNote, CiFixRequest } from "@/components/review";
 import { CheckpointRequest, ForkBanner, ImportBanner, TurnMenu } from "@/components/checkpoints";
+import { TurnArtifacts } from "@/components/artifacts";
 import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
@@ -143,7 +144,7 @@ function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
         if (b.t === "text")
           return (
             <div key={i} className="reply">
-              <Markdown>{b.text}</Markdown>
+              <RichMarkdown>{b.text}</RichMarkdown>
             </div>
           );
         if (b.t === "thought")
@@ -179,7 +180,7 @@ function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
                 {b.blocks.length ? <Blocks blocks={b.blocks} live={running} /> : running ? <p className="hint">Starting</p> : null}
                 {b.report ? (
                   <div className="reply subagent-report">
-                    <Markdown>{b.report}</Markdown>
+                    <RichMarkdown>{b.report}</RichMarkdown>
                   </div>
                 ) : null}
               </div>
@@ -199,6 +200,7 @@ function TurnView({
   now,
   onOpenChanges,
   checkpoint,
+  artifacts,
 }: {
   turn: Turn;
   events: StreamEvent[];
@@ -207,6 +209,8 @@ function TurnView({
   onOpenChanges: () => void;
   /** Rewind and fork, for a finished turn. */
   checkpoint?: { threadId: string; canRewind: boolean; rewindNote?: string };
+  /** The session's artifacts; the turn shows the ones it wrote. */
+  artifacts?: ArtifactMeta[];
 }) {
   // A review runs with the repo's reviewer, not the session's agent.
   const harness = turn.harness ?? sessionHarness;
@@ -223,7 +227,7 @@ function TurnView({
   return (
     <article className="turn" data-rewound={turn.rewoundAt ? true : undefined}>
       {turn.rewoundAt ? <div className="rewound-tag">Rewound</div> : null}
-      {turn.kind === "fork" ? null : turn.kind === "rewind" || turn.kind === "import" ? (
+      {turn.kind === "fork" ? null : turn.kind === "rewind" || turn.kind === "import" || turn.kind === "screenshots" ? (
         <CheckpointRequest turn={turn} />
       ) : turn.kind === "fix" ? (
         <FixRequest turn={turn} agent={h.name} />
@@ -253,6 +257,7 @@ function TurnView({
 
       <div className="msg-agent">
         <Blocks blocks={blocks} live={active} />
+        {artifacts?.length ? <TurnArtifacts turnId={turn.id} all={artifacts} /> : null}
 
         {active && blocks.length === 0 ? (
           <p className="shimmer-text" role="status" style={{ fontSize: 14, justifySelf: "start" }}>
@@ -274,7 +279,7 @@ function TurnView({
           </span>
           {active ? <span className="num">{elapsed(turn.createdAt, now)}</span> : null}
           {turn.kind === "import_turn" ? <span className="imported-tag">Imported</span> : null}
-          {turn.kind === "rewind" || turn.kind === "fork" || turn.kind === "import" || turn.kind === "import_turn" ? null : turn.onPlan ? (
+          {turn.kind === "rewind" || turn.kind === "fork" || turn.kind === "import" || turn.kind === "import_turn" || turn.kind === "screenshots" ? null : turn.onPlan ? (
             <span>On your plan</span>
           ) : turn.costUsd !== null ? (
             <span className="num" title={h.cost === "estimated" ? "Estimated from token counts" : "Reported by the agent"}>
@@ -500,7 +505,7 @@ export default function SessionPage() {
   // The latest review's findings, as a count on the Changes button.
   const lastReview = [...turns].reverse().find((t) => t.kind === "review" || t.kind === "audit");
   // The latest turn that wasn't undone: nothing after it to rewind.
-  const lastLiveTurn = [...turns].reverse().find((t) => !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import");
+  const lastLiveTurn = [...turns].reverse().find((t) => !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import" && t.kind !== "screenshots");
   // Of an imported conversation, only the last turn has its code (the code as it was imported).
   const lastImported = [...turns].reverse().find((t) => t.kind === "import_turn");
   const openFindings = lastReview?.status === "succeeded" && lastReview.output ? Number(/(\d+) blocking/.exec(lastReview.output)?.[1] ?? 0) + Number(/(\d+) suggestions?/.exec(lastReview.output)?.[1] ?? 0) : 0;
@@ -694,8 +699,9 @@ export default function SessionPage() {
             events={events[t.id] ?? []}
             harness={thread.harness}
             now={now}
+            artifacts={thread.artifacts}
             checkpoint={
-              !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import" && (t.kind !== "import_turn" || t.id === lastImported?.id) && !ACTIVE.includes(t.status)
+              !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import" && t.kind !== "screenshots" && (t.kind !== "import_turn" || t.id === lastImported?.id) && !ACTIVE.includes(t.status)
                 ? {
                     threadId: thread.id,
                     canRewind: !busy && !thread.mergedAt && t.id !== lastLiveTurn?.id,

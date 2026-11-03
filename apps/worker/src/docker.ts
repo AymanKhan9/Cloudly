@@ -95,6 +95,8 @@ export interface ContainerOptions {
     desktopPassword?: string;
     /** Host dir mounted at /files: the repo's kept files. */
     filesDir?: string;
+    /** Host dir mounted at /artifacts: what the agent makes for the user to look at. */
+    artifactsDir?: string;
     /** Environment for the agent: secret placeholders, and exposed secrets' real values. */
     env?: Record<string, string>;
     /** Host dir mounted at /context: the repo's shared context, when it's on. */
@@ -333,6 +335,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             ...(options.homeDir ? ["-v", `${options.homeDir}:/home/node`, "-e", "HOME=/home/node"] : []),
 
             ...(options.filesDir ? ["-v", `${options.filesDir}:/files`] : []),
+            ...(options.artifactsDir ? ["-v", `${options.artifactsDir}:/artifacts`] : []),
             ...(options.contextDir ? ["-v", `${options.contextDir}:/context`] : []),
             ...(options.sessionsDir ? ["-v", `${options.sessionsDir}:/sessions`] : []),
             ...(options.askDir ? ["-v", `${options.askDir}:/ask`] : []),

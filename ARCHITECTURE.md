@@ -802,6 +802,27 @@ Pi), the file goes into the thread's home where that agent looks (`.claude/proje
 puts the imported turns in their own section (`importedHistory`: the compaction summary, then as
 many recent turns as fit in 24k characters) ahead of the Cloudly turns.
 
+### Artifacts and screenshots
+
+A thread turn mounts a folder at `/artifacts` (`apps/worker/src/artifacts.ts`), filled with the
+latest version of each of the session's artifacts. After the container exits, every regular file
+with a known extension (`@repo/shared/artifacts`) that's new or whose sha256 changed becomes an
+`Artifact` row: the next `version` for that `(threadId, name)`, `runId` the turn. It's read like
+`/files`: no symlinks followed, size caps. The API serves content only as text or with a
+`sandbox` CSP (never as a page of its origin); the web app puts HTML in an iframe with
+`sandbox="allow-scripts"` (an opaque origin) and a CSP meta tag first in the document
+(`framedHtml`: CDN scripts and styles only, `connect-src 'none'`). A share token on a row makes it
+readable at `/shared/<token>` without a session.
+
+Screenshots (`apps/worker/src/screenshots.ts`): after a committed turn whose patch touches UI
+files, on a repo with `RepoSettings.screenshots` on and the desktop preset installed, a
+`Run.kind = "screenshots"` turn (`targetRunId` the turn) runs a script in a container on the
+session's clone: check out the turn's commit, start the app, screenshot each page with headless
+Chromium into `shots/<page>/after.png`, stop the app's process group, and the same at the commit's
+parent for `before.png`. They become artifacts of that run; the web app shows matching pairs side
+by side. With `WEB_ORIGIN` set and a pull request open, the PR description's marked Screenshots
+section is replaced with the pairs as share links.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

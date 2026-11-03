@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import Markdown from "react-markdown";
+import { RichMarkdown } from "@/components/rich-markdown";
 import { ArrowCounterClockwise, CaretRight, ChatCircleText, MagnifyingGlass, PaperPlaneTilt, Plus, X } from "@phosphor-icons/react";
 import { parseDiff, type DiffFile } from "@repo/shared/diff";
 import { api, ApiError, type ReviewFinding, type SessionChanges } from "@/lib/api";
@@ -52,7 +52,7 @@ function FindingCard({
       </div>
       {f.body && !dismissed ? (
         <div className="finding-body">
-          <Markdown>{f.body}</Markdown>
+          <RichMarkdown>{f.body}</RichMarkdown>
         </div>
       ) : null}
     </div>

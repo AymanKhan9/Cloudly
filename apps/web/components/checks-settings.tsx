@@ -23,6 +23,10 @@ export function ChecksSettings() {
   const [postToGitHub, setPostToGitHub] = useState(true);
   const [autoMerge, setAutoMerge] = useState(false);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
+  const [shots, setShots] = useState(false);
+  const [shotCommand, setShotCommand] = useState("");
+  const [shotPort, setShotPort] = useState(3000);
+  const [shotPages, setShotPages] = useState("/");
   const [agents, setAgents] = useState<Harness[]>(HARNESSES);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -55,6 +59,10 @@ export function ChecksSettings() {
         setPostToGitHub(v.settings.reviewPostToGitHub);
         setAutoMerge(v.settings.autoMerge);
         setMergeMethod(v.settings.mergeMethod);
+        setShots(v.settings.screenshots);
+        setShotCommand(v.settings.screenshotCommand ?? v.preview?.command ?? "");
+        setShotPort(v.settings.screenshotPort !== 3000 ? v.settings.screenshotPort : v.preview?.port ?? 3000);
+        setShotPages((v.settings.screenshotPaths.length ? v.settings.screenshotPaths : ["/"]).join("\n"));
       })
       .catch((e: Error) => setMessage({ ok: false, text: e.message }));
   }, [repo]);
@@ -70,6 +78,8 @@ export function ChecksSettings() {
           checks: mode, checkCommand: mode === "custom" ? command : command || null, fixAttempts: fixes, checkTimeoutSec: minutes * 60,
           reviewer: reviewer || null, reviewRounds: rounds, reviewPostToGitHub: postToGitHub,
           autoMerge, mergeMethod,
+          screenshots: shots, screenshotCommand: shotCommand.trim() || null, screenshotPort: shotPort,
+          screenshotPaths: shotPages.split("\n").map((p) => p.trim()).filter(Boolean).slice(0, 6),
         }),
       });
       setMessage({ ok: true, text: "Saved. Applies from the next turn." });
@@ -243,11 +253,46 @@ export function ChecksSettings() {
                   <p className="hint">The repo has to allow it on GitHub.</p>
                 </div>
               </div>
+              <div className="panel-row field">
+                <span className="label">Screenshots</span>
+                <label className="check-row">
+                  <input type="checkbox" checked={shots} onChange={(e) => setShots(e.target.checked)} />
+                  Before-and-after screenshots when a turn changes the UI
+                </label>
+                <p className="hint">
+                  Cloudly starts the app at the commit before the turn and at the turn&apos;s own, and screenshots each page. They show side by side in the session and in the pull
+                  request&apos;s description. It&apos;s a turn of its own, after the change, and costs no model time.
+                  {view?.desktopTools === false ? " It needs the sandbox's desktop tools (for Chromium): turn them on under Settings > Sandbox tools." : ""}
+                </p>
+              </div>
+              {shots ? (
+                <div className="panel-row checks-grid">
+                  <div className="field">
+                    <label className="label" htmlFor="shot-cmd">
+                      Command that starts the app
+                    </label>
+                    <input id="shot-cmd" className="input mono" value={shotCommand} onChange={(e) => setShotCommand(e.target.value)} placeholder="npm install && npm run dev" />
+                    <p className="hint">It runs from the repo&apos;s root with PORT set, and should keep running.</p>
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="shot-port">
+                      Port
+                    </label>
+                    <input id="shot-port" className="input mono" type="number" min={1} max={65535} value={shotPort} onChange={(e) => setShotPort(Number(e.target.value) || 3000)} />
+                  </div>
+                  <div className="field" style={{ gridColumn: "1 / -1" }}>
+                    <label className="label" htmlFor="shot-pages">
+                      Pages <span className="dim">(one per line, up to 6)</span>
+                    </label>
+                    <textarea id="shot-pages" className="textarea mono" rows={3} value={shotPages} onChange={(e) => setShotPages(e.target.value)} placeholder="/" />
+                  </div>
+                </div>
+              ) : null}
               <div className="panel-row form-foot">
                 <span className="msg" role="status" data-tone={message && !message.ok ? "danger" : undefined}>
                   {message?.text ?? "Each fix attempt and each review is a turn, and costs like one."}
                 </span>
-                <button type="submit" className="btn btn-primary" disabled={busy || !repo || (mode === "custom" && !command.trim())}>
+                <button type="submit" className="btn btn-primary" disabled={busy || !repo || (mode === "custom" && !command.trim()) || (shots && !shotCommand.trim())}>
                   Save
                 </button>
               </div>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowCounterClockwise, DotsThree, DownloadSimple, GitFork } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Camera, DotsThree, DownloadSimple, GitFork } from "@phosphor-icons/react";
 import { IMPORT_SOURCES, type ImportSource } from "@repo/shared/session-import";
 import { api, ApiError, type ThreadSummary, type Turn } from "@/lib/api";
 import { HARNESSES, type Harness } from "@/lib/harness";
@@ -12,7 +12,7 @@ import { HARNESSES, type Harness } from "@/lib/harness";
 export function CheckpointRequest({ turn }: { turn: Turn }) {
   return (
     <div className="msg-system">
-      {turn.kind === "rewind" ? <ArrowCounterClockwise size={14} /> : turn.kind === "import" ? <DownloadSimple size={14} /> : <GitFork size={14} />}
+      {turn.kind === "rewind" ? <ArrowCounterClockwise size={14} /> : turn.kind === "import" ? <DownloadSimple size={14} /> : turn.kind === "screenshots" ? <Camera size={14} /> : <GitFork size={14} />}
       {turn.prompt}
     </div>
   );

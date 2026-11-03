@@ -30,6 +30,7 @@ import { agents } from './agent-routes';
 import { checkpoints } from './checkpoint-routes';
 import { plans } from './plan-routes';
 import { imports, importCommand } from './import-routes';
+import { artifacts, shared } from './artifact-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -45,7 +46,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*', '/artifacts/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -93,6 +94,9 @@ app.route('/threads', checkpoints)
 app.route('/plans', plans)
 // Signed in, or a personal token from the import command (import-routes).
 app.route('/imports', imports)
+app.route('/artifacts', artifacts)
+// A shared artifact: anyone with the link.
+app.route('/shared', shared)
 app.route('/webhooks', webhooks)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
@@ -251,7 +255,7 @@ const TURN_FIELDS = {
 async function forkOf(threadId: string | null, runId: string | null, userId: string) {
   if (!threadId) return null;
   const parent = await prisma.thread.findFirst({ where: { id: threadId, userId }, select: { id: true, title: true } });
-  const runs = parent ? await prisma.run.findMany({ where: { threadId, kind: { notIn: ['rewind', 'fork', 'import'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } }) : [];
+  const runs = parent ? await prisma.run.findMany({ where: { threadId, kind: { notIn: ['rewind', 'fork', 'import', 'screenshots'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } }) : [];
   return { threadId, title: parent?.title ?? null, turn: runId ? runs.findIndex((r) => r.id === runId) + 1 || null : null };
 }
 
@@ -261,10 +265,11 @@ async function threadView(threadId: string, userId: string) {
     include: {
       runs: { orderBy: { createdAt: 'asc' }, select: TURN_FIELDS },
       imported: { select: { source: true, turns: true, dropped: true, resumed: true, startFrom: true, summary: true } },
+      artifacts: { orderBy: [{ name: 'asc' }, { version: 'asc' }], select: { id: true, runId: true, name: true, kind: true, mime: true, size: true, version: true, shareToken: true, createdAt: true } },
     },
   });
   if (!thread) return null;
-  const { runs, imported, ...meta } = thread;
+  const { runs, imported, artifacts: made, ...meta } = thread;
   // Turns other sessions asked for name where they came from, if the user still has it.
   const fromIds = [...new Set(runs.map((r) => r.fromThreadId).filter((x): x is string => Boolean(x)))];
   const titles = new Map(
@@ -273,6 +278,7 @@ async function threadView(threadId: string, userId: string) {
   return {
     thread: {
       ...meta, agentSessionId: undefined, forkOf: await forkOf(meta.forkOfThreadId, meta.forkAtRunId, userId),
+      artifacts: made.map(({ shareToken, ...a }) => ({ ...a, shared: Boolean(shareToken) })),
       imported: imported ? { source: imported.source, turns: imported.turns, dropped: imported.dropped, resumed: imported.resumed, startFrom: imported.startFrom, hasSummary: Boolean(imported.summary) } : null,
     },
     // The password itself only goes out alongside a relay token (live-routes).

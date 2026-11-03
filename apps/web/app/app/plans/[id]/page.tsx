@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Markdown from "react-markdown";
+import { RichMarkdown } from "@/components/rich-markdown";
 import { ArrowSquareOut, CheckCircle, Circle, GitPullRequest, Plus, Trash, TreeStructure, WarningCircle, X } from "@phosphor-icons/react";
 import { waves } from "@repo/shared/plan";
 import { api, ApiError, type PlanTask, type PlanView } from "@/lib/api";
@@ -325,7 +325,7 @@ export default function PlanPage() {
 
       {plan.summary ? (
         <div className="plan-summary">
-          <Markdown>{plan.summary}</Markdown>
+          <RichMarkdown>{plan.summary}</RichMarkdown>
         </div>
       ) : null}
 

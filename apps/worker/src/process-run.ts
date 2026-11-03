@@ -22,6 +22,7 @@ import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
 import { withPreamble, sandboxRules, isCommand, runExtras } from "./preamble";
 import { materializeRepoFiles, syncRepoFiles, destroyFilesDir, type FilesDir } from "./repo-files";
+import { prepareArtifacts, collectArtifacts, destroyArtifactsDir, type ArtifactsDir } from "./artifacts";
 import { patchStats } from "./patch";
 import { ensureRelay } from "./previews";
 import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./shared-context";
@@ -32,6 +33,7 @@ import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } 
 import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { notifyTurnEnd } from "./notify";
 import { processImport } from "./imports";
+import { processScreenshots, queueScreenshots } from "./screenshots";
 import { processCheckpoint } from "./checkpoints";
 import { processPlanTurn } from "./plans";
 import { modelCommand } from "@repo/shared/model-command";
@@ -117,6 +119,7 @@ export async function processRun(
   // Going back to a checkpoint, or starting a fork from one: branch work, no agent.
   if (run.kind === "rewind" || run.kind === "fork") return processCheckpoint(run, workerId);
   if (run.kind === "import") return processImport(run, workerId);
+  if (run.kind === "screenshots") return processScreenshots(run, workerId);
   // A planner breaking a big task into a plan's tasks.
   if (run.kind === "plan") return processPlanTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
@@ -152,6 +155,7 @@ export async function processRun(
 
   let ws: Workspace | undefined;
   let files: FilesDir | undefined;
+  let artifacts: ArtifactsDir | undefined;
   let context: ContextDir | null = null;
   let sessions: SessionsDir | null = null;
   let askDir: string | undefined;
@@ -226,6 +230,11 @@ export async function processRun(
     files = await materializeRepoFiles(run.repo);
     containerOptions.mcpServers = mcp;
     containerOptions.filesDir = files.dir;
+    // A session's artifacts (charts, reports, screenshots), for the user to look at.
+    if (thread) {
+      artifacts = await prepareArtifacts(thread.id);
+      containerOptions.artifactsDir = artifacts.dir;
+    }
     containerOptions.env = Object.fromEntries(secrets.map((s) => [s.name, s.exposed ? s.value : s.placeholder]));
     if (thread?.desktop) {
       await ensureRelay().catch((err) => console.error(`run ${run.id}: relay:`, err));
@@ -241,7 +250,7 @@ export async function processRun(
     // ask_user, so the agent can flag the session as needing the user.
     if (thread) containerOptions.askDir = askDir = await prepareAsk();
     const extras = runExtras({
-      mcp, secrets, files: true, desktop: Boolean(thread?.desktop), context: context?.markdown,
+      mcp, secrets, files: true, artifacts: Boolean(artifacts), desktop: Boolean(thread?.desktop), context: context?.markdown,
       sessions: sessions ? { count: sessions.index.sessions.length, scope: sessions.index.scope, canSend: sessions.index.canSend > 0 } : undefined,
       ask: Boolean(askDir),
     });
@@ -369,6 +378,17 @@ export async function processRun(
       console.error(`run ${run.id}: couldn't save /files:`, err);
     }
 
+    if (artifacts) {
+      try {
+        const got = await collectArtifacts(artifacts, run.id);
+        if (got.saved.length || got.skipped.length) {
+          await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "artifacts", saved: got.saved, skipped: got.skipped } }]);
+        }
+      } catch (err) {
+        console.error(`run ${run.id}: couldn't save /artifacts:`, err);
+      }
+    }
+
     if (leaseLost) return;
 
     // Fenced transition: only the worker that still holds this exact
@@ -481,6 +501,12 @@ export async function processRun(
     });
     if (context) await shareTurn(context, { summary: lastText, prUrl: prUrl ?? thread?.prUrl, stats });
 
+    // A change to the UI: before-and-after screenshots, when the repo has them on.
+    if (thread && !cancelled && check?.status !== "failed" && !isCommand(run.prompt)) {
+      const shots = await queueScreenshots(run, patch).catch((err) => (console.error(`run ${run.id}: couldn't queue screenshots:`, err), false));
+      if (shots) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "screenshots.queued" } }]);
+    }
+
     // Failing checks: the same agent gets another turn to fix them, a few times
     // in a row at most; after that the session asks the user.
     if (check?.status === "failed" && thread) {
@@ -510,6 +536,7 @@ export async function processRun(
     clearInterval(heartbeatTimer);
     if (ws) await destroyWorkspace(ws);
     if (files) await destroyFilesDir(files);
+    if (artifacts) await destroyArtifactsDir(artifacts);
     if (context) await destroyContext(context);
     if (sessions) await destroySessions(sessions);
     if (askDir) await destroyAsk(askDir);

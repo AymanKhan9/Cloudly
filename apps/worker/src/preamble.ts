@@ -1,3 +1,4 @@
+import { ARTIFACTS_RULE } from "@repo/shared/artifacts";
 import { BASE_TOOLS_LABEL } from "@repo/db";
 
 /**
@@ -17,6 +18,8 @@ export function sandboxRules(tools: string = BASE_TOOLS_LABEL, extras: string[] 
 }
 
 export interface RunExtras {
+  /** /artifacts is mounted: files there are shown to the user. */
+  artifacts?: boolean;
   /** Connected MCP servers' names. */
   mcp?: string[];
   /** Names of the environment variables set from the user's secrets, and whether each holds a placeholder. */
@@ -35,6 +38,7 @@ export interface RunExtras {
 /** Lines for what this run has beyond the basics: kept files, secrets, MCP servers, a desktop. */
 export function runExtras(extras: RunExtras): string[] {
   const lines: string[] = [];
+  if (extras.artifacts) lines.push(ARTIFACTS_RULE);
   if (extras.files) {
     lines.push("- /files holds files the user keeps for this repo outside git (data, fixtures, notes). It isn't committed. Anything you leave there is kept for the next session on this repo; put scratch files elsewhere.");
   }

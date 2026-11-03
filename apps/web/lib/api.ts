@@ -100,8 +100,22 @@ export interface ThreadSummary {
   planId?: string | null;
   /** A fork: the session it came from and the turn. */
   forkOf?: { threadId: string; title: string | null; turn: number | null } | null;
+  /** What its agents made for the user to look at, every version, oldest first per name. */
+  artifacts?: ArtifactMeta[];
   /** Brought in from an agent run elsewhere. */
   imported?: { source: string; turns: number; dropped: number; resumed: boolean; startFrom: string | null; hasSummary: boolean } | null;
+}
+
+export interface ArtifactMeta {
+  id: string;
+  runId: string;
+  name: string;
+  kind: "html" | "svg" | "image" | "markdown" | "mermaid" | "csv" | "pdf" | "text";
+  mime: string;
+  size: number;
+  version: number;
+  shared: boolean;
+  createdAt: string;
 }
 
 /** What an import found in a session file, before it's imported. */
@@ -149,7 +163,7 @@ export interface Turn {
    * review: the reviewer looked at the session's change; review_fix: the author
    * was sent the reviewer's blocking findings; audit: the whole repo was reviewed.
    */
-  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix" | "rewind" | "fork" | "import" | "import_turn";
+  kind?: "turn" | "fix" | "review" | "review_fix" | "audit" | "ci_fix" | "rewind" | "fork" | "import" | "import_turn" | "screenshots";
   /** The turn's commit: a checkpoint to rewind or fork from. */
   commitSha?: string | null;
   /** Undone by a rewind. */
@@ -187,8 +201,16 @@ export interface RepoCheckSettings {
     ciFixAttempts: number;
     autoMerge: boolean;
     mergeMethod: "squash" | "merge" | "rebase";
+    screenshots: boolean;
+    screenshotCommand: string | null;
+    screenshotPort: number;
+    screenshotPaths: string[];
   };
   last: { checkCommand: string | null; checkStatus: string; createdAt: string } | null;
+  /** The sandbox has Chromium (the desktop tools), which screenshots need. */
+  desktopTools?: boolean;
+  /** What this repo's last preview ran. */
+  preview?: { command: string; port: number } | null;
 }
 
 export interface ReviewFinding {
