@@ -1,15 +1,13 @@
 import { Hono } from "hono";
-import { createMiddleware } from "hono/factory";
-import { getCookie } from "hono/cookie";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { gunzipSync, gzipSync } from "node:zlib";
-import { prisma, harnessAvailable, budgetStatus, harnessUsesPlan, accessTokenOwner, seal } from "@repo/db";
+import { prisma, harnessAvailable, budgetStatus, harnessUsesPlan, seal } from "@repo/db";
 import {
   parseSession, canResumeNatively, githubRepoFromUrl, IMPORT_SOURCES, IMPORT_LIMITS, type ParsedSession,
 } from "@repo/shared/session-import";
-import { userFromSessionCookie, type AuthEnv } from "./middleware/auth_middleware";
-import { SESSION_COOKIE_NAME } from "./session";
+import type { AuthEnv } from "./middleware/auth_middleware";
+import { tokenOrSession } from "./middleware/token_or_session";
 import { HARNESSES, listHarnesses } from "./harnesses";
 import { listInstallationRepos } from "./github";
 
@@ -19,20 +17,7 @@ import { listInstallationRepos } from "./github";
 
 export const imports = new Hono<AuthEnv>();
 
-imports.use("*", createMiddleware<AuthEnv>(async (c, next) => {
-  const bearer = /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
-  if (bearer) {
-    const owner = await accessTokenOwner(bearer);
-    const user = owner ? await prisma.user.findUnique({ where: { id: owner.userId } }) : null;
-    if (!user) return c.json({ message: "That token isn't valid. Create one in Cloudly under Settings > Shared context, or on the Import page." }, 401);
-    c.set("user", { id: user.id, login: user.login, avatarUrl: user.avatarUrl });
-    return next();
-  }
-  const user = await userFromSessionCookie(getCookie(c, SESSION_COOKIE_NAME));
-  if (!user) return c.json({ message: "Sign in required" }, 401);
-  c.set("user", user);
-  await next();
-}));
+imports.use("*", tokenOrSession);
 
 const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const REF = /^(?!.*\.\.)(?!\/)(?!.*\/$)[A-Za-z0-9._/-]{1,200}$/;

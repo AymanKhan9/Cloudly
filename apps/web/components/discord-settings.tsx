@@ -24,7 +24,7 @@ interface NotifyStatus {
   onMerged: boolean;
 }
 
-function CopyText({ value, label }: { value: string; label: string }) {
+export function CopyText({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="copy-field">

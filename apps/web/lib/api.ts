@@ -170,7 +170,7 @@ export interface Turn {
   rewoundAt?: string | null;
   targetRunId?: string | null;
   /** What on GitHub started the turn, when something did. */
-  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord" | "slack" | "plan"; name?: string; planId?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
+  trigger?: { type: "issue" | "mention" | "pr_review" | "ci" | "schedule" | "discord" | "slack" | "plan" | "sentry"; name?: string; planId?: string; by?: string; url?: string | null; number?: number; state?: string; sha?: string; checks?: string[] } | null;
   /** The agent that ran the turn; a review's is the reviewer. */
   harness?: string;
   /** A review's or audit's findings, as text. */

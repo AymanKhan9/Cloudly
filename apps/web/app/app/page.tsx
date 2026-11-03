@@ -40,6 +40,8 @@ export default function NewSessionPage() {
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("");
   const [harness, setHarness] = useState<string>("native-claude");
+  // "Auto": the agent with the best record on this repo (the scorecard's pick).
+  const [pick, setPick] = useState<{ harness: string; reason: string } | null>(null);
   const [effort, setEffort] = useState<string | null>(null);
   // Compare: the same task to several agents at once (an arena). Council: several
   // agents answer one question together, in rounds, and a chair writes the report.
@@ -67,6 +69,18 @@ export default function NewSessionPage() {
   // council of them; this is what it asked for, and which of them can't run.
   const [asked, setAsked] = useState<{ ids: string[]; checked: AgentReadiness[] } | null>(null);
   const applied = useRef("");
+
+  // What Auto would pick on the chosen repo.
+  useEffect(() => {
+    if (!repo) return;
+    let live = true;
+    api<{ pick: { harness: string; reason: string } | null }>(`/scorecard?repo=${encodeURIComponent(repo)}`)
+      .then((r) => live && setPick(r.pick))
+      .catch(() => live && setPick(null));
+    return () => {
+      live = false;
+    };
+  }, [repo]);
 
   useEffect(() => {
     // "New session on <repo>" from a session's menu comes with ?repo= and ?branch=.
@@ -120,7 +134,8 @@ export default function NewSessionPage() {
   const needsRepo = !council || onRepo;
   const ready =
     !submitting && !stopped && (audit || Boolean(prompt.trim())) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (single || rivals.length >= 2);
-  const h = harnesses.find((x) => x.id === harness) ?? harnesses[0]!;
+  const chosen = harness === "auto" ? pick?.harness ?? harnesses.find((x) => x.ready !== false)?.id ?? "native-claude" : harness;
+  const h = harnesses.find((x) => x.id === chosen) ?? harnesses[0]!;
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -155,7 +170,7 @@ export default function NewSessionPage() {
       if (planMode) {
         const { id } = await api<{ id: string }>("/plans", {
           method: "POST",
-          body: JSON.stringify({ repo, baseBranch: branch, goal: prompt, planner: harness }),
+          body: JSON.stringify({ repo, baseBranch: branch, goal: prompt, planner: chosen }),
         });
         router.push(`/app/plans/${id}`);
         return;
@@ -164,8 +179,8 @@ export default function NewSessionPage() {
         method: "POST",
         body: JSON.stringify(
           audit
-            ? { repo, baseBranch: branch, prompt: prompt.trim() ? `Audit the repository: ${prompt.trim()}` : "Audit the repository", harness, effort, mode: "audit" }
-            : { repo, baseBranch: branch, prompt, harness, effort, desktop },
+            ? { repo, baseBranch: branch, prompt: prompt.trim() ? `Audit the repository: ${prompt.trim()}` : "Audit the repository", harness: chosen, effort, mode: "audit" }
+            : { repo, baseBranch: branch, prompt, harness: chosen, effort, desktop },
         ),
       });
       router.push(`/app/s/${id}`);
@@ -282,9 +297,15 @@ export default function NewSessionPage() {
             ) : (
             <Picker
               label="Agent"
-              icon={<AgentLogo harness={harness} size={15} />}
+              icon={<AgentLogo harness={chosen} size={15} />}
               value={harness}
-              options={harnesses.map((x) => ({
+              options={[
+                {
+                  value: "auto",
+                  label: pick ? `Auto: ${harnesses.find((x) => x.id === pick.harness)?.name ?? pick.harness}` : "Auto",
+                  sub: <span className="dim">{pick ? `Best record on this repo: ${pick.reason}` : "Not enough history on this repo yet; picks once agents have a record here"}</span>,
+                },
+                ...harnesses.map((x) => ({
                 value: x.id,
                 label: x.name,
                 sub: (
@@ -294,14 +315,14 @@ export default function NewSessionPage() {
                     <span className="dim">{costLabel(x.cost)}</span>
                   </>
                 ),
-              }))}
+              }))]}
               onChange={(v) => {
                 setHarness(v);
                 setEffort(null); // levels differ per agent
               }}
             />
             )}
-            {single ? <EffortControl harness={harness} value={effort} onChange={setEffort} /> : null}
+            {single ? <EffortControl harness={chosen} value={effort} onChange={setEffort} /> : null}
             {council ? (
               <>
                 <Picker

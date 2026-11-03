@@ -1,4 +1,4 @@
-# Importing sessions
+# Moving sessions between your computer and Cloudly
 
 Started something in Claude Code on your laptop, or in Codex, Pi, Gemini CLI or OpenCode? Bring the session into Cloudly and carry on there: the conversation, and your work.
 
@@ -7,8 +7,8 @@ Started something in Claude Code on your laptop, or in Codex, Pi, Gemini CLI or 
 The **Import** page gives you a command and a token for it. Run it in the repository you worked in:
 
 ```
-curl -fsSL https://<your instance>/api/import.mjs -o cloudly-import.mjs
-CLOUDLY_TOKEN=cly_... node cloudly-import.mjs
+curl -fsSL https://<your instance>/api/cloudly.mjs -o cloudly.mjs
+CLOUDLY_TOKEN=cly_... node cloudly.mjs
 ```
 
 It lists that repository's sessions from every agent it knows, newest first, and imports the one you pick. To carry on from exactly where you were, it pushes your work (your commits, and the changes you haven't committed) to a new branch, `cloudly/import-…`, after showing you what's in it. It does that with a separate index, so your files, your index and your branches stay as they are. Files your `.gitignore` leaves out, like `.env`, aren't pushed.
@@ -49,3 +49,19 @@ A session whose first turns are the conversation: each of your messages, what th
 Each session carries on in its own branch and pull request like any other. You can rewind or fork to the last imported turn (the code as it was imported), but not to earlier ones: Cloudly never had the code as it was then.
 
 The token reaches session imports and [shared context](/docs/shared-context), nothing else. Remove it under Settings when you're done.
+
+## Back to your computer
+
+The other way works too. A session's **Local** button shows the command for it:
+
+```
+CLOUDLY_TOKEN=cly_... node cloudly.mjs pull https://<your instance>/app/s/<session id>
+```
+
+Run it in your clone of the repo. It checks out the session's branch (with uncommitted changes of yours there, add `--worktree` for a folder of its own), then:
+
+- **Claude Code, Codex or Pi session:** the agent's own session goes where that agent on your computer looks for it, with the sandbox's `/workspace` changed to your folder, and it prints the command to resume it (`claude --resume …`, `codex resume …`, `pi --session …`). It picks up with everything it remembers, compactions included.
+- **Any other agent, or `--agent claude|codex|pi` to switch:** the conversation so far is written into a file inside `.git` (never committed), and it prints the command that starts that agent with it.
+
+Push to the branch, and the session in Cloudly carries on from there on its next turn. Wait for a running turn to finish before pulling.
+

@@ -9,7 +9,7 @@ import type { AuthEnv } from "./middleware/auth_middleware";
 // keeps the API and the worker talking only through Postgres.
 
 /** The events the worker acts on. Anything else is acknowledged and dropped. */
-export const HANDLED_EVENTS = ["issues", "issue_comment", "pull_request_review", "check_suite"] as const;
+export const HANDLED_EVENTS = ["issues", "issue_comment", "pull_request_review", "check_suite", "pull_request"] as const;
 const MAX_BODY = 5 * 1024 * 1024;
 
 export function webhookUrl(): string {

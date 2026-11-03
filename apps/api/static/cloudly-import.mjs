@@ -1,10 +1,18 @@
 #!/usr/bin/env node
-// Cloudly's import command: brings a coding agent session from this machine
-// into Cloudly, to carry on there. Run it in the repository you worked in:
+// Cloudly's command: moves coding agent sessions between this machine and
+// Cloudly, both ways. Run it in the repository you work in:
 //
-//   curl -fsSL https://<your instance>/api/import.mjs -o cloudly-import.mjs
-//   CLOUDLY_TOKEN=cly_... node cloudly-import.mjs
+//   curl -fsSL https://<your instance>/api/cloudly.mjs -o cloudly.mjs
+//   CLOUDLY_TOKEN=cly_... node cloudly.mjs [import]       this machine -> Cloudly
+//   CLOUDLY_TOKEN=cly_... node cloudly.mjs pull <link>    Cloudly -> this machine
 //
+// pull: checks out the session's branch and puts the agent's own session where
+// Claude Code, Codex or Pi on this machine looks for it, with the folder changed
+// to this one, then says how to resume it. Any other agent gets the conversation
+// as a prompt. With uncommitted changes here, pass --worktree to check the
+// branch out in a folder of its own.
+//
+// import:
 // It finds the sessions Claude Code, Codex, Pi, Gemini CLI and OpenCode keep for
 // this repository, lets you pick one, pushes your work (commits and uncommitted
 // changes) to a new branch, cloudly/import-..., and uploads the session. Your
@@ -22,10 +30,12 @@
 //   --latest         take the newest session without asking
 //   --list           only list the sessions found
 //   --yes            don't ask before pushing
+//   --worktree       (pull) check the session out in a new folder next to this one
+//   --agent NAME     (pull) claude, codex or pi on this machine; the session's own by default
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync, copyFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -53,16 +63,18 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--latest") opts.latest = true;
   else if (a === "--list") opts.list = true;
   else if (a === "--yes" || a === "-y") opts.yes = true;
+  else if (a === "--worktree") opts.worktree = true;
   else if (a === "--help" || a === "-h") {
     console.log(readFileSync(new URL(import.meta.url)).toString().split("\n").filter((l) => l.startsWith("//")).map((l) => l.slice(3)).join("\n"));
     process.exit(0);
   } else if (a.startsWith("-")) die(`Unknown option ${a}. See --help.`);
+  else if (!opts.command && opts.files.length === 0 && (a === "pull" || a === "import")) opts.command = a;
   else opts.files.push(a);
 }
 if (!opts.url && !BAKED_URL.startsWith("__")) opts.url = BAKED_URL;
 
 function die(message) {
-  console.error(`cloudly-import: ${message}`);
+  console.error(`cloudly: ${message}`);
   process.exit(1);
 }
 
@@ -362,4 +374,110 @@ async function main() {
   }
 }
 
-main().catch((err) => die(err?.message ?? String(err)));
+// ---------- pull: a Cloudly session back to this machine ----------
+
+/** The session file with the sandbox's folder replaced by this one (whole path segments only). */
+function rewriteCwd(content, from, to) {
+  const esc = (s) => JSON.stringify(s).slice(1, -1);
+  const pattern = esc(from).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return content.replace(new RegExp(`${pattern}(?=[/\\\\"'\`\\s:)]|$)`, "g"), esc(to).replace(/\$/g, "$$$$"));
+}
+
+const OWN_AGENT = { "native-claude": "claude", "native-codex": "codex", "acp-pi": "pi" };
+const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+
+async function pull() {
+  const target = opts.files[0];
+  if (!target) die("Which session? node cloudly.mjs pull <its link or id>");
+  const link = /^(https?:\/\/[^/]+)\/app\/s\/([0-9a-f-]{36})/i.exec(target);
+  const threadId = link ? link[2] : /^[0-9a-f-]{36}$/i.test(target) ? target : die("That isn't a session's link or id.");
+  const base = (opts.url ?? link?.[1] ?? "").replace(/\/+$/, "");
+  if (!base) die("Which Cloudly? Pass --url https://your-instance (or set CLOUDLY_URL), or the session's full link.");
+  if (!opts.token) die(`Cloudly needs a personal token. Make one on ${base}/app/import and pass it with --token (or CLOUDLY_TOKEN).`);
+  const call = async (p, init = {}) => {
+    const res = await fetch(`${base}/api${p}`, { ...init, headers: { "content-type": "application/json", authorization: `Bearer ${opts.token}` } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) die(body.message ?? `Cloudly answered ${res.status}.`);
+    return body;
+  };
+
+  if (git("rev-parse", "--is-inside-work-tree") !== "true") die("Run it in a clone of the session's repository.");
+  console.log("Getting the session ready...");
+  const { id } = await call("/handoffs", { method: "POST", body: JSON.stringify({ threadId }) });
+  let h;
+  for (let i = 0; i < 90; i++) {
+    h = await call(`/handoffs/${id}`);
+    if (h.status === "ready" || h.status === "failed") break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (h.status === "failed") die(`Cloudly couldn't get it ready: ${h.error}`);
+  if (h.status !== "ready") die("Cloudly's worker didn't get to it in time. Is the worker running? Try again in a minute.");
+  const { session, agentSession, transcript } = h;
+
+  // The code: the session's branch, here or in a folder of its own.
+  const upstream = git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+  const remotes = (git("remote") ?? "").split("\n").filter(Boolean);
+  const remote = upstream?.split("/")[0] ?? (remotes.includes("origin") ? "origin" : remotes[0]);
+  const here = githubRepo(remote ? git("remote", "get-url", remote) : null);
+  if (here && here.toLowerCase() !== session.repo.toLowerCase()) die(`This clone is ${here}; the session is on ${session.repo}.`);
+  let dir = root;
+  if (session.branch) {
+    const b = session.branch;
+    if (!remote || git("fetch", "--quiet", remote, `+refs/heads/${b}:refs/remotes/${remote}/${b}`) === null) die(`Couldn't fetch the branch ${b}${remote ? ` from ${remote}` : ": this clone has no remote"}.`);
+    const dirty = (git("status", "--porcelain") ?? "").trim() !== "";
+    if (opts.worktree) {
+      dir = path.resolve(root, "..", `${path.basename(root)}-${b.replace(/[^\w.-]+/g, "-")}`);
+      if (existsSync(dir)) die(`${dir} is there already. Open it, or remove it first.`);
+      const r = spawnSync("git", ["worktree", "add", "-B", b, dir, `${remote}/${b}`], { stdio: "inherit" });
+      if (r.status !== 0) die("git worktree add failed.");
+    } else if (dirty) {
+      die("You have uncommitted changes here. Commit or stash them, or add --worktree to check the session out in a folder of its own.");
+    } else if (git("rev-parse", "--verify", "--quiet", `refs/heads/${b}`) !== null) {
+      if (spawnSync("git", ["checkout", "--quiet", b], { stdio: "inherit" }).status !== 0) die(`Couldn't check out ${b}.`);
+      if (git("merge", "--ff-only", "--quiet", `${remote}/${b}`) === null) console.log(`Your ${b} has commits the session doesn't; left it as it is.`);
+    } else if (spawnSync("git", ["checkout", "--quiet", "-b", b, "--track", `${remote}/${b}`], { stdio: "inherit" }).status !== 0) {
+      die(`Couldn't check out ${b}.`);
+    }
+    console.log(`On ${b}${dir !== root ? `, in ${dir}` : ""}.`);
+  } else {
+    console.log("The session hasn't changed any code yet: staying on your current branch.");
+  }
+
+  // The conversation.
+  const own = OWN_AGENT[session.harness];
+  const agent = opts.agent ?? own ?? "claude";
+  if (!["claude", "codex", "pi"].includes(agent)) die("--agent is claude, codex or pi.");
+  const cd = dir !== process.cwd() ? `cd ${quote(dir)} && ` : "";
+  let resume;
+  if (agentSession && agent === own) {
+    const text = rewriteCwd(Buffer.from(agentSession.file, "base64").toString("utf8"), agentSession.cwd, dir);
+    const now = new Date();
+    let file;
+    if (agent === "claude") {
+      file = path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(home, ".claude"), "projects", dir.replace(/[^a-zA-Z0-9]/g, "-"), `${agentSession.id}.jsonl`);
+      resume = `claude --resume ${agentSession.id}`;
+    } else if (agent === "codex") {
+      const day = [String(now.getFullYear()), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")];
+      file = path.join(process.env.CODEX_HOME ?? path.join(home, ".codex"), "sessions", ...day, path.basename(agentSession.fileName));
+      resume = `codex resume ${agentSession.id}`;
+    } else {
+      const enc = dir.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-");
+      file = path.join(process.env.PI_CODING_AGENT_DIR ?? path.join(home, ".pi", "agent"), "sessions", `--${enc}--`, path.basename(agentSession.fileName));
+      resume = `pi --session ${quote(file)}`;
+    }
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text, { mode: 0o600 });
+    console.log(`\n${{ claude: "Claude Code", codex: "Codex", pi: "Pi" }[agent]}'s session is in place, with everything it remembers.`);
+  } else {
+    const gitDir = spawnSync("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { encoding: "utf8" }).stdout.trim();
+    const file = path.join(gitDir || dir, `cloudly-handoff-${session.id.slice(0, 8)}.md`);
+    writeFileSync(file, transcript ?? "", { mode: 0o600 });
+    resume = `${agent} "$(cat ${quote(file)})"`;
+    console.log(agentSession ? `\nThe session's agent is ${session.harness}; ${agent} gets the conversation as its first message instead.` : `\n${agent} gets the conversation as its first message (Cloudly has no session file of ${session.harness}'s to resume).`);
+  }
+  console.log(`\nCarry on with:\n\n  ${cd}${resume}\n`);
+  if (session.prUrl) console.log(`Pull request: ${session.prUrl}`);
+  console.log(`Pushing to ${session.branch ?? "a branch"} keeps the session in Cloudly in step: its next turn starts from what's there.`);
+}
+
+(opts.command === "pull" ? pull() : main()).catch((err) => die(err?.message ?? String(err)));

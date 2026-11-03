@@ -786,7 +786,7 @@ out.
 JSONL trees, following the current branch; Codex rollouts; Gemini CLI chat logs and
 checkpoints; `opencode export`; generic `{role, content}` JSON or `User:`/`Assistant:` text) into
 turns of a prompt plus text and one-line tool steps. `POST /imports` (signed in, or a personal
-token from the import command in `apps/api/static/cloudly-import.mjs`) creates the thread, a
+token from the command in `apps/api/static/cloudly-import.mjs`, served as `/cloudly.mjs`) creates the thread, a
 `SessionImport` row, one finished `Run.kind = "import_turn"` per turn with its steps as events,
 and a queued `"import"` turn. The original file is kept gzipped and sealed when its agent can
 resume it.
@@ -822,6 +822,29 @@ Chromium into `shots/<page>/after.png`, stop the app's process group, and the sa
 parent for `before.png`. They become artifacts of that run; the web app shows matching pairs side
 by side. With `WEB_ORIGIN` set and a pull request open, the PR description's marked Screenshots
 section is replaced with the pairs as share links.
+
+### Handoffs, the scorecard, Sentry
+
+**Handoffs** (the command's `pull`): `POST /handoffs` makes a `SessionHandoff` row; the worker's
+handoff loop (`apps/worker/src/handoff.ts`) claims it, reads the agent's own session file from the
+thread's home (Claude's `-workspace` project, Codex's rollout, Pi's file via pi-acp's map), stores
+it gzipped and sealed with the transcript `promptWithHistory` would give a new agent, and marks it
+ready. The command polls `GET /handoffs/:id`, checks out the branch, rewrites `/workspace` to the
+local folder, and writes the file where the local agent looks. Rows are deleted after a day.
+
+**Scorecard** (`@repo/db` scorecard): per thread harness, from threads, runs and review findings,
+over a window. PR outcomes come from `Thread.mergedAt`/`prClosedAt`, set by the `pull_request`
+webhook (`closed`) and by `outcomeSweep` in the merge loop (each open PR at most every 6 hours).
+`pickAgent` ranks agents with at least 3 decided PRs by `(merged + 1) / (decided + 2)`; the
+composer's Auto sends the pick.
+
+**Sentry**: `POST /webhooks/sentry` checks `Sentry-Hook-Signature` (HMAC-SHA256 of the body with
+the integration's client secret) and stores `issue` and `event_alert` deliveries in
+`WebhookDelivery` as `sentry.*`; the webhook loop hands them to `onSentry` (`apps/worker/src/sentry.ts`),
+which maps the project to a repo (`SentryProject`), dedupes by `Run.triggerKey`
+(`sentry:<project>:<issue>`), caps sessions per project per day, fetches the latest event's
+stack trace with the integration token when the webhook had none, and starts a session whose
+prompt fences the error off as data.
 
 ## 11. How finalize works
 

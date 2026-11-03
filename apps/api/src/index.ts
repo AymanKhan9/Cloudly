@@ -31,6 +31,9 @@ import { checkpoints } from './checkpoint-routes';
 import { plans } from './plan-routes';
 import { imports, importCommand } from './import-routes';
 import { artifacts, shared } from './artifact-routes';
+import { handoffs } from './handoff-routes';
+import { scorecard } from './scorecard-routes';
+import { sentryHook, sentrySettings } from './sentry-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -46,7 +49,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*', '/artifacts/*']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*', '/artifacts/*', '/scorecard']) {
   app.use(path, authMiddleware);
 }
 
@@ -95,9 +98,14 @@ app.route('/plans', plans)
 // Signed in, or a personal token from the import command (import-routes).
 app.route('/imports', imports)
 app.route('/artifacts', artifacts)
+// Sending a session back to the user's computer (signed in, or the command's token).
+app.route('/handoffs', handoffs)
+app.route('/scorecard', scorecard)
 // A shared artifact: anyone with the link.
 app.route('/shared', shared)
 app.route('/webhooks', webhooks)
+app.route('/webhooks', sentryHook)
+app.route('/settings/sentry', sentrySettings)
 app.route('/settings/webhooks', webhookSettings)
 app.route('/schedules', schedules)
 app.route('/discord', discord)
@@ -113,6 +121,9 @@ app.route('/', live)
 app.get('/health', (c) => c.json({ ok: true }))
 
 // The import command (no secrets in it): fetched with curl, run with node.
+app.get('/cloudly.mjs', async (c) => {
+  return c.body(await importCommand(), 200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+})
 app.get('/import.mjs', async (c) => {
   return c.body(await importCommand(), 200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
 })

@@ -11,6 +11,7 @@ import {
   CloudSlash,
   FileText,
   FolderSimple,
+  Laptop,
   Monitor,
   AppWindow,
   ChatsCircle,
@@ -49,6 +50,7 @@ import { ChecksBadge, ChecksDetail, FixRequest } from "@/components/checks";
 import { ReviewRequest, ReviewResult, TriggerNote, CiFixRequest } from "@/components/review";
 import { CheckpointRequest, ForkBanner, ImportBanner, TurnMenu } from "@/components/checkpoints";
 import { TurnArtifacts } from "@/components/artifacts";
+import { HandoffPanel } from "@/components/handoff-panel";
 import { ChangesPanel } from "@/components/changes-panel";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
@@ -344,7 +346,7 @@ export default function SessionPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pick, setPick] = useState(0);
-  const [panel, setPanel] = useState<"changes" | "files" | "preview" | "desktop" | "context" | null>(null);
+  const [panel, setPanel] = useState<"changes" | "files" | "preview" | "desktop" | "context" | "local" | null>(null);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -500,7 +502,12 @@ export default function SessionPage() {
   const busy = latest ? ACTIVE.includes(latest.status) : false;
   // The running turn has a desktop to watch.
   const desktopLive = Boolean(latest && latest.status === "running" && latest.desktop);
-  const toggle = (p: NonNullable<typeof panel>) => setPanel((cur) => (cur === p ? null : p));
+  const toggle = (p: NonNullable<typeof panel>) => {
+    const opening = panel !== p;
+    setPanel(opening ? p : null);
+    // The panel opens above the conversation, which is usually scrolled to its end.
+    if (opening) window.requestAnimationFrame(() => document.querySelector(".side-panel")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  };
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
   // The latest review's findings, as a count on the Changes button.
   const lastReview = [...turns].reverse().find((t) => t.kind === "review" || t.kind === "audit");
@@ -635,6 +642,10 @@ export default function SessionPage() {
             <FolderSimple size={15} />
             <span className="hide-sm">Files</span>
           </button>
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "local"} onClick={() => toggle("local")} title="Continue this session on your computer" aria-label="On your computer">
+            <Laptop size={15} />
+            <span className="hide-sm">Local</span>
+          </button>
           {thread.prUrl && (thread.mergedAt || thread.autoMerge) ? (
             <span className="merge-chip" data-merged={thread.mergedAt ? true : undefined} title={thread.mergedAt ? "Merged by Cloudly when it was ready" : "Merge when ready is on"}>
               <GitMerge size={14} weight="bold" />
@@ -654,7 +665,7 @@ export default function SessionPage() {
         <section
           className="side-panel"
           data-wide={panel === "changes" || undefined}
-          aria-label={panel === "changes" ? "Changes" : panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : "Desktop"}
+          aria-label={panel === "changes" ? "Changes" : panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : panel === "local" ? "On your computer" : "Desktop"}
         >
           {panel === "changes" ? (
             <>
@@ -675,6 +686,11 @@ export default function SessionPage() {
               </h2>
               <p className="hint">Kept for {thread.repo} outside git, in every session&apos;s sandbox. Mention them in your message to point the agent at them.</p>
               <FilesPanel repo={thread.repo} compact />
+            </>
+          ) : panel === "local" ? (
+            <>
+              <h2>Continue on your computer</h2>
+              <HandoffPanel threadId={thread.id} harness={thread.harness} busy={busy} />
             </>
           ) : panel === "preview" ? (
             <>

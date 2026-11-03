@@ -4,6 +4,7 @@ import { github as realGitHub, type GitHubPort, type FailedCheck } from "./githu
 import { repoSettings } from "./checks";
 import { maybeMerge } from "./merge";
 import { notify } from "./notify";
+import { onSentry } from "./sentry";
 
 // GitHub triggers. The API stores each signed webhook delivery; this turns them
 // into sessions and turns:
@@ -15,6 +16,8 @@ import { notify } from "./notify";
 //                           session's next turn addresses it
 //   check_suite.completed   failing CI on a pull request Cloudly opened: a fix
 //                           turn, a couple of times at most
+//   pull_request.closed     how a pull request Cloudly opened ended: merged or
+//                           not (for the agent scorecard)
 //
 // Only people on this Cloudly's sign-in list can start anything, and never a bot
 // (Cloudly's own reviews and comments come from its bot). Everything a turn is
@@ -71,7 +74,7 @@ const repoParts = (fullName: string) => {
 };
 
 /** Whether a turn may start for this user on this agent now. */
-async function overBudget(userId: string, harness: string): Promise<boolean> {
+export async function overBudget(userId: string, harness: string): Promise<boolean> {
   return !(await harnessUsesPlan(harness)) && (await budgetStatus(userId)).state === "storm";
 }
 
@@ -98,8 +101,10 @@ function issuePrompt(issue: Payload, instruction: string | null): string {
 }
 
 /** A new session for an issue (or a pull request), with its first turn. */
-async function startSession(opts: {
+export async function startSession(opts: {
   userId: string;
+  /** The agent; the repo's GitHub-trigger agent when left out. */
+  harness?: string | null;
   repo: string;
   baseBranch: string;
   title: string;
@@ -111,7 +116,7 @@ async function startSession(opts: {
   triggerKey: string;
 }): Promise<string | null> {
   const settings = await repoSettings(opts.repo);
-  const harness = settings.triggerHarness ?? DEFAULT_HARNESS;
+  const harness = opts.harness ?? settings.triggerHarness ?? DEFAULT_HARNESS;
   const id = crypto.randomUUID();
   try {
     await prisma.thread.create({
@@ -336,12 +341,27 @@ async function onCheckSuite(d: Delivery, gh: GitHubPort): Promise<Outcome> {
   return ok ? { status: "done", note: `fix attempt ${done + 1} in session ${thread.id}` } : { status: "ignored", note: "a fix for this commit is already queued" };
 }
 
+/** A pull request Cloudly opened was merged or closed, by anyone: the session records which. */
+async function onPullRequestClosed(d: Delivery): Promise<Outcome> {
+  const pr = d.payload.pull_request;
+  const url = typeof pr?.html_url === "string" ? pr.html_url : null;
+  if (!url) return { status: "ignored", note: "no pull request" };
+  const at = new Date(typeof pr.closed_at === "string" ? pr.closed_at : Date.now());
+  const r = await prisma.thread.updateMany({
+    where: { prUrl: url, mergedAt: null, prClosedAt: null },
+    data: pr.merged ? { mergedAt: new Date(typeof pr.merged_at === "string" ? pr.merged_at : at), prCheckedAt: new Date() } : { prClosedAt: at, prCheckedAt: new Date() },
+  });
+  return r.count ? { status: "done", note: pr.merged ? "merged" : "closed without merging" } : { status: "ignored", note: "not a session's pull request, or already recorded" };
+}
+
 export async function handleDelivery(d: Delivery, gh: GitHubPort = realGitHub): Promise<Outcome> {
+  if (d.event.startsWith("sentry.")) return onSentry(d);
   if (!d.payload?.repository?.full_name) return { status: "ignored", note: "no repository" };
   if (d.event === "issues" && d.action === "labeled") return onIssueLabeled(d, gh);
   if (d.event === "issue_comment" && d.action === "created") return onComment(d, gh);
   if (d.event === "pull_request_review" && d.action === "submitted") return onReview(d, gh);
   if (d.event === "check_suite" && d.action === "completed") return onCheckSuite(d, gh);
+  if (d.event === "pull_request" && d.action === "closed") return onPullRequestClosed(d);
   return { status: "ignored", note: `${d.event}.${d.action ?? ""} isn't handled` };
 }
 

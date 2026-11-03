@@ -54,12 +54,12 @@ function ImportCommand() {
       </p>
       {token ? (
         <>
-          <CodeBlock>{`curl -fsSL ${origin}/api/import.mjs -o cloudly-import.mjs\nCLOUDLY_TOKEN=${token} node cloudly-import.mjs`}</CodeBlock>
+          <CodeBlock>{`curl -fsSL ${origin}/api/cloudly.mjs -o cloudly.mjs\nCLOUDLY_TOKEN=${token} node cloudly.mjs`}</CodeBlock>
           <p className="hint">Copy it now: the token isn&apos;t shown again. Remove it under Settings &gt; Shared context when you no longer need it.</p>
         </>
       ) : (
         <>
-          <CodeBlock>{`curl -fsSL ${origin}/api/import.mjs -o cloudly-import.mjs\nCLOUDLY_TOKEN=<token> node cloudly-import.mjs`}</CodeBlock>
+          <CodeBlock>{`curl -fsSL ${origin}/api/cloudly.mjs -o cloudly.mjs\nCLOUDLY_TOKEN=<token> node cloudly.mjs`}</CodeBlock>
           <div className="row-actions" style={{ justifyContent: "flex-start" }}>
             <button type="button" className="btn btn-secondary" onClick={create}>
               Create a token for it

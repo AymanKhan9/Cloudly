@@ -98,9 +98,45 @@ export async function mergeSweep(gh: GitHubPort = realGitHub): Promise<void> {
   }
 }
 
+/**
+ * How each session's pull request ended up, merged or closed, whoever did it
+ * (for the agent scorecard). The pull_request webhook usually says first; this
+ * catches the rest, a few sessions a minute, each at most every 6 hours.
+ */
+export async function outcomeSweep(gh: GitHubPort = realGitHub, now = Date.now(), batch = 10): Promise<number> {
+  const due = await prisma.thread.findMany({
+    where: {
+      prUrl: { not: null }, mergedAt: null, prClosedAt: null,
+      OR: [{ prCheckedAt: null }, { prCheckedAt: { lt: new Date(now - 6 * 3600_000) } }],
+    },
+    orderBy: [{ prCheckedAt: { sort: "asc", nulls: "first" } }],
+    select: { id: true, prUrl: true },
+    take: batch,
+  });
+  let decided = 0;
+  for (const t of due) {
+    const ref = prRef(t.prUrl!);
+    if (!ref) {
+      await prisma.thread.update({ where: { id: t.id }, data: { prCheckedAt: new Date(now) } });
+      continue;
+    }
+    try {
+      const pr = await gh.prStatus(ref.owner, ref.repo, ref.number);
+      const data = pr.merged ? { mergedAt: new Date(now) } : pr.state !== "open" ? { prClosedAt: new Date(now) } : {};
+      if (Object.keys(data).length) decided++;
+      await prisma.thread.update({ where: { id: t.id }, data: { ...data, prCheckedAt: new Date(now) } });
+    } catch (err) {
+      console.error(`[merge] outcome of session ${t.id}:`, err);
+      await prisma.thread.update({ where: { id: t.id }, data: { prCheckedAt: new Date(now) } });
+    }
+  }
+  return decided;
+}
+
 export async function runMergeLoop(signal: AbortSignal, intervalMs = 60_000): Promise<void> {
   while (!signal.aborted) {
     await mergeSweep().catch((err) => console.error("[merge] sweep:", err));
+    await outcomeSweep().catch((err) => console.error("[merge] outcomes:", err));
     await Bun.sleep(intervalMs);
   }
 }

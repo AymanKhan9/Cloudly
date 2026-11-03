@@ -9,7 +9,7 @@ export interface SettingSpec {
   label: string;
   /** Secret values are never shown again after saving. */
   secret: boolean;
-  group: "github" | "models" | "alerts" | "access" | "sandbox" | "discord";
+  group: "github" | "models" | "alerts" | "access" | "sandbox" | "discord" | "sentry";
   /** Keys and tokens: never contain whitespace, but a terminal-wrapped copy often does. */
   token?: boolean;
 }
@@ -36,6 +36,9 @@ export const SETTINGS: SettingSpec[] = [
   { name: "DISCORD_BOT_TOKEN", label: "Discord bot token", secret: true, group: "discord", token: true },
   { name: "SLACK_SIGNING_SECRET", label: "Slack signing secret", secret: true, group: "discord", token: true },
   { name: "SLACK_BOT_TOKEN", label: "Slack bot token", secret: true, group: "discord", token: true },
+  { name: "SENTRY_CLIENT_SECRET", label: "Sentry integration client secret (checks its webhooks)", secret: true, group: "sentry", token: true },
+  { name: "SENTRY_AUTH_TOKEN", label: "Sentry integration token (reads stack traces, comments on issues)", secret: true, group: "sentry", token: true },
+  { name: "SENTRY_URL", label: "Sentry address, for self-hosted Sentry", secret: false, group: "sentry", token: true },
 ];
 
 export function settingSpec(name: string): SettingSpec | undefined {

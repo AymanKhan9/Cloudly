@@ -27,6 +27,7 @@ model User {
   threads     Thread[]
   schedules   Schedule[]
   plans       Plan[]
+  sentryProjects SentryProject[]
   notifications Notification[]
   notifySettings NotifySettings?
   arenas      Arena[]
@@ -87,6 +88,10 @@ model Thread {
   /// What merge-when-ready is waiting for, or what happened, for the session's header.
   mergeStatus    String?
   mergedAt       DateTime?
+  /// Its pull request was closed without merging (for the agent scorecard).
+  prClosedAt     DateTime?
+  /// When Cloudly last asked GitHub how its pull request ended up.
+  prCheckedAt    DateTime?
   /// The schedule that started the session, if one did.
   scheduleId     String?
   /// Started from Discord: the channel, and the Discord thread its updates go to.
@@ -108,6 +113,7 @@ model Thread {
   /// Brought in from an agent run elsewhere (see SessionImport).
   imported         SessionImport?
   artifacts        Artifact[]
+  handoffs         SessionHandoff[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -752,4 +758,44 @@ model Artifact {
   thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
   @@unique([threadId, name, version])
   @@index([runId])
+}
+
+/// A session going back to the user's computer (the import command's "pull"):
+/// the worker reads the agent's own session file from the session's home and
+/// writes the conversation out, for the command to pick up. Kept a day.
+model SessionHandoff {
+  id         String   @id @default(uuid())
+  threadId   String
+  userId     String
+  /// pending | working | ready | failed
+  status     String   @default("pending")
+  error      String?
+  harness    String
+  /// The agent's own session: its id, file name, and the file (gzipped, sealed), paths as in the sandbox.
+  sessionId  String?
+  fileName   String?
+  file       String?
+  /// The conversation as a prompt, for an agent that can't open the file.
+  transcript String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  @@index([status, createdAt])
+}
+
+/// A Sentry project whose new errors start fix sessions on a repo (see the
+/// worker's sentry.ts). Sessions belong to the user who connected it.
+model SentryProject {
+  id        String   @id @default(uuid())
+  /// The project's slug in Sentry.
+  slug      String   @unique
+  repo      String
+  userId    String
+  /// The agent that fixes; null is the repo's GitHub-trigger agent.
+  harness   String?
+  enabled   Boolean  @default(true)
+  /// Sessions it may start a day, so an outage doesn't start fifty.
+  perDay    Int      @default(5)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

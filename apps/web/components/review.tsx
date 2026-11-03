@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarBlank, CaretRight, ChatsCircle, TreeStructure, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
+import { Bug, CalendarBlank, CaretRight, ChatsCircle, TreeStructure, GitDiff, GithubLogo, MagnifyingGlass, Wrench } from "@phosphor-icons/react";
 import type { Turn } from "@/lib/api";
 import type { StreamEvent } from "@/lib/events";
 
@@ -89,6 +89,21 @@ export function TriggerNote({ turn }: { turn: Turn }) {
         <TreeStructure size={14} />
         A task of the plan: {t.name ?? "a plan"}
       </Link>
+    );
+  }
+  if (t.type === "sentry") {
+    const inner = (
+      <>
+        <Bug size={14} />
+        From Sentry: {t.name ?? "an error in production"}
+      </>
+    );
+    return t.url ? (
+      <a className="msg-from" href={t.url} target="_blank" rel="noreferrer">
+        {inner}
+      </a>
+    ) : (
+      <span className="msg-from">{inner}</span>
     );
   }
   if (t.type === "schedule") {

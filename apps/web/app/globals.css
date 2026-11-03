@@ -6851,3 +6851,108 @@ div.msg-system {
   color: var(--text-3);
   font-size: 13px;
 }
+
+/* ---------- Scorecard ---------- */
+
+.score-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.score-filters .select {
+  width: auto;
+  min-width: 200px;
+}
+
+.score-pick {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.score-pick svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent);
+}
+
+.score-table td {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.score-table tr[data-pick] td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.score-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.score-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-track {
+  width: 80px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.score-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: #2a78d6;
+}
+
+:root[data-theme="dark"] .score-fill {
+  background: #3987e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .score-fill {
+    background: #3987e5;
+  }
+}
+
+.sentry-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.sentry-add .input {
+  flex: 1 1 180px;
+  width: auto;
+}
+
+.sentry-add .select {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+.handoff {
+  display: grid;
+  gap: 10px;
+}
+
+.handoff .row-actions {
+  margin: 0;
+}
