@@ -26,7 +26,16 @@ When the turn ends, Cloudly commits what changed, pushes the branch and opens th
 
 ## Follow-ups
 
-Keep talking to the agent in the same session; it remembers the conversation. Turns run one at a time, so a message you send while the agent is working waits until the current turn ends.
+Keep talking to the agent in the same session; it remembers the conversation.
+
+### While the agent works
+
+Send a message while a turn runs and it goes to the agent then, not after: "stop, that's the wrong file", "also handle the empty case". It shows in the turn where the agent took it in.
+
+- **Claude Code** reads it at its next step and carries on, without stopping.
+- **Codex, Gemini CLI and added agents** are stopped where they are and carry on in the same session with your message; what they'd done stays.
+
+If the turn ends before the agent gets to it, the message becomes the next turn, so nothing you say is lost. **After this turn** sends it as the next turn instead, and a `/command` always waits its turn.
 
 ## Keep the sidebar tidy
 

@@ -215,6 +215,14 @@ const PatchSchema = z.object({
   hosts: z.array(z.string().max(253)).max(30).optional(),
   /** Install newer versions on its own. */
   autoUpdate: z.boolean().optional(),
+  /** Try a newer version on past tasks before switching to it. */
+  testUpdates: z.boolean().optional(),
+});
+
+// An agent's update trials, latest first (see the worker's trials.ts).
+agents.get("/:id/trials", async (c) => {
+  const rows = await prisma.agentTrial.findMany({ where: { providerId: c.req.param("id") }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, fromVersion: true, toVersion: true, status: true, verdict: true, results: true, createdAt: true } });
+  return c.json({ trials: rows });
 });
 
 /** How the API checks for updates: the registry fetched fresh, npm for unpinned packages. Tests swap it. */

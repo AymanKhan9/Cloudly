@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { readdir } from "node:fs/promises";
 import type { RunAdapter } from "./adapter";
 import { ClaudeAdapter } from "./adapters/claude";
 import { CodexAdapter } from "./adapters/codex";
@@ -56,6 +58,39 @@ async function loadConfig(): Promise<RunConfig> {
 
 let lastSeq = -1;
 
+/** Prints an event of the runner's own, numbered after everything so far. */
+function emit(kind: string, data: unknown) {
+    lastSeq++;
+    console.log(JSON.stringify({ seq: lastSeq, ts: Date.now(), kind, data }));
+}
+
+/**
+ * Messages the user sends while the turn runs: the worker writes each to
+ * /control/steer/<id>.json, and the agent gets it if it can still take it.
+ */
+function watchSteers(adapter: RunAdapter, dir = process.env.CONTROL_STEER_DIR ?? "/control/steer"): () => void {
+    const seen = new Set<string>();
+    const timer = setInterval(async () => {
+        let names: string[] = [];
+        try {
+            names = (await readdir(dir)).filter((n) => n.endsWith(".json")).sort();
+        } catch {
+            return;
+        }
+        for (const name of names) {
+            if (seen.has(name)) continue;
+            seen.add(name);
+            try {
+                const m = (await Bun.file(`${dir}/${name}`).json()) as { id?: unknown; text?: unknown };
+                if (typeof m.id !== "string" || typeof m.text !== "string" || !m.text.trim()) continue;
+                const taken = adapter.steer?.(m.text) ?? false;
+                emit("status", taken ? { type: "steer", id: m.id, text: m.text } : { type: "steer.late", id: m.id });
+            } catch {}
+        }
+    }, 700);
+    return () => clearInterval(timer);
+}
+
 async function main() {
     const config = await loadConfig();
     // Added agents all speak ACP; the worker says how to start each one.
@@ -70,12 +105,14 @@ async function main() {
         if (await startDesktop(config.desktop.password)) {
             mcp.push(DESKTOP_MCP);
         } else {
-            lastSeq++;
-            console.log(JSON.stringify({
-                seq: lastSeq, ts: Date.now(), kind: "status",
-                data: { type: "desktop", available: false, message: "No virtual display: tick \"Desktop and browser\" under Settings > Sandbox tools." },
-            }));
+            emit("status", { type: "desktop", available: false, message: "No virtual display: tick \"Desktop and browser\" under Settings > Sandbox tools." });
         }
+    }
+    // A trial of an agent's new version: install it in this sandbox first.
+    if (config.acp?.preinstall) {
+        emit("status", { type: "trial.install", name: config.acp.name });
+        const r = spawnSync("bash", ["-c", config.acp.preinstall], { encoding: "utf8", timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+        if (r.status !== 0) throw new Error(`The new version of ${config.acp.name} didn't install: ${(r.stderr || r.stdout || "").trim().split("\n").slice(-3).join(" ")}`);
     }
     const adapter : RunAdapter = makeAdapter(config, mcp);
 
@@ -83,11 +120,16 @@ async function main() {
         adapter.interrupt();
     });
 
-    // Adapters number their own events from 0; anything the runner said first comes before them.
-    const offset = lastSeq + 1;
-    for await (const event of adapter.start(config.task, config.resume, config.fallbackTask)) {
-        lastSeq = event.seq + offset;
-        console.log(JSON.stringify({ ...event, seq: lastSeq }));
+    // Adapters number their own events from 0; the runner's own (a message
+    // taken mid-turn) come in between, so everything is numbered here, in order.
+    const stopSteers = watchSteers(adapter);
+    try {
+        for await (const event of adapter.start(config.task, config.resume, config.fallbackTask)) {
+            lastSeq++;
+            console.log(JSON.stringify({ ...event, seq: lastSeq }));
+        }
+    } finally {
+        stopSteers();
     }
 }
 

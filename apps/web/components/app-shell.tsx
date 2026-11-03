@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarBlank, ChartBar, DownloadSimple, GearSix, TreeStructure, List, NotePencil, SignOut, Warning, X } from "@phosphor-icons/react";
+import { CalendarBlank, ChartBar, DownloadSimple, GearSix, Lightbulb, TreeStructure, List, NotePencil, SignOut, Warning, X } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { usd } from "@/lib/harness";
 import { useApp } from "./app-context";
@@ -83,6 +83,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link href="/app/scorecard" className="rail-link" aria-current={pathname.startsWith("/app/scorecard") ? "page" : undefined}>
             <ChartBar size={17} />
             Scorecard
+          </Link>
+          <Link href="/app/lessons" className="rail-link" aria-current={pathname.startsWith("/app/lessons") ? "page" : undefined}>
+            <Lightbulb size={17} />
+            Lessons
           </Link>
           <Link href="/app/import" className="rail-link" aria-current={pathname.startsWith("/app/import") ? "page" : undefined}>
             <DownloadSimple size={17} />

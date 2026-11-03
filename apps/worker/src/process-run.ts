@@ -34,6 +34,9 @@ import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { notifyTurnEnd } from "./notify";
 import { processImport } from "./imports";
 import { processScreenshots, queueScreenshots } from "./screenshots";
+import { takeSteers, steerDelivered, requeueSteers } from "./steer";
+import { processLessonsTurn } from "./lessons";
+import { processTrialRun } from "./trials";
 import { processCheckpoint } from "./checkpoints";
 import { processPlanTurn } from "./plans";
 import { modelCommand } from "@repo/shared/model-command";
@@ -120,6 +123,8 @@ export async function processRun(
   if (run.kind === "rewind" || run.kind === "fork") return processCheckpoint(run, workerId);
   if (run.kind === "import") return processImport(run, workerId);
   if (run.kind === "screenshots") return processScreenshots(run, workerId);
+  if (run.kind === "lessons") return processLessonsTurn(run, workerId);
+  if (run.kind === "trial") return processTrialRun(run, workerId);
   // A planner breaking a big task into a plan's tasks.
   if (run.kind === "plan") return processPlanTurn(run, workerId, runContainer, heartbeatIntervalMs);
   let leaseLost = false;
@@ -230,6 +235,8 @@ export async function processRun(
     files = await materializeRepoFiles(run.repo);
     containerOptions.mcpServers = mcp;
     containerOptions.filesDir = files.dir;
+    // Messages the user sends while the turn runs go to the agent as it works.
+    if (thread) containerOptions.steers = () => takeSteers(run.id);
     // A session's artifacts (charts, reports, screenshots), for the user to look at.
     if (thread) {
       artifacts = await prepareArtifacts(thread.id);
@@ -301,6 +308,7 @@ export async function processRun(
           }
         }
 
+        await steerDelivered(event).catch(() => {});
         const agentSession = agentSessionIdFromEvent(run.harness, event);
         if (agentSession) sessionId = agentSession;
         if (thread && nativeResume && agentSession) {
@@ -537,6 +545,8 @@ export async function processRun(
     if (ws) await destroyWorkspace(ws);
     if (files) await destroyFilesDir(files);
     if (artifacts) await destroyArtifactsDir(artifacts);
+    // A message the turn didn't get to: the next turn.
+    if (!leaseLost) await requeueSteers(run).catch((err) => console.error(`run ${run.id}: couldn't requeue its messages:`, err));
     if (context) await destroyContext(context);
     if (sessions) await destroySessions(sessions);
     if (askDir) await destroyAsk(askDir);

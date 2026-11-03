@@ -420,8 +420,10 @@ export interface AgentRow {
   createdAt: string;
   /** Updates: installed on their own unless turned off; agents added by command never update. */
   autoUpdate: boolean;
+  /** Try updates on past tasks before switching. */
+  testUpdates: boolean;
   availableVersion: string | null;
-  updateState: "updating" | "updated" | "failed" | null;
+  updateState: "updating" | "updated" | "failed" | "testing" | null;
   updateNote: string | null;
   updatedVersionAt: string | null;
   checkedAt: string | null;

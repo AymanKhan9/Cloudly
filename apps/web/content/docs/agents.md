@@ -53,6 +53,7 @@ When there's a newer one:
 
 - **Auto-update on** (the default): Cloudly switches the agent to it and rebuilds the sandbox image. Turns that are running keep the version they started with; new turns use the new one once the image is built. The agent's row says what it updated from and to.
 - **Auto-update off:** the row says the new version is available, with an **Update** button.
+- **Test updates first** (with auto-update on): before switching, Cloudly tries the new version on up to 3 of the agent's sessions whose pull requests were merged. Each one's first message runs again from the commit it started on, once with the version installed now and once with the new one (installed in that sandbox only). The new version is installed only if it finishes as many tasks, passes the repo's checks as often, changes about the same files as what was merged, and doesn't cost much more. Otherwise the agent stays on its version, the row says why, with the comparison, and **Use it anyway** installs it. Each try is a turn per version, so it costs about six turns. Agents installed by npm or a downloaded binary can be tested; others update as usual.
 
 If a new version doesn't install, Cloudly puts the old one back, says so on the agent's row, and doesn't try that version again; the next release is tried as usual. If the image fails to build for another reason (the setup script, say), the agent goes back to its old version for now and the new one is tried again at the next check.
 

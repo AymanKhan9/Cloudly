@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowCircleUp, ArrowSquareOut, ArrowsClockwise, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
+import { ShieldCheck, ArrowCircleUp, ArrowSquareOut, ArrowsClockwise, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { api, ApiError, type AgentRow, type AgentsSettings, type CatalogItem, type RegistryItem } from "@/lib/api";
 import { AgentLogo, MaskIcon } from "@/components/agent-logo";
 import { catalogIconPath } from "@repo/shared/providers";
@@ -127,9 +127,97 @@ function DefineKey({ agent, onSaved }: { agent: AgentRow; onSaved: () => void })
 
 type ImageStatus = NonNullable<AgentsSettings["image"]>["status"] | undefined;
 
+interface TrialSide {
+  status: string;
+  checks: string | null;
+  costUsd: number | null;
+  files: string[];
+}
+
+type TrialView = {
+  toVersion: string;
+  fromVersion: string | null;
+  verdict: string | null;
+  results: { judged?: { title: string; threadId: string; current: TrialSide; candidate: TrialSide }[] } | null;
+};
+
+function sideText(s: TrialSide): string {
+  if (s.status !== "succeeded") return s.status;
+  const files = s.files.length + (s.files.length === 1 ? " file" : " files");
+  const cost = s.costUsd !== null ? ", $" + s.costUsd.toFixed(2) : "";
+  return files + ", checks " + (s.checks ?? "none") + cost;
+}
+
+/** The last update trial's tasks, side by side: the version it has and the new one. */
+function TrialDetails({ agentId }: { agentId: string }) {
+  const [trial, setTrial] = useState<TrialView | null | undefined>(undefined);
+  const load = () => {
+    if (trial !== undefined) return;
+    api<{ trials: TrialView[] }>("/settings/agents/" + agentId + "/trials")
+      .then((r) => setTrial(r.trials[0] ?? null))
+      .catch(() => setTrial(null));
+  };
+  return (
+    <details className="trial-details" onToggle={(e) => (e.currentTarget.open ? load() : null)}>
+      <summary>How the versions compared</summary>
+      {trial === undefined ? (
+        <p className="hint">Loading…</p>
+      ) : !trial?.results?.judged?.length ? (
+        <p className="hint">No comparison to show.</p>
+      ) : (
+        <div className="md-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Past task</th>
+                <th>{trial.fromVersion ?? "Current"}</th>
+                <th>{trial.toVersion}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trial.results.judged.map((t) => (
+                <tr key={t.threadId}>
+                  <td>
+                    <a href={"/app/s/" + t.threadId}>{t.title}</a>
+                  </td>
+                  <td>{sideText(t.current)}</td>
+                  <td>{sideText(t.candidate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </details>
+  );
+}
+
 /** Where an agent is with its updates: installing one, one waiting, or what the last one did. */
 function UpdateLine({ agent, busy, onUpdate }: { agent: AgentRow; busy: boolean; onUpdate: () => void }) {
   if (agent.source === "custom") return null;
+  if (agent.updateState === "testing") {
+    return (
+      <div className="state update-line">
+        <ArrowsClockwise size={13} weight="bold" />
+        <span>{agent.updateNote ?? "Trying the new version on past tasks before switching."}</span>
+      </div>
+    );
+  }
+  // A trial it didn't pass: it stayed on its version, and the new one can still be chosen.
+  if (agent.availableVersion && agent.updateState === "failed" && agent.updateNote) {
+    return (
+      <div className="update-trial">
+        <div className="state update-line" data-locked>
+          <WarningCircle size={13} weight="bold" />
+          <span>{agent.updateNote}</span>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={onUpdate}>
+            Use it anyway
+          </button>
+        </div>
+        <TrialDetails agentId={agent.id} />
+      </div>
+    );
+  }
   if (agent.updateState === "updating") {
     return (
       <div className="state update-line">
@@ -164,9 +252,12 @@ function UpdateLine({ agent, busy, onUpdate }: { agent: AgentRow; busy: boolean;
   // A recent update, shown for a week.
   if (agent.updateState === "updated" && agent.updateNote && agent.updatedVersionAt && Date.now() - new Date(agent.updatedVersionAt).getTime() < 7 * 86_400_000) {
     return (
-      <div className="state update-line" data-set>
-        <ArrowCircleUp size={13} weight="bold" />
-        <span>{agent.updateNote}</span>
+      <div className="update-trial">
+        <div className="state update-line" data-set>
+          <ArrowCircleUp size={13} weight="bold" />
+          <span>{agent.updateNote}</span>
+        </div>
+        {agent.updateNote.includes("after trying it") ? <TrialDetails agentId={agent.id} /> : null}
       </div>
     );
   }
@@ -240,6 +331,23 @@ function AgentItem({ agent, image, onChange }: { agent: AgentRow; image: ImageSt
             >
               <ArrowsClockwise size={13} />
               <span className="pill-text">{agent.autoUpdate ? "Auto-update on" : "Auto-update off"}</span>
+            </button>
+          ) : null}
+          {agent.source !== "custom" && agent.autoUpdate ? (
+            <button
+              type="button"
+              className="pill"
+              aria-pressed={agent.testUpdates}
+              disabled={busy}
+              onClick={() => act({ method: "PATCH", body: JSON.stringify({ testUpdates: !agent.testUpdates }) })}
+              title={
+                agent.testUpdates
+                  ? "A new version is tried on up to 3 of this agent's merged tasks, against the current one, and installed only if it isn't worse. Each try is a turn per version."
+                  : "Try new versions on past tasks before switching to them"
+              }
+            >
+              <ShieldCheck size={13} />
+              <span className="pill-text">{agent.testUpdates ? "Tests updates first" : "Test updates first"}</span>
             </button>
           ) : null}
           <button type="button" className="btn btn-secondary" aria-expanded={open} onClick={() => setOpen((o) => !o)}>

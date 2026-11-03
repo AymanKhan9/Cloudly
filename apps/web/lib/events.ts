@@ -87,6 +87,8 @@ export type Block =
   | { t: "thought"; text: string }
   | { t: "tools"; items: ToolItem[] }
   | { t: "error"; text: string }
+  /** A message the user sent mid-turn, where the agent took it in. */
+  | { t: "steer"; text: string }
   | SubagentBlock;
 
 // Claude starts a subagent with its Agent tool (named Task in older versions).
@@ -201,6 +203,8 @@ export function buildBlocks(events: StreamEvent[], harness: string): Block[] {
       }
     } else if (e.kind === "error") {
       blocks.push({ t: "error", text: describeEvent(e) });
+    } else if (e.kind === "status" && obj?.type === "steer" && typeof obj.text === "string") {
+      root.push({ t: "steer", text: obj.text });
     }
   }
   return root;

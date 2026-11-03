@@ -11,6 +11,7 @@ import {
   CloudSlash,
   FileText,
   FolderSimple,
+  ArrowBendDownRight,
   Laptop,
   Monitor,
   AppWindow,
@@ -147,6 +148,16 @@ function Blocks({ blocks, live }: { blocks: Block[]; live: boolean }) {
           return (
             <div key={i} className="reply">
               <RichMarkdown>{b.text}</RichMarkdown>
+            </div>
+          );
+        if (b.t === "steer")
+          return (
+            <div key={i} className="msg-user msg-steer">
+              <span className="msg-from">
+                <ArrowBendDownRight size={14} />
+                Sent while it worked
+              </span>
+              <div>{b.text}</div>
             </div>
           );
         if (b.t === "thought")
@@ -523,7 +534,7 @@ export default function SessionPage() {
   const unknownCommand =
     typed && typed.toLowerCase() !== "model" && commands.length > 0 && !commands.includes(typed) && !commands.some((c) => c.startsWith(typed + " ")) && suggestions.length === 0 ? typed : null;
 
-  async function send(e?: React.FormEvent, text = draft) {
+  async function send(e?: React.FormEvent, text = draft, after = false) {
     e?.preventDefault();
     // A bare "/model" opens the model menu instead of asking the agent.
     if (text === draft && /^\/model\s*$/i.test(text.trim())) {
@@ -531,11 +542,12 @@ export default function SessionPage() {
       modelMenu.current?.show();
       return;
     }
-    if (!text.trim() || busy || sending) return;
+    if (!text.trim() || sending) return;
     setSending(true);
     setActionError(null);
     try {
-      await api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ prompt: text }) });
+      // While a turn runs, the agent gets it now (the API decides); "after" waits for the turn to end.
+      await api(`/threads/${id}/messages`, { method: "POST", body: JSON.stringify({ prompt: text, ...(after ? { after: true } : {}) }) });
       if (text === draft) setDraft("");
       stickRef.current = true;
     } catch (err) {
@@ -593,7 +605,7 @@ export default function SessionPage() {
         : !connected
           ? { tone: undefined, text: "Reconnecting to the live log" }
           : busy
-            ? { tone: undefined, text: "The agent is working. Your next message can wait here until the turn ends." }
+            ? { tone: undefined, text: "The agent is working. What you send now goes to it as it works; it takes it in at its next step." }
             : null;
 
   return (
@@ -879,7 +891,16 @@ export default function SessionPage() {
               </span>
             ) : null}
             <span className="spacer" />
-            {busy ? (
+            {busy && draft.trim() ? (
+              <>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => send(undefined, draft, true)} disabled={sending} title="Send it as the next turn instead">
+                  After this turn
+                </button>
+                <button type="submit" className="send" disabled={sending} aria-label="Send to the agent now" title="Send to the agent now: it takes it in as it works">
+                  <ArrowUp size={18} weight="bold" />
+                </button>
+              </>
+            ) : busy ? (
               <button type="button" className="send stop" onClick={cancel} disabled={latest?.cancelRequested} aria-label="Cancel turn" title="Cancel turn">
                 <Stop size={15} weight="fill" />
               </button>

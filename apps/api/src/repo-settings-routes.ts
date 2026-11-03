@@ -16,6 +16,7 @@ const DEFAULTS = {
   triggerHarness: null as string | null, issueLabel: "cloudly", onIssueLabel: true, onMention: true, onPrReview: true, fixCi: true, ciFixAttempts: 2,
   autoMerge: false, mergeMethod: "squash",
   screenshots: false, screenshotCommand: null as string | null, screenshotPort: 3000, screenshotPaths: ["/"] as string[],
+  autoLessons: false,
 };
 
 function repoOf(c: { req: { param: (k: string) => string } }) {
@@ -69,6 +70,7 @@ const SettingsSchema = z
     screenshots: z.boolean().optional(),
     screenshotCommand: z.string().trim().max(2000).nullable().optional(),
     screenshotPort: z.number().int().min(1).max(65535).optional(),
+    autoLessons: z.boolean().optional(),
     screenshotPaths: z.array(z.string().trim().regex(/^\/[\w\-./?=&%#~]*$/, "A page starts with /")).min(1).max(6).optional(),
   })
   .refine((s) => s.checks !== "custom" || Boolean(s.checkCommand), { message: "Enter the command to run.", path: ["checkCommand"] });

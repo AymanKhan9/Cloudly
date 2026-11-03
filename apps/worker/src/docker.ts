@@ -56,6 +56,8 @@ export interface AcpLaunchConfig {
     resume?: boolean;
     /** Where the runner reads its turn's cost, beyond ACP usage updates. */
     cost?: "pi-session";
+    /** A trial: shell lines that install the new version under /tmp first. */
+    preinstall?: string;
 }
 
 /** An added agent's launch, from Settings > Agents. */
@@ -97,6 +99,10 @@ export interface ContainerOptions {
     filesDir?: string;
     /** Host dir mounted at /artifacts: what the agent makes for the user to look at. */
     artifactsDir?: string;
+    /** A trial of an added agent's new version: installed in the sandbox first, then run from there. */
+    trialLaunch?: { block: string; run: string };
+    /** Messages the user sent while the turn runs, not yet handed to the runner; each is written once. */
+    steers?: () => Promise<{ id: string; text: string }[]>;
     /** Environment for the agent: secret placeholders, and exposed secrets' real values. */
     env?: Record<string, string>;
     /** Host dir mounted at /context: the repo's shared context, when it's on. */
@@ -273,6 +279,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
     );
 
     let credentials: Awaited<ReturnType<typeof credentialFlags>> | undefined;
+    let steerTimer: ReturnType<typeof setInterval> | undefined;
     try{
         const config:ControlConfig = {
             task,
@@ -287,7 +294,9 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             desktop: options.desktopPassword ? { password: options.desktopPassword } : undefined,
             context: Boolean(options.contextDir),
             research: options.research,
-            acp: await acpLaunch(harness),
+            acp: options.trialLaunch
+                ? { ...(await acpLaunch(harness))!, command: options.trialLaunch.run, preinstall: options.trialLaunch.block }
+                : await acpLaunch(harness),
             sessions: Boolean(options.sessionsDir),
             ask: Boolean(options.askDir),
         };
@@ -297,6 +306,25 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
             JSON.stringify(config),
             "utf-8",
         );
+        // Messages mid-turn go here; the runner reads each new file (it can't write to /control).
+        if (options.steers) {
+            const steerDir = path.join(controlDir, "steer");
+            await mkdir(steerDir, { recursive: true });
+            let writing = false;
+            steerTimer = setInterval(async () => {
+                if (writing) return;
+                writing = true;
+                try {
+                    for (const m of await options.steers!()) {
+                        await writeFile(path.join(steerDir, `${Date.now()}-${m.id}.json`), JSON.stringify(m), "utf-8");
+                    }
+                } catch (err) {
+                    console.error(`run ${runId}: couldn't pass on a message:`, err);
+                } finally {
+                    writing = false;
+                }
+            }, 1000);
+        }
 
         credentials = await credentialFlags(harness);
         const runEnv = envFlags(options.env);
@@ -414,6 +442,7 @@ export async function* createRunContainer(workspace: Workspace, task:string,harn
         );
         }
     }finally{
+        if (steerTimer) clearInterval(steerTimer);
         await rm(controlDir,{
             recursive:true,
             force:true

@@ -6956,3 +6956,112 @@ div.msg-system {
 .handoff .row-actions {
   margin: 0;
 }
+
+/* A message sent while the agent worked, where it took it in. */
+.msg-steer {
+  justify-self: end;
+  margin: 4px 0;
+}
+
+/* ---------- Lessons ---------- */
+
+.lessons {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.lessons h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.lesson {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  background: var(--surface);
+}
+
+.lesson-title {
+  font-weight: 600;
+}
+
+.lesson-evidence summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.lesson-evidence ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.lessons-decided {
+  margin-top: 16px;
+}
+
+.lessons-decided summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.lessons-decided ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.lessons-decided li[data-status="dismissed"] {
+  opacity: 0.6;
+}
+
+.update-trial {
+  display: grid;
+  gap: 6px;
+}
+
+.trial-details summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.trial-details .md-table {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+/* An agent's actions wrap rather than squeeze its details. */
+.agent-head .mcp-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 340px;
+}
+
+/* A narrow agent row: its actions go on a line of their own, under its details. */
+.agent-item {
+  container-type: inline-size;
+}
+
+@container (max-width: 760px) {
+  .agent-head {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .agent-head .mcp-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    max-width: none;
+  }
+}

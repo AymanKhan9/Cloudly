@@ -13,6 +13,8 @@ import { runNotifyLoop } from "./notify";
 import { runAgentUpdateLoop } from "./agent-updates";
 import { runPlanLoop } from "./plans";
 import { runHandoffLoop } from "./handoff";
+import { runLessonsLoop } from "./lessons";
+import { runTrialLoop } from "./trials";
 
 const workerId = process.env.WORKER_ID ?? `${hostname()}-${process.pid}`;
 // ponytail: poll and recovery each cap at this, so the true ceiling is 2x; share one counter if that matters.
@@ -46,4 +48,6 @@ await Promise.all([
   runAgentUpdateLoop(controller.signal),
   runPlanLoop(controller.signal),
   runHandoffLoop(controller.signal),
+  runLessonsLoop(controller.signal),
+  runTrialLoop(controller.signal),
 ]);

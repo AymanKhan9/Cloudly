@@ -52,6 +52,8 @@ export interface ProviderView {
   createdAt: Date;
   /** Updates (see provider-updates.ts). */
   autoUpdate: boolean;
+  /** Try updates on past tasks before switching (see the worker's trials.ts). */
+  testUpdates: boolean;
   availableVersion: string | null;
   updateState: string | null;
   updateNote: string | null;
@@ -96,6 +98,7 @@ async function view(row: ProviderRow, key: Buffer): Promise<ProviderView> {
     missing: credentials.filter((c) => !c.optional && !c.set && !c.reused).map((c) => c.env),
     createdAt: row.createdAt,
     autoUpdate: row.autoUpdate,
+    testUpdates: row.testUpdates,
     availableVersion: row.availableVersion,
     updateState: row.updateState,
     updateNote: row.updateNote,
@@ -168,7 +171,7 @@ export async function addProvider(input: {
   }
 }
 
-export async function updateProvider(id: string, input: { name?: string; enabled?: boolean; hosts?: string[]; autoUpdate?: boolean }): Promise<void> {
+export async function updateProvider(id: string, input: { name?: string; enabled?: boolean; hosts?: string[]; autoUpdate?: boolean; testUpdates?: boolean }): Promise<void> {
   const row = await prisma.provider.findUnique({ where: { id } });
   if (!row) throw new Error("No such agent.");
   const spec = input.hosts !== undefined ? cleanSpec({ ...specOf(row), hosts: input.hosts }) : undefined;
@@ -178,6 +181,7 @@ export async function updateProvider(id: string, input: { name?: string; enabled
       ...(input.name !== undefined ? { name: input.name.trim().slice(0, 64) || id } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(input.autoUpdate !== undefined ? { autoUpdate: input.autoUpdate } : {}),
+      ...(input.testUpdates !== undefined ? { testUpdates: input.testUpdates } : {}),
       ...(spec ? { spec: spec as unknown as Prisma.InputJsonValue } : {}),
     },
   });

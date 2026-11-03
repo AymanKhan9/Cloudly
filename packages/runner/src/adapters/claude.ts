@@ -73,6 +73,10 @@ export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
 
 export class ClaudeAdapter implements RunAdapter {
     private controller?: AbortController;
+    /** Messages from the user mid-turn, waiting to go into the input stream. */
+    private steers: string[] = [];
+    private wakeInput?: () => void;
+    private closed = false;
 
     /**
      * maxBudgetUsd: the SDK stops the run itself once it has spent this much
@@ -92,12 +96,36 @@ export class ClaudeAdapter implements RunAdapter {
         // Streaming input: with a plain string prompt Claude Code closes as soon as
         // the turn ends, too early to ask how full the context is. The input stays
         // open until that answer is in.
+        // A message from the user mid-turn goes into the same stream: Claude Code
+        // takes it in at its next step, without stopping.
         let finish!: () => void;
         const finished = new Promise<void>((resolve) => (finish = resolve));
+        let sent = 1;
+        let results = 0;
+        let lastMessage = Date.now();
+        const close = () => {
+            this.closed = true;
+            finish();
+            this.wakeInput?.();
+        };
+        const self = this;
         async function* input(): AsyncIterable<SDKUserMessage> {
             yield { type: "user", message: { role: "user", content: task }, parent_tool_use_id: null };
-            await finished;
+            while (!self.closed) {
+                const next = self.steers.shift();
+                if (next !== undefined) {
+                    sent++;
+                    yield { type: "user", message: { role: "user", content: next }, parent_tool_use_id: null };
+                    continue;
+                }
+                await Promise.race([finished, new Promise<void>((resolve) => (self.wakeInput = resolve))]);
+            }
         }
+        // A message taken in mid-turn may not get a result of its own: once the
+        // agent has been quiet a while after its last result, the turn is over.
+        const watchdog = setInterval(() => {
+            if (!this.closed && results > 0 && results < sent && this.steers.length === 0 && Date.now() - lastMessage > 6000) close();
+        }, 1000);
 
         const q = query({
             prompt: input(),
@@ -121,11 +149,13 @@ export class ClaudeAdapter implements RunAdapter {
         });
         try {
             for await (const message of q) {
+                lastMessage = Date.now();
                 // How full the context window is, like Claude Code's context indicator.
                 // "summary" answers from the last response's usage: no extra API calls.
-                if (message.type === "result") {
+                if (message.type === "result") results++;
+                if (message.type === "result" && results >= sent && this.steers.length === 0) {
                     const usage = await q.getContextUsage({ detail: "summary" }).catch(() => null);
-                    finish();
+                    close();
                     if (usage) {
                         yield {
                             seq: seq++, ts: Date.now(), kind: "status",
@@ -138,8 +168,16 @@ export class ClaudeAdapter implements RunAdapter {
                 }
             }
         } finally {
-            finish();
+            clearInterval(watchdog);
+            close();
         }
+    }
+
+    steer(text: string): boolean {
+        if (this.closed || !this.controller) return false;
+        this.steers.push(text);
+        this.wakeInput?.();
+        return true;
     }
 
     async interrupt(): Promise<void> {

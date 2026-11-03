@@ -1,4 +1,4 @@
-import type { RunAdapter } from "../adapter";
+import { steerPrompt, type RunAdapter } from "../adapter";
 import type { RunEvent } from "@repo/shared/run-event";
 import * as acp from "@agentclientprotocol/sdk";
 import type { SessionUpdate, PermissionOption, PermissionOptionKind, SessionId } from "@agentclientprotocol/sdk";
@@ -14,6 +14,8 @@ import path from "node:path";
 /** An agent added under Settings > Agents: the image installed it, the worker says how to start it. */
 export interface AcpLaunch {
     name: string;
+    /** A trial of a new version: shell lines that install it (under /tmp) before it starts. */
+    preinstall?: string;
     /** Its run script, /opt/cloudly/agents/<id>/run. */
     command: string;
     /** Sent with `authenticate` when the agent offers it (e.g. Grok's "xai.api_key"). */
@@ -230,6 +232,10 @@ export class AcpAdapter implements RunAdapter {
     private process?: ChildProcessByStdio<Writable, Readable, null>;
     private ctx?: acp.ClientContext;
     private sessionId?: SessionId;
+    /** Messages from the user mid-turn: the prompt is cancelled and the session carries on with them. */
+    private steers: string[] = [];
+    private prompting = false;
+    private closed = false;
 
     /**
      * `fallbackTask` is the task with the earlier conversation written in, for
@@ -361,12 +367,33 @@ export class AcpAdapter implements RunAdapter {
                         }
                     }
                     const turnStarted = Date.now();
+                    this.prompting = true;
                     session.prompt(task);
+                    // Token counts across the prompts of a steered turn, for one "done".
+                    const tokens = { input_tokens: 0, output_tokens: 0 };
+                    const addTokens = (response: unknown) => {
+                        const t = (response as { _meta?: { quota?: { token_count?: { input_tokens?: number; output_tokens?: number } } } } | undefined)?._meta?.quota?.token_count;
+                        tokens.input_tokens += t?.input_tokens ?? 0;
+                        tokens.output_tokens += t?.output_tokens ?? 0;
+                    };
 
                     for (;;) {
                         const message = await (first ?? session.nextUpdate());
                         first = undefined;
+                        if (message.kind === "stop" && this.steers.length) {
+                            // Stopped for the user's message (or finished as it came): carry on with it.
+                            addTokens(message.response);
+                            session.prompt(steerPrompt(this.steers.splice(0)));
+                            continue;
+                        }
                         if (message.kind === "stop") {
+                            this.prompting = false;
+                            this.closed = true;
+                            addTokens(message.response);
+                            const response = message.response as Record<string, any>;
+                            if (response?._meta?.quota?.token_count) {
+                                message.response = { ...response, _meta: { ...response._meta, quota: { ...response._meta.quota, token_count: { ...response._meta.quota.token_count, ...tokens } } } } as typeof message.response;
+                            }
                             clearInterval(timer);
                             while (polling) await Bun.sleep(20);
                             await pollSubagents();
@@ -472,7 +499,17 @@ export class AcpAdapter implements RunAdapter {
         return events;
     }
 
+    steer(text: string): boolean {
+        if (this.closed || !this.prompting || !this.ctx || !this.sessionId) return false;
+        this.steers.push(text);
+        this.ctx.notify(acp.methods.agent.session.cancel, { sessionId: this.sessionId }).catch(() => {});
+        return true;
+    }
+
     async interrupt(): Promise<void> {
+        // Cancelled by the user: nothing more goes in.
+        this.steers = [];
+        this.closed = true;
         if (this.ctx && this.sessionId) {
             await this.ctx.notify(acp.methods.agent.session.cancel, { sessionId: this.sessionId });
             return;

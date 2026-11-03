@@ -25,6 +25,9 @@ Free and MIT-licensed. Bring your own cloud, model keys and GitHub.
 - **Back to your computer.** `cloudly.mjs pull <session>` checks out its branch and hands Claude Code, Codex or Pi their own session to resume locally.
 - **Agent scorecard and Auto.** Merge rate, cost per merge, first-try checks, fixes and review findings per agent and repo; Auto starts new sessions with the agent that does best there.
 - **Sentry.** A new production error starts a session that reproduces it in a test and fixes it, a few a day at most.
+- **Steer while it works.** A message sent mid-turn reaches the running agent: Claude Code takes it in at its next step; others are stopped and carry on with it.
+- **Lessons.** What keeps going wrong in a repo's sessions (review findings, rewinds, corrections, failing checks) becomes rules for its notes, once you approve them.
+- **Updates tested first.** An added agent's new version is tried on past merged tasks against the current one, and installed only if it isn't worse.
 - **Fast starts.** The worker keeps a copy of each repo and fetches only what changed, so a turn on a big repo starts in seconds instead of a minute (8x faster on t3code).
 - **Compare agents.** Hand one task to two or three agents at once, compare cost, time, diff size and each agent's summary side by side, and open the best result as the pull request.
 - **An agent council.** Pick two or more agents, or just name them in your question ("use claude, chatgpt, opencode, gemini and pi for this"), and ask. Cloudly checks each can run and tells you which can't. They research on their own, cross-examine each other's findings, give final positions, and a chair writes one report with where they agree, where they don't, and each one's take. Research councils can read the open web; on a repo, they read without changing anything.

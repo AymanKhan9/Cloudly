@@ -402,6 +402,18 @@ function packageName(spec: string): string {
  * failure leaves that agent out (its turns then say so) without failing the
  * rest of the image.
  */
+/** Where a trial installs a new version, inside the sandbox, away from the one in the image. */
+export const TRIAL_AGENTS_DIR = "/tmp/cloudly-trial";
+
+/** Updates that can be tried inside a sandbox before they're installed (they install without root). */
+export const trialable = (launch: AgentLaunch) => launch.install.kind === "npm" || launch.install.kind === "binary";
+
+/** The install block for a trial: the same steps, under TRIAL_AGENTS_DIR; and where its `run` ends up. */
+export function trialInstall(id: string, launch: AgentLaunch): { block: string; run: string } {
+  const block = providerInstallBlock(id, launch).split(`${AGENTS_DIR}/${id}`).join(`${TRIAL_AGENTS_DIR}/${id}`);
+  return { block, run: `${TRIAL_AGENTS_DIR}/${id}/run` };
+}
+
 export function providerInstallBlock(id: string, launch: AgentLaunch): string {
   if (!validProviderId(id)) throw new Error(`invalid agent id: ${id}`);
   const dir = `${AGENTS_DIR}/${id}`;

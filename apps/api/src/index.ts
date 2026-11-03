@@ -34,6 +34,7 @@ import { artifacts, shared } from './artifact-routes';
 import { handoffs } from './handoff-routes';
 import { scorecard } from './scorecard-routes';
 import { sentryHook, sentrySettings } from './sentry-routes';
+import { lessons } from './lesson-routes';
 
 const app = new Hono<AuthEnv>()
 
@@ -49,7 +50,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*', '/artifacts/*', '/scorecard']) {
+for (const path of ['/harnesses', '/runs/*', '/threads', '/threads/*', '/repos', '/budget', '/settings/*', '/files/*', '/arenas', '/arenas/*', '/previews/*', '/capabilities', '/context', '/context/*', '/councils', '/councils/*', '/schedules', '/schedules/*', '/plans', '/plans/*', '/artifacts/*', '/scorecard', '/lessons', '/lessons/*']) {
   app.use(path, authMiddleware);
 }
 
@@ -70,7 +71,11 @@ const NewThreadSchema = CreateRunSchema.extend({
   /** Merge the pull request once it's ready. Left out: the repo's default. */
   autoMerge: z.boolean().optional(),
 });
-const MessageSchema = z.object({ prompt: z.string().trim().min(1).max(8000) });
+const MessageSchema = z.object({
+  prompt: z.string().trim().min(1).max(8000),
+  /** While a turn runs: wait for it to end instead of telling its agent now. */
+  after: z.boolean().optional(),
+});
 
 const BudgetSchema = z.object({
   monthlyLimitUsd: z.number().min(0).max(100_000),
@@ -101,6 +106,7 @@ app.route('/artifacts', artifacts)
 // Sending a session back to the user's computer (signed in, or the command's token).
 app.route('/handoffs', handoffs)
 app.route('/scorecard', scorecard)
+app.route('/lessons', lessons)
 // A shared artifact: anyone with the link.
 app.route('/shared', shared)
 app.route('/webhooks', webhooks)
@@ -422,15 +428,20 @@ app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) =
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: user.id } });
   if (!thread) return c.json({ message: 'Session not found' }, 404);
 
-  const active = await prisma.run.count({ where: { threadId: thread.id, status: { in: ACTIVE_STATUSES as any } } });
-  if (active > 0) return c.json({ message: 'Wait for the current turn to finish, or cancel it.' }, 409);
+  const { prompt, after } = c.req.valid('json');
+  // A turn running: its agent gets the message now, as it works (a /command waits its turn).
+  const running = await prisma.run.findFirst({ where: { threadId: thread.id, status: 'running', kind: { in: ['turn', 'fix', 'ci_fix', 'review_fix'] } }, orderBy: { createdAt: 'desc' } });
+  if (running && !after && !/^\/[a-z0-9]/i.test(prompt)) {
+    const steer = await prisma.runSteer.create({ data: { runId: running.id, text: prompt } });
+    await prisma.thread.update({ where: { id: thread.id }, data: { updatedAt: new Date(), needsInput: null } });
+    return c.json({ steered: true, runId: running.id, id: steer.id }, 202);
+  }
 
   const budget = await budgetStatus(user.id);
   if (budget.state === 'storm' && !(await harnessUsesPlan(thread.harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to continue.', budget }, 402);
   }
 
-  const { prompt } = c.req.valid('json');
   const run = await prisma.run.create({
     data: {
       repo: thread.repo, baseBranch: thread.baseBranch, prompt, harness: thread.harness,

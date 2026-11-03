@@ -1,4 +1,4 @@
-import type { RunAdapter } from "../adapter";
+import { steerPrompt, type RunAdapter } from "../adapter";
 import { CodexSubagents } from "./codex-subagents";
 import type { RunEvent } from "@repo/shared/run-event";
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from "@openai/codex-sdk";
@@ -52,6 +52,11 @@ export function mapCodexEvent(event: ThreadEvent): NormalizedEvent[] {
 
 export class CodexAdapter implements RunAdapter {
     private controller?: AbortController;
+    /** Messages from the user mid-turn: the run is stopped and the thread carries on with them. */
+    private steers: string[] = [];
+    private steering = false;
+    private closed = false;
+    private threadId?: string;
 
     constructor(private model?: string, private effort?: string, private mcp: McpSpec[] = [], private research = false) {}
 
@@ -77,30 +82,75 @@ export class CodexAdapter implements RunAdapter {
             : codex.startThread(threadOptions);
 
         let seq = 0;
-        const { events } = await thread.runStreamed(task, { signal: this.controller.signal });
         const subagents = new CodexSubagents();
-        if (resume) subagents.threadId = resume;
-
-        // Main-thread events as they come, and every half second whatever the
-        // subagents' own logs have added since.
-        const it = events[Symbol.asyncIterator]();
-        let next = it.next();
-        for (;;) {
-            const step = await Promise.race([next, Bun.sleep(500).then(() => null)]);
-            for (const event of await subagents.poll().catch(() => [])) {
-                yield { seq: seq++, ts: Date.now(), ...event };
+        if (resume) {
+            subagents.threadId = resume;
+            this.threadId = resume;
+        }
+        // One "done" for the whole turn, with every run's tokens in it.
+        const usage = { input_tokens: 0, cached_input_tokens: 0, output_tokens: 0 };
+        let completed: Record<string, unknown> | null = null;
+        let prompt = task;
+        try {
+            for (;;) {
+                this.controller = new AbortController();
+                this.steering = false;
+                try {
+                    const { events } = await thread.runStreamed(prompt, { signal: this.controller.signal });
+                    // Main-thread events as they come, and every half second whatever the
+                    // subagents' own logs have added since.
+                    const it = events[Symbol.asyncIterator]();
+                    let next = it.next();
+                    for (;;) {
+                        const step = await Promise.race([next, Bun.sleep(500).then(() => null)]);
+                        for (const event of await subagents.poll().catch(() => [])) {
+                            yield { seq: seq++, ts: Date.now(), ...event };
+                        }
+                        if (step === null) continue;
+                        if (step.done) break;
+                        next = it.next();
+                        if (step.value.type === "thread.started") {
+                            subagents.threadId = step.value.thread_id;
+                            this.threadId = step.value.thread_id;
+                        }
+                        if (step.value.type === "turn.completed") {
+                            const u = step.value.usage as Partial<typeof usage> | undefined;
+                            usage.input_tokens += u?.input_tokens ?? 0;
+                            usage.cached_input_tokens += u?.cached_input_tokens ?? 0;
+                            usage.output_tokens += u?.output_tokens ?? 0;
+                            completed = step.value as unknown as Record<string, unknown>;
+                            continue;
+                        }
+                        for (const normalized of mapCodexEvent(step.value)) {
+                            yield { seq: seq++, ts: Date.now(), ...normalized };
+                        }
+                    }
+                } catch (err) {
+                    // Stopped for the user's message: not a failure.
+                    if (!this.steering) throw err;
+                }
+                const waiting = this.steers.splice(0);
+                if (!waiting.length) break;
+                prompt = steerPrompt(waiting);
             }
-            if (step === null) continue;
-            if (step.done) break;
-            next = it.next();
-            if (step.value.type === "thread.started") subagents.threadId = step.value.thread_id;
-            for (const normalized of mapCodexEvent(step.value)) {
-                yield { seq: seq++, ts: Date.now(), ...normalized };
-            }
+        } finally {
+            this.closed = true;
         }
         for (const event of await subagents.poll().catch(() => [])) {
             yield { seq: seq++, ts: Date.now(), ...event };
         }
+        if (completed) yield { seq: seq++, ts: Date.now(), kind: "done", data: { ...completed, usage } };
+    }
+
+    steer(text: string): boolean {
+        if (this.closed || !this.controller) return false;
+        this.steers.push(text);
+        // Before Codex has said which thread it is, stopping would lose it: the message waits for the run to end.
+        if (this.threadId) {
+            this.steering = true;
+            this.controller.abort();
+        }
+        return true;
     }
 
     async interrupt(): Promise<void> {

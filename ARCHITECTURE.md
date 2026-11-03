@@ -846,6 +846,33 @@ which maps the project to a repo (`SentryProject`), dedupes by `Run.triggerKey`
 stack trace with the integration token when the webhook had none, and starts a session whose
 prompt fences the error off as data.
 
+### Steering, lessons, update trials
+
+**Steering**: `POST /threads/:id/messages` while a turn is running stores a `RunSteer`. The worker
+(docker.ts) polls them each second and writes each into the run's control dir
+(`/control/steer/<id>.json`); the runner polls that dir and calls the adapter's `steer`. Claude's
+adapter pushes it into its streaming input; Codex's aborts the run and resumes the thread with it;
+the ACP adapter sends `session/cancel` and prompts the same session again. Each adapter emits one
+`done` per turn (Codex sums usage across runs). The runner prints `status {type: "steer"}` when the
+agent takes one (the worker marks it delivered) and numbers all events itself. Whatever wasn't taken
+becomes the next queued turn (`requeueSteers`).
+
+**Lessons** (`apps/worker/src/lessons.ts`): `collectSignals` numbers what went wrong on a repo
+(review findings F, rewinds R, user follow-ups C with corrections first, failed checks K, CI fixes
+I). A threadless `Run.kind = "lessons"` mounts them with the repo's notes and decided lessons at
+`/workspace/.cloudly-lessons`; the agent writes `lessons.json`, checked by `checkLessons`, saved as
+`Lesson` rows. Accepting one appends it to `RepoContext.notes` (`notesWithLesson`) and turns shared
+context on. `RepoSettings.autoLessons` queues one weekly when 5+ signals are new.
+
+**Update trials** (`apps/worker/src/trials.ts`): with `Provider.testUpdates`, the update check
+opens an `AgentTrial` instead of installing. The trial loop picks up to 3 of the agent's merged
+threads, queues two `kind = "trial"` runs per task (current and candidate) from `thread.diffBase`;
+the candidate run's config carries `preinstall` (the agent's install block rewritten to
+`/tmp/cloudly-trial`) and the runner installs it before launching. Each trial run exports its patch
+and runs the repo's checks, pushing nothing. `judgeTrial` compares completion, checks, file overlap
+with the merged diff and cost; a pass installs the version (`installTrialUpdate`), a fail keeps the
+current one and offers the new one as available.
+
 ## 11. How finalize works
 
 Finalize is the part of a run most exposed to code the platform doesn't trust: the repo's own

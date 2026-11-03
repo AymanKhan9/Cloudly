@@ -1,5 +1,5 @@
 import { prisma, Prisma } from "./client";
-import { catalogEntry, catalogLaunch, launchFromRegistry, type AgentLaunch, type ProviderSpec, type RegistryAgent } from "@repo/shared/providers";
+import { catalogEntry, catalogLaunch, launchFromRegistry, trialable, type AgentLaunch, type ProviderSpec, type RegistryAgent } from "@repo/shared/providers";
 import { pinInstall, sameLaunch, launchVersion } from "@repo/shared/agent-updates";
 
 // Updates for added agents. A check compares what each catalog or registry
@@ -19,8 +19,8 @@ export interface UpdateResult {
   id: string;
   from: string | null;
   to: string;
-  /** installing: the image is rebuilding with it; available: auto-update is off; skipped: it failed before. */
-  outcome: "installing" | "available" | "skipped";
+  /** installing: the image is rebuilding with it; testing: tried on past tasks first; available: auto-update is off; skipped: it failed before. */
+  outcome: "installing" | "testing" | "available" | "skipped";
 }
 
 type Row = Awaited<ReturnType<typeof prisma.provider.findMany>>[number];
@@ -70,8 +70,8 @@ export async function checkProviderUpdates(src: UpdateSources, now = new Date())
   const rows = await prisma.provider.findMany({ where: { source: { in: ["catalog", "registry"] } }, orderBy: { id: "asc" } });
   const results: UpdateResult[] = [];
   for (const row of rows) {
-    // A build with an update in it hasn't finished: wait for it.
-    if (row.updateState === "updating") continue;
+    // A build with an update in it hasn't finished, or one is being tried: wait for it.
+    if (row.updateState === "updating" || row.updateState === "testing") continue;
     let latest: Awaited<ReturnType<typeof latestLaunch>>;
     try {
       latest = await latestLaunch(row, src);
@@ -90,7 +90,12 @@ export async function checkProviderUpdates(src: UpdateSources, now = new Date())
       results.push({ id: row.id, from: row.version, to: latest.version, outcome: "skipped" });
       continue;
     }
-    if (row.autoUpdate) {
+    if (row.autoUpdate && row.testUpdates && trialable(latest.launch)) {
+      // Tried on past tasks first (the worker's trials.ts); installed only if it holds up.
+      await prisma.agentTrial.create({ data: { providerId: row.id, fromVersion: row.version, toVersion: latest.version, launch: json(latest.launch) } });
+      await prisma.provider.update({ where: { id: row.id }, data: { checkedAt: now, updateState: "testing", updateNote: `Trying ${latest.version} on past tasks before switching.` } });
+      results.push({ id: row.id, from: row.version, to: latest.version, outcome: "testing" });
+    } else if (row.autoUpdate) {
       await install(row, latest.launch, latest.version);
       await prisma.provider.update({ where: { id: row.id }, data: { checkedAt: now } });
       results.push({ id: row.id, from: row.version, to: latest.version, outcome: "installing" });
@@ -100,6 +105,17 @@ export async function checkProviderUpdates(src: UpdateSources, now = new Date())
     }
   }
   return results;
+}
+
+/** Installs the version a trial tried (it held up, or the user chose it anyway). */
+export async function installTrialUpdate(trialId: string, note?: string): Promise<boolean> {
+  const trial = await prisma.agentTrial.findUnique({ where: { id: trialId } });
+  const row = trial ? await prisma.provider.findUnique({ where: { id: trial.providerId } }) : null;
+  if (!trial || !row || row.updateState === "updating") return false;
+  await install(row, trial.launch as unknown as AgentLaunch, trial.toVersion);
+  if (note) await prisma.provider.update({ where: { id: row.id }, data: { updateNote: note } });
+  await prisma.agentTrial.update({ where: { id: trial.id }, data: { status: "installed" } });
+  return true;
 }
 
 /** Installs the update a check found for an agent with auto-update off. */

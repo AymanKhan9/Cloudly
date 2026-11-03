@@ -184,6 +184,8 @@ model Provider {
   enabled   Boolean  @default(true)
   /// Install newer versions on its own (catalog and registry agents; never one added by command).
   autoUpdate Boolean @default(true)
+  /// Before switching to an update, try it on past tasks against the current version (see AgentTrial).
+  testUpdates Boolean @default(false)
   /// A newer version found and not installed yet (auto-update off), with its launch.
   availableVersion String?
   availableLaunch  Json?
@@ -363,6 +365,7 @@ model Run {
   @@index([status,createdAt])
   @@index([userId])
   @@index([threadId, createdAt])
+  steers       RunSteer[]
 }
 
 model RunEvent {
@@ -519,6 +522,8 @@ model RepoSettings {
   screenshotCommand String?
   screenshotPort    Int      @default(3000)
   screenshotPaths   String[] @default(["/"])
+  /// Look for lessons in the repo's sessions every week (an agent turn each time).
+  autoLessons       Boolean  @default(false)
   updatedAt       DateTime @updatedAt
 }
 
@@ -798,4 +803,58 @@ model SentryProject {
   perDay    Int      @default(5)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A message the user sent while a turn was running, for that turn's agent to
+/// take in as it works (see the worker's process-run and the runner). One the
+/// turn ends before taking becomes the session's next turn instead.
+model RunSteer {
+  id        String   @id @default(uuid())
+  runId     String
+  text      String
+  /// pending | sent (written for the runner) | delivered (the agent has it) | late (became a turn)
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@index([runId, status])
+}
+
+/// A rule for a repo's notes, proposed from what went wrong in its sessions
+/// (see the worker's lessons.ts); accepted ones go into its shared-context notes.
+model Lesson {
+  id        String    @id @default(uuid())
+  repo      String
+  /// The lessons turn that proposed it.
+  runId     String
+  title     String
+  rule      String
+  why       String    @default("")
+  /// What it's based on: [{ "ref": "F3", "text": "...", "threadId": "..." }].
+  evidence  Json
+  /// proposed | accepted | dismissed
+  status    String    @default("proposed")
+  decidedAt DateTime?
+  createdAt DateTime  @default(now())
+  @@index([repo, status])
+}
+
+/// An added agent's update, tried before it's installed: a few of its merged
+/// sessions replayed on the current version and on the new one, compared on
+/// checks, cost, and how close each came to what was merged (see the worker's trials.ts).
+model AgentTrial {
+  id          String   @id @default(uuid())
+  providerId  String
+  fromVersion String?
+  toVersion   String
+  /// The new version's launch, to install if it holds up.
+  launch      Json
+  /// pending | running | passed | failed | installed | cancelled
+  status      String   @default("pending")
+  /// Per task, both versions' results, and the verdict.
+  results     Json?
+  verdict     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([providerId, createdAt])
+  @@index([status])
 }
