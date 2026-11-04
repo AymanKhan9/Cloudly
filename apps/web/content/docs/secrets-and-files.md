@@ -36,7 +36,7 @@ For values that aren't sensitive, or that a tool reads directly (the password of
 
 Every run has a folder at `/files` that belongs to the repository, not to git. Use it for data, fixtures, a local config or a large sample file:
 
-- **Add files** in **Settings → Repo files**, or with the **Files** button in a session. Drag them in or click **Upload**.
+- **Add files** in **Settings → Repo files**, or in a session from the **⋯** menu at the top, under **Repo files**. Drag them in or click **Upload**.
 - **The agent can read them** at `/files/<name>`. Mention them in your message, like "use the orders in /files/fixtures/orders.csv".
 - **What the agent leaves there is kept.** After each turn, Cloudly saves new and changed files and drops ones the agent deleted, so notes or results carry over to the next session on that repo.
 - **They're never committed.** `/files` is outside the repository.

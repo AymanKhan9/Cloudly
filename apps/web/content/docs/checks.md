@@ -58,7 +58,7 @@ When the session has a pull request, the review is posted there too, with commen
 
 ## The Changes tab
 
-Every session has a **Changes** button. It shows everything the session has changed so far, file by file, with the reviewer's findings on the lines they're about. From there you can:
+Every session has a **Changes** button at the top. On a wide screen it opens beside the conversation, so you can read the diff while you reply. It shows everything the session has changed so far, file by file, with the reviewer's findings on the lines they're about. From there you can:
 
 - **Tick findings** to send to the agent, and **dismiss** the ones that aren't worth fixing.
 - **Comment on any changed line**: hover it and press **+**.

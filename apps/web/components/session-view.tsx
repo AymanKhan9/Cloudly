@@ -7,6 +7,8 @@ import {
   ArrowSquareOut,
   ArrowUp,
   CaretRight,
+  DotsThree,
+  X,
   CloudSlash,
   FileText,
   FolderSimple,
@@ -55,8 +57,19 @@ import { AgentModelPicker, type AgentChoice } from "@/components/agent-model-pic
 import { useApp } from "@/components/app-context";
 import { ChangesPanel } from "@/components/changes-panel";
 import { SecretRequest, secretAsk } from "@/components/secret-request";
+import { ContextMenu } from "@/components/session-menu";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
+
+/** Each panel's title, in its header and for screen readers. */
+const PANEL_TITLE = {
+  changes: "Changes",
+  preview: "Preview",
+  context: "Shared context",
+  files: "Repo files",
+  local: "Continue on your computer",
+  desktop: "Desktop",
+} as const;
 
 type TurnEvent = StreamEvent & { runId: string };
 
@@ -397,6 +410,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
   const [now, setNow] = useState(() => Date.now());
   const [pick, setPick] = useState(0);
   const [panel, setPanel] = useState<"changes" | "files" | "preview" | "desktop" | "context" | "local" | null>(null);
+  const [more, setMore] = useState<{ x: number; y: number; from: HTMLElement } | null>(null);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const stickRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -559,9 +573,17 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
   const desktopLive = Boolean(latest && latest.status === "running" && latest.desktop);
   const toggle = (p: NonNullable<typeof panel>) => {
     const opening = panel !== p;
+    // The layout changes (a column beside the conversation, or none); stay at the newest message if that's where you were.
+    const atEnd = stickRef.current;
     setPanel(opening ? p : null);
+    if (atEnd) window.requestAnimationFrame(() => scrollToEnd());
     // The panel opens above the conversation, which is usually scrolled to its end.
-    if (opening) window.requestAnimationFrame(() => rootRef.current?.querySelector(".side-panel")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    // Beside the conversation (a wide pane) it's already in view.
+    if (opening)
+      window.requestAnimationFrame(() => {
+        const el = rootRef.current?.querySelector<HTMLElement>(".side-panel");
+        if (el && getComputedStyle(el).position !== "sticky") el.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
   };
   const total = turns.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
   // The latest review's findings, as a count on the Changes button.
@@ -666,7 +688,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             : null;
 
   return (
-    <div className="chat" ref={rootRef}>
+    <div className="chat" ref={rootRef} data-panel={panel ?? undefined}>
       <header className="chat-head">
         <div className="titles">
           <h1 title={thread.title}>{thread.title}</h1>
@@ -712,20 +734,20 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             <span className="hide-sm">Preview</span>
           </button>
           {thread.repo ? (
-          <>
-          <button type="button" className="head-btn" aria-pressed={panel === "context"} onClick={() => toggle("context")} title="Notes and work shared by every agent on this repo" aria-label="Context">
-            <Notebook size={15} />
-            <span className="hide-sm">Context</span>
-          </button>
-          <button type="button" className="head-btn" aria-pressed={panel === "files"} onClick={() => toggle("files")} title="The repo's kept files, at /files in every run" aria-label="Files">
-            <FolderSimple size={15} />
-            <span className="hide-sm">Files</span>
-          </button>
-          <button type="button" className="head-btn" aria-pressed={panel === "local"} onClick={() => toggle("local")} title="Continue this session on your computer" aria-label="On your computer">
-            <Laptop size={15} />
-            <span className="hide-sm">Local</span>
-          </button>
-          </>
+            <button
+              type="button"
+              className="head-btn head-more"
+              aria-haspopup="menu"
+              aria-pressed={panel === "context" || panel === "files" || panel === "local"}
+              aria-label="More: shared context, repo files, continue on your computer"
+              title="Shared context, repo files, continue on your computer"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setMore({ x: r.right - 240, y: r.bottom + 4, from: e.currentTarget });
+              }}
+            >
+              <DotsThree size={18} weight="bold" />
+            </button>
           ) : null}
           {thread.prUrl && (thread.mergedAt || thread.autoMerge) ? (
             <span className="merge-chip" data-merged={thread.mergedAt ? true : undefined} title={thread.mergedAt ? "Merged by Cloudly when it was ready" : "Merge when ready is on"}>
@@ -746,36 +768,38 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
         <section
           className="side-panel"
           data-wide={panel === "changes" || undefined}
-          aria-label={panel === "changes" ? "Changes" : panel === "files" ? "Repo files" : panel === "preview" ? "Preview" : panel === "context" ? "Shared context" : panel === "local" ? "On your computer" : "Desktop"}
+          aria-label={PANEL_TITLE[panel]}
         >
+          {panel !== "desktop" ? (
+            <header className="side-head">
+              <h2>{PANEL_TITLE[panel]}</h2>
+              <button type="button" className="icon-btn" onClick={() => toggle(panel)} aria-label={`Close ${PANEL_TITLE[panel]}`} title="Close">
+                <X size={16} />
+              </button>
+            </header>
+          ) : null}
           {panel === "changes" ? (
             <>
-              <h2>Changes</h2>
               <ChangesPanel threadId={thread.id} agent={h.name} busy={busy} version={`${turns.length}:${latest?.status ?? ""}`} audit={turns[0]?.kind === "audit"} />
             </>
           ) : panel === "context" ? (
             <>
-              <h2>
-                Shared context for <span className="mono">{thread.repo}</span>
-              </h2>
+              <p className="hint">
+                Notes and a log of recent work for <span className="mono">{thread.repo}</span>, shared by every agent on it.
+              </p>
               <ContextPanel repo={thread.repo} />
             </>
           ) : panel === "files" ? (
             <>
-              <h2>
-                Files in <span className="mono">/files</span>
-              </h2>
-              <p className="hint">Kept for {thread.repo} outside git, in every session&apos;s sandbox. Mention them in your message to point the agent at them.</p>
+              <p className="hint">At /files in every run. Kept for {thread.repo} outside git, in every session&apos;s sandbox. Mention them in your message to point the agent at them.</p>
               <FilesPanel repo={thread.repo} compact />
             </>
           ) : panel === "local" ? (
             <>
-              <h2>Continue on your computer</h2>
               <HandoffPanel threadId={thread.id} harness={thread.harness} busy={busy} />
             </>
           ) : panel === "preview" ? (
             <>
-              <h2>Preview</h2>
               <PreviewPanel threadId={thread.id} />
             </>
           ) : desktopLive && latest ? (
@@ -784,6 +808,22 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             <p className="hint">The desktop is only there while a turn runs.</p>
           )}
         </section>
+      ) : null}
+
+      {more ? (
+        <ContextMenu
+          label="More"
+          at={{ x: more.x, y: more.y }}
+          onClose={() => {
+            more.from.focus();
+            setMore(null);
+          }}
+          items={[
+            { kind: "action", label: "Shared context", icon: <Notebook size={15} />, run: () => toggle("context") },
+            { kind: "action", label: "Repo files (/files)", icon: <FolderSimple size={15} />, run: () => toggle("files") },
+            { kind: "action", label: "Continue on your computer", icon: <Laptop size={15} />, run: () => toggle("local") },
+          ]}
+        />
       ) : null}
 
       <div className="thread">

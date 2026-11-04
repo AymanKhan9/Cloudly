@@ -8910,3 +8910,80 @@ body[data-resizing] .pane-body {
   border-radius: 5px;
   background: var(--surface-3);
 }
+
+/* ---------- Session panels (Changes, Preview, Context, Files, Local) ---------- */
+
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -4px -6px -2px 0;
+}
+
+.side-head .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+/* Above the conversation (narrow panes): it lands below the sticky header, not under it. */
+.side-panel {
+  scroll-margin-top: 64px;
+}
+
+.head-more {
+  padding: 0 7px;
+}
+
+/*
+ * A wide pane: the panel sits beside the conversation, so the diff or the
+ * preview stays in view while you read and reply. It keeps its place as the
+ * conversation scrolls and scrolls on its own.
+ */
+@container pane (min-width: 900px) {
+  .chat[data-panel] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 44%, 720px);
+    grid-template-rows: auto 1fr auto;
+  }
+  .chat[data-panel] > .chat-head {
+    grid-column: 1 / -1;
+  }
+  .chat[data-panel] > .thread,
+  .chat[data-panel] > .dock {
+    grid-column: 1;
+    min-width: 0;
+  }
+  .chat[data-panel] > .thread {
+    grid-row: 2;
+  }
+  .chat[data-panel] > .dock {
+    grid-row: 3;
+  }
+  .chat[data-panel] > .side-panel {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    position: sticky;
+    top: 53px;
+    align-self: start;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 92px);
+    margin: 0;
+    padding: 14px 16px 20px;
+    overflow-y: auto;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+    background: var(--bg);
+    scrollbar-width: thin;
+  }
+  .chat[data-panel] > .side-panel > .side-head {
+    position: sticky;
+    top: -14px;
+    z-index: 1;
+    margin: -14px -16px 0;
+    padding: 10px 10px 10px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+}

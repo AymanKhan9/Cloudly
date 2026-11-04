@@ -52,7 +52,7 @@ The token reaches session imports and [shared context](/docs/shared-context), no
 
 ## Back to your computer
 
-The other way works too. A session's **Local** button shows the command for it:
+The other way works too. In a session, **⋯** at the top → **Continue on your computer** shows the command for it:
 
 ```
 CLOUDLY_TOKEN=cly_... node cloudly.mjs pull https://<your instance>/app/s/<session id>

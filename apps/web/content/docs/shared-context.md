@@ -6,7 +6,7 @@ It's off until you turn it on, per repository.
 
 ## Turn it on
 
-Open a session on the repository, click **Context** at the top, then **Turn on shared context**.
+Open a session on the repository, click **⋯** at the top → **Shared context**, then **Turn on shared context**.
 
 From then on, every turn on that repository, in any session and with any agent:
 
