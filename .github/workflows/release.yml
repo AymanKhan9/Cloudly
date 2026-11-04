@@ -1,9 +1,16 @@
 # Builds the web app once per CPU type so small VMs never have to run `next build`.
-# Push a tag like v0.1.0 to publish; install.sh downloads the "latest" release.
+# Push a tag like v0.1.0 to publish, or run it by hand (Actions > release > Run
+# workflow) with a version: that tags the commit it runs on. install.sh downloads
+# the "latest" release.
 name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag and publish, like v0.6.0"
+        required: true
 permissions:
   contents: write
 jobs:
@@ -34,3 +41,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: cloudly-linux-${{ matrix.arch }}.tar.gz
+          # A run by hand creates the tag on the commit it ran on.
+          tag_name: ${{ inputs.version || github.ref_name }}
+          target_commitish: ${{ github.sha }}
