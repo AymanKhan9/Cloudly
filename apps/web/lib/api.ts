@@ -362,6 +362,8 @@ export interface CouncilView {
     baseBranch: string | null;
     budgetUsd: number | null;
     guidance: { text: string; round: number; at: string }[];
+    /** Each member's (and the chair's) model and effort. */
+    settings: Record<string, { model?: string; effort?: string }>;
     report: string | null;
     error: string | null;
   };

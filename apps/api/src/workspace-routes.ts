@@ -17,7 +17,7 @@ envSecrets.get("/", async (c) => c.json({ secrets: await listEnvSecrets() }));
 
 const SecretSchema = z.object({
   name: z.string().trim().max(64),
-  repo: z.string().trim().refine((r) => r === "*" || SLUG.test(r), "Pick a repository, or all of them."),
+  repo: z.string().trim().refine((r) => r === "*" || r === "" || SLUG.test(r), "Pick a repository, or all of them."),
   value: z.string().max(20_000).optional(),
   hosts: z.string().max(5_000).default(""),
   exposed: z.boolean().default(false),

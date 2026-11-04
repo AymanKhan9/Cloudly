@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { modelCommand } from '@repo/shared/model-command'
 import { PEER_SCOPES } from '@repo/shared/sessions'
 import { effortLevels } from '@repo/shared/effort'
-import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, recoverSettings, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList } from "@repo/db";
+import { prisma, budgetStatus, config, listSettings, setSetting, deleteSetting, settingSpec, harnessUsesPlan, recoverSettings, SANDBOX_PRESETS, presetBlock, EGRESS_DEFAULT_HOSTS, parseHostList, saveEnvSecret, envNameProblem } from "@repo/db";
 import { setup } from './setup';
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod';
@@ -64,6 +64,9 @@ const CreateRunSchema = z.object({
 });
 
 const NewThreadSchema = CreateRunSchema.extend({
+  /** Left out: a session without a project, in a folder of its own (no branch, pull request or checks). */
+  repo: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, 'expected owner/repo').optional(),
+  baseBranch: z.string().min(1).max(255).optional(),
   effort: z.string().nullable().optional(),
   desktop: z.boolean().optional(),
   /** "audit": the agent reviews the whole repo and lists findings instead of changing it. */
@@ -341,8 +344,13 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness, effort, desktop, mode, autoMerge, model } = c.req.valid('json');
+  const { repo: picked, baseBranch: pickedBase, prompt, harness, effort, desktop, mode, autoMerge, model } = c.req.valid('json');
   const audit = mode === 'audit';
+  // Without a project: repo "" and a main branch in the session's own repo (see the worker's scratch.ts).
+  const repo = picked ?? '';
+  const baseBranch = picked ? pickedBase ?? '' : 'main';
+  if (picked && !pickedBase) return c.json({ message: 'Give the base branch.' }, 400);
+  if (!picked && audit) return c.json({ message: 'An audit needs a repository to read.' }, 400);
   if (effort && !effortAllowed(harness, effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
   }
@@ -354,8 +362,8 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
       model: modelCommand(prompt) ?? model,
       effort: effort ?? undefined,
       desktop: desktop ?? false,
-      autoMerge: autoMerge ?? (await prisma.repoSettings.findUnique({ where: { repo }, select: { autoMerge: true } }))?.autoMerge ?? false,
-      branch: `agent/thread-${id.slice(0, 8)}`,
+      autoMerge: repo ? autoMerge ?? (await prisma.repoSettings.findUnique({ where: { repo }, select: { autoMerge: true } }))?.autoMerge ?? false : false,
+      branch: repo ? `agent/thread-${id.slice(0, 8)}` : 'main',
       runs: { create: { repo, baseBranch, prompt, harness, status: 'queued', userId: user.id, kind: audit ? 'audit' : 'turn' } },
     },
   });
@@ -386,21 +394,27 @@ const ThreadSettingsSchema = z.object({
   seen: z.boolean().optional(),
   /** Merge the pull request once it's ready (see the worker's merge.ts). */
   autoMerge: z.boolean().optional(),
+  /** Another agent from the next turn on; it gets the conversation so far. */
+  harness: HarnessId.optional(),
 });
 
 app.patch('/threads/:id', zValidator('json', ThreadSettingsSchema), async (c) => {
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: c.get('user').id } });
   if (!thread) return c.json({ message: 'Session not found' }, 404);
-  const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen, autoMerge } = c.req.valid('json');
+  const { model, effort, desktop, peers, title, pinned, settled, archived, snoozeUntil, seen, autoMerge, harness } = c.req.valid('json');
   const now = new Date();
-  if (effort && !effortAllowed(thread.harness, effort)) {
+  const switching = harness !== undefined && harness !== thread.harness;
+  if (effort && !effortAllowed(harness ?? thread.harness, effort)) {
     return c.json({ message: `${thread.harness} has no "${effort}" effort.` }, 400);
   }
   await prisma.thread.update({
     where: { id: thread.id },
     data: {
-      ...(model !== undefined ? { model } : {}),
-      ...(effort !== undefined ? { effort } : {}),
+      // A new agent: its own model and effort (the old ones may not exist for it), and no
+      // session of the old agent's to resume; the next turn gets the conversation instead.
+      ...(switching ? { harness, agentSessionId: null, model: model ?? null, effort: effort ?? null } : {}),
+      ...(!switching && model !== undefined ? { model } : {}),
+      ...(!switching && effort !== undefined ? { effort } : {}),
       ...(desktop !== undefined ? { desktop } : {}),
       ...(peers !== undefined ? { peers } : {}),
       ...(title !== undefined ? { title } : {}),
@@ -423,6 +437,45 @@ app.delete('/threads/:id', async (c) => {
   if (active > 0) return c.json({ message: 'A turn is still running. Cancel it, then delete the session.' }, 409);
   await prisma.thread.delete({ where: { id: thread.id } });
   return c.body(null, 204);
+})
+
+const SessionSecretSchema = z.object({
+  name: z.string().trim().max(64),
+  value: z.string().min(1, 'Enter the value.').max(20_000),
+  hosts: z.string().max(5_000),
+});
+
+/**
+ * The secret an agent asked for (request_secret), saved for the session's repo
+ * like one added in Settings: the agent only ever gets a placeholder, which the
+ * proxy swaps for the value on requests to the hosts. Its next turn starts, told
+ * where the secret is.
+ */
+app.post('/threads/:id/secrets', zValidator('json', SessionSecretSchema), async (c) => {
+  const user = c.get('user');
+  const thread = await prisma.thread.findFirst({ where: { id: c.req.param('id'), userId: user.id } });
+  if (!thread) return c.json({ message: 'Session not found' }, 404);
+  const { name, value, hosts: hostText } = c.req.valid('json');
+  const problem = envNameProblem(name);
+  if (problem) return c.json({ message: problem }, 400);
+  const hosts = parseHostList(hostText).filter((h) => h !== '*');
+  if (!hosts.length) return c.json({ message: 'Name the hosts it may be sent to, e.g. api.stripe.com.' }, 400);
+  await saveEnvSecret({ name, repo: thread.repo, value, hosts: hosts.join('\n'), exposed: false });
+
+  const prompt = `I saved ${name} securely. It's in your environment as $${name}: a placeholder the proxy swaps for the real value on HTTPS requests to ${hosts.join(', ')}, in a header or the URL. Use it as it is; you won't see the value. Carry on.`;
+  const budget = await budgetStatus(user.id);
+  let runId: string | null = null;
+  if (budget.state !== 'storm' || (await harnessUsesPlan(thread.harness))) {
+    const run = await prisma.run.create({
+      data: { repo: thread.repo, baseBranch: thread.baseBranch, prompt, harness: thread.harness, status: 'queued', userId: user.id, threadId: thread.id },
+    });
+    runId = run.id;
+  }
+  await prisma.thread.update({
+    where: { id: thread.id },
+    data: { updatedAt: new Date(), settledAt: null, snoozedUntil: null, archivedAt: null, needsInput: null },
+  });
+  return c.json({ saved: true, name, hosts, runId }, 201);
 })
 
 app.post('/threads/:id/messages', zValidator('json', MessageSchema), async (c) => {

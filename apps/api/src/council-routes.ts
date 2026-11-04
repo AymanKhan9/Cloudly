@@ -17,6 +17,9 @@ export const councils = new Hono<AuthEnv>();
 
 const SLUG = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
+/** Research, then as many rounds of debate as asked, the last one final positions. */
+export const MAX_ROUNDS = 10;
+
 const CouncilSchema = z
   .object({
     question: z.string().trim().min(1).max(8000),
@@ -24,7 +27,9 @@ const CouncilSchema = z
     // Agent ids; whether each can run is checked below, with a reason for each that can't.
     members: z.array(AgentId).min(2).max(30).refine((m) => new Set(m).size === m.length, "Pick each agent once."),
     chair: AgentId,
-    rounds: z.number().int().min(1).max(3).default(3),
+    rounds: z.number().int().min(1).max(MAX_ROUNDS).default(3),
+    /** A member's (or the chair's) model and effort; left out, the agent's own default. */
+    settings: z.record(AgentId, z.object({ model: z.string().trim().min(1).max(100).regex(/^\S+$/).optional(), effort: z.string().trim().min(1).max(40).optional() })).optional(),
     repo: z.string().regex(SLUG, "expected owner/repo").nullable().optional(),
     baseBranch: z.string().min(1).max(255).nullable().optional(),
     budgetUsd: z.number().min(0.5).max(1000).nullable().optional(),
@@ -50,7 +55,7 @@ councils.get("/estimate", async (c) => {
   for (const m of (c.req.query("members") ?? "").split(",")) if (m && (await isHarness(m))) members.push(m);
   const asked = c.req.query("chair");
   const chair = asked && (await isHarness(asked)) ? asked : members[0];
-  const rounds = Math.min(3, Math.max(1, Number(c.req.query("rounds")) || 3));
+  const rounds = Math.min(MAX_ROUNDS, Math.max(1, Number(c.req.query("rounds")) || 3));
   const turns = [...members.flatMap((m) => Array(rounds).fill(m) as string[]), ...(chair ? [chair] : [])];
   let usd = 0;
   let known = true;
@@ -91,6 +96,7 @@ councils.post("/", zValidator("json", CouncilSchema), async (c) => {
       repo: body.repo ?? null,
       baseBranch: body.repo ? body.baseBranch ?? null : null,
       budgetUsd: body.budgetUsd ?? null,
+      settings: (body.settings ?? {}) as Prisma.InputJsonValue,
     },
   });
   await prisma.run.createMany({
@@ -170,6 +176,16 @@ councils.post("/:id/guidance", zValidator("json", z.object({ text: z.string().tr
     data: { guidance: [...notes, { text: c.req.valid("json").text, round: council.round, at: new Date().toISOString() }] },
   });
   return c.json({ ok: true });
+});
+
+// Ends the debate early: the round under way is the last, then the chair writes the report.
+councils.post("/:id/finish", async (c) => {
+  const council = await owned(c.req.param("id"), c.get("user").id);
+  if (!council) return c.json({ message: "Council not found" }, 404);
+  if (council.status !== "running") return c.json({ message: `The council is already ${council.status}.` }, 409);
+  if (council.round > council.rounds) return c.json({ message: "The chair is already writing the report." }, 409);
+  await prisma.council.update({ where: { id: council.id }, data: { rounds: council.round } });
+  return c.json({ ok: true, rounds: council.round });
 });
 
 councils.post("/:id/cancel", async (c) => {

@@ -72,7 +72,7 @@ test("a research council runs its rounds, passes answers between them, and ends 
     const chair = seen.find((s) => s.role === "chair")!;
     expect(chair.files).toHaveLength(6);
     expect(chair.task).toContain("## Where it disagrees");
-    expect(g("gemini-acp", 2).task).toContain("cross-review");
+    expect(g("gemini-acp", 2).task).toContain("debate. Answer the others directly");
     // The answer is the file, not the chat.
     expect(done.runs.find((r) => r.harness === "gemini-acp" && r.councilRound === 1)!.output).toBe("gemini-acp round 1: hiring is slower.");
 

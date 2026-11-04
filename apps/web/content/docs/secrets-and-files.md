@@ -24,6 +24,7 @@ What to know:
 - **Headers and URL only.** A placeholder inside a request body is not replaced.
 - **HTTPS only**, like everything leaving the sandbox.
 - A repository's own secret wins over an instance-wide one with the same name.
+- An agent can ask you for one in the chat; see [When it needs a secret](/docs/sessions#when-it-needs-a-secret).
 - Names Cloudly or the sandbox use themselves (`PATH`, `HTTPS_PROXY`, `NODE_OPTIONS`, `ANTHROPIC_*` and similar) can't be set.
 - The browser inside a [desktop](/docs/desktop-and-previews) doesn't trust Cloudly's CA, so pages it loads from a secret's host show a certificate error.
 

@@ -78,7 +78,7 @@ export async function publishCommit(
   // Checkout base_sha detached, then branch — never the mirror's current
   // default branch, which may have moved since the run started.
   const branch = info.branch ?? `agent/run-${info.runId}`;
-  await Bun.$`git -C ${publishDir} checkout -b ${branch} ${workspace.baseSha}`;
+  await Bun.$`git -C ${publishDir} checkout -B ${branch} ${workspace.baseSha}`;
 
   await writeFile(patchFile, patch, "utf-8");
   await Bun.$`git -C ${publishDir} apply --index ${patchFile}`;

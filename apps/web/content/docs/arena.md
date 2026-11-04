@@ -28,5 +28,5 @@ Click **Pick and open PR** on the result you want. Cloudly opens its branch as t
 ## Good to know
 
 - Each agent's turn costs what it would on its own, and counts toward your [spend limit](/docs/spend-limit).
-- Turns run one at a time unless `WORKER_CONCURRENCY` is higher, so an arena of three takes about three turns' time on a small VM.
+- How many turns run at once depends on the worker's memory (`WORKER_CONCURRENCY`): about one per 1.5 GB, up to four. On a 1 GB VM an arena of three takes about three turns' time; with 4 GB or more they run side by side.
 - An arena can have a [desktop](/docs/desktop-and-previews), which each agent gets.

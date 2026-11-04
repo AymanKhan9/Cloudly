@@ -6,6 +6,7 @@
 //   write PATH=TEXT    append PATH=TEXT    rm PATH    (\n in TEXT is a newline)
 //   run COMMAND        say TEXT            think TEXT     rich      artifacts
 //   slow SECONDS       fail MESSAGE        ask QUESTION   call SERVER.TOOL {json}
+//   secret NAME HOST [WHAT IT IS]    env NAME (says whether NAME is set, never its value)
 //   recall             (lists the messages this session has had)
 //
 // It also does Cloudly's own jobs when the prompt asks for them: a plan
@@ -318,6 +319,18 @@ async function runSteps(s, prompt, cancelled) {
         fs.writeFileSync("/ask/question.json", JSON.stringify({ question: unescape(rest) }));
         text(s.id, "I asked you a question; I'll wait for the answer.\n");
         break;
+      case "secret": {
+        // secret NAME HOST [what it is]: as request_secret leaves it.
+        const [name, host, ...about] = rest.split(" ");
+        fs.writeFileSync("/ask/secret.json", JSON.stringify({ name, hosts: [host], description: unescape(about.join(" ")) }));
+        text(s.id, `I need ${name} to go on; I asked you for it.\n`);
+        break;
+      }
+      case "env": {
+        const v = process.env[rest.trim()];
+        text(s.id, v ? `${rest.trim()} is set (${v.startsWith("cloudly-secret-") ? "a placeholder" : "a real value"}).\n` : `${rest.trim()} isn't set.\n`);
+        break;
+      }
       case "recall":
         // What it was given: its own session's messages, and the conversation Cloudly sent with the prompt.
         text(s.id, `This session has had ${s.history.length} message(s):\n${s.history.map((h, i) => `${i + 1}. ${h}`).join("\n")}\n\nThe prompt I was given ends:\n\n${prompt.slice(-1500)}\n`);

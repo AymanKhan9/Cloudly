@@ -1,17 +1,29 @@
 # Sessions and chat
 
-A session is a conversation with one agent about one repository. Everything it does lands on one branch and one pull request.
+A session is a conversation with an agent, usually about one repository. Everything it does there lands on one branch and one pull request. A session can also have [no project](#sessions-without-a-project) at all.
 
 ## Start a session
 
 Click **New session** (or press **Ctrl K** anywhere in the app), then:
 
 1. Describe the first task.
-2. Pick the **repository**. Type in the picker to search long lists.
+2. Pick the **repository**, or **No project**. Type in the picker to search long lists.
 3. Check the **base branch**. The pull request targets it.
-4. Pick the **agent**. A session keeps the same agent from start to finish.
+4. Pick the **agent**, its model and how hard it thinks.
 
 Press **Enter** to start, or **Shift + Enter** for a new line.
+
+### Switch agent or model
+
+The picker under the chat box lists every agent you've set up on the left, and the chosen agent's models and effort levels on the right. Pick a different model or effort at any point; it applies from the next turn. Pick a different agent and the session carries on with it: the new agent gets the conversation so far written into its first turn, and works on the same branch.
+
+### Sessions without a project
+
+Pick **No project** for work that isn't about a repository: research, a report, a script you'll copy out. The agent gets a folder of its own at /workspace, kept from turn to turn on your server. Nothing is pushed anywhere, so there's no branch, pull request, checks or merge; what the agent writes stays in that folder and in its [artifacts](/docs/artifacts). Secrets for these sessions are set under **Sessions without a project** in **Settings → Secrets**.
+
+### Several at once
+
+Sessions don't wait for each other. How many turns run at the same time depends on the worker's memory: about one per 1.5 GB, up to four (`WORKER_CONCURRENCY`, see [Configuration](/docs/configuration)). Beyond that, a turn shows "Waiting for the worker to pick this up" until one finishes.
 
 ## What happens during a turn
 
@@ -63,9 +75,13 @@ Sending a message to a session brings it back from Settled, Snoozed or Archived.
 - **Needs you:** the agent asked you something (below). Hover over it to read the question.
 - **A spinning ring:** a turn is running.
 
+Sessions with a turn queued or running are listed first, under **Working**. Sessions you've settled are folded under **Settled** at the bottom.
+
 ## Several sessions side by side
 
 Sessions open as tabs. Click a session in the sidebar and it opens as a new tab in the pane you're working in, or goes to its tab if it's already open.
+
+- **New tab:** the **+** after a pane's tabs opens a new-session form in a tab. The session you start there takes the tab's place; a plan, council or comparison opens on its own page.
 
 - **Split:** the buttons at the right of a pane's tabs split it to the right or downward. The new pane lists your recent sessions to pick from. You can also right-click a session in the sidebar and choose **Open to the side** or **Open below**.
 - **Move and arrange:** drag a tab, or a session from the sidebar, onto a pane. Drop it in the middle to move it there, or near an edge to split that pane on that side. Drag a tab along a tab bar to reorder it.
@@ -81,6 +97,16 @@ The button at the top of the sidebar hides it, leaving a slim bar with buttons t
 ## When an agent needs you
 
 Agents in Cloudly work with nobody watching, so they never stop to ask permission: they can already run commands, edit files and install packages in their sandbox, and nothing they do there leaves it except through Cloudly's own checks. When an agent can't go on without you, because a decision is yours to make or it can't find something, it asks with its `ask_user` tool and ends its turn. The session then shows **Needs you** in the sidebar, and its question sits above the chat box. Reply as usual; your answer is the next turn, and the flag clears.
+
+### When it needs a secret
+
+An agent that needs an API key, a token or a password asks for it with its `request_secret` tool rather than in chat. The turn shows a card with the variable's name, what it's for and the hosts it may be sent to. Paste the value and choose **Save securely**:
+
+- The value is stored encrypted, like a [secret you add in Settings](/docs/secrets-and-files), for this session's repository (or for sessions without a project).
+- The agent never sees it. From its next turn, the variable holds a placeholder that the network proxy swaps for the real value only on HTTPS requests to those hosts.
+- The agent's next turn starts straight away, told that the secret is saved and where it may be used.
+
+Edit the hosts before saving to narrow or widen where it goes. **Decline** tells the agent to carry on without it. Change or remove the secret later under **Settings → Secrets**.
 
 ## Sessions that talk to each other
 

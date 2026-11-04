@@ -27,3 +27,13 @@ test("ask_user leaves the question for the worker and tells the agent to end its
   const tools = (await handle({ jsonrpc: "2.0", id: 2, method: "tools/list" }))!.result.tools;
   expect(tools[0].description).toContain("Never ask for permission");
 });
+
+test("request_secret leaves the request for the worker, never a value", async () => {
+  const ask = async (args: Record<string, unknown>) => (await handle({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "request_secret", arguments: args } }))!.result;
+  const out = await ask({ name: "STRIPE_KEY", description: "Your test key", hosts: ["https://api.stripe.com/v1", "api.stripe.com", "not a host"] });
+  expect(out.isError).toBeUndefined();
+  expect(out.content[0].text).toContain("api.stripe.com");
+  expect(JSON.parse(await readFile(path.join(dir, "secret.json"), "utf8"))).toEqual({ name: "STRIPE_KEY", description: "Your test key", hosts: ["api.stripe.com"] });
+  expect((await ask({ name: "stripe key", hosts: ["api.stripe.com"] })).isError).toBe(true);
+  expect((await ask({ name: "STRIPE_KEY", hosts: [] })).isError).toBe(true);
+});

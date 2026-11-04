@@ -49,4 +49,4 @@ Set these in the [configuration](/docs/configuration) if the defaults don't fit 
 |---|---|
 | `SANDBOX_MEMORY` | The VM's RAM minus 768 MB (at least 512 MB) |
 | `SANDBOX_PIDS` | 2048 |
-| `WORKER_CONCURRENCY` | 1 run at a time |
+| `WORKER_CONCURRENCY` | `auto`: about one turn per 1.5 GB of memory, 1 to 4 |

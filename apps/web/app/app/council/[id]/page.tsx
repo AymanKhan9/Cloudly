@@ -15,17 +15,20 @@ const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 const NAMES: Record<string, string> = { "native-claude": "Claude", "native-codex": "Codex (GPT)", "gemini-acp": "Gemini" };
 const memberName = (h: string) => NAMES[h] ?? harnessById(h).name;
 
+/** Round 1 is research; the last round, final positions; any between, debate. */
 function roundName(round: number, rounds: number) {
   if (round > rounds) return "Report";
-  return round === 1 ? "Research" : round === 2 ? "Cross-review" : "Final positions";
+  if (round === 1) return "Research";
+  if (round === rounds) return "Final positions";
+  return rounds > 3 ? `Debate ${round - 1}` : "Debate";
 }
 
-const ROUND_HINT: Record<string, string> = {
-  Research: "Each member on its own, without seeing the others.",
-  "Cross-review": "Each member reads the others' findings and challenges them.",
-  "Final positions": "Each member's conclusion after everything it read.",
-  Report: "The chair writes the council's report.",
-};
+function roundHint(name: string) {
+  if (name === "Research") return "Every member at once, each on its own, without seeing the others.";
+  if (name.startsWith("Debate")) return "Every member reads the others' latest answers, then challenges, defends and refines.";
+  if (name === "Final positions") return "Each member's conclusion after everything it read.";
+  return "The chair writes the council's report.";
+}
 
 function duration(ms: number | null) {
   if (ms === null) return null;
@@ -122,6 +125,16 @@ export default function CouncilPage() {
     }
   }
 
+  async function finish() {
+    setActionError(null);
+    try {
+      await api(`/councils/${id}/finish`, { method: "POST" });
+      await load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Couldn't finish the council.");
+    }
+  }
+
   async function cancel() {
     setActionError(null);
     try {
@@ -162,41 +175,68 @@ export default function CouncilPage() {
       : council.status === "done"
         ? "Done"
         : council.status === "stopped"
-          ? "Stopped at the cap"
+          ? "Stopped at its cap"
           : council.status === "cancelled"
             ? "Stopped"
             : "Failed";
 
   return (
     <div className="page council">
-      <div className="page-head">
-        <h1>Council</h1>
-        <p className="arena-task">{council.question}</p>
-        <div className="meta council-head">
-          <span className="council-members">
-            {council.members.map((m) => (
-              <span key={m}>
-                <AgentLogo harness={m} size={14} />
-                {memberName(m)}
+      <header className="council-top">
+        <p className="council-kind">
+          <span className="council-dot" data-live={running || undefined} />
+          Council · {council.repo ? <span className="mono">{council.repo}</span> : "web research"}
+        </p>
+        <h1 className="council-question">{council.question}</h1>
+        <div className="council-people">
+          {council.members.map((m) => {
+            const s = council.settings?.[m];
+            return (
+              <span key={m} className="council-person">
+                <AgentLogo harness={m} size={15} />
+                <span>
+                  {memberName(m)}
+                  {s?.model || s?.effort ? <span className="dim"> · {[s.model, s.effort].filter(Boolean).join(", ")}</span> : null}
+                </span>
+                {m === council.chair ? <Crown size={13} aria-label="Chairs" /> : null}
               </span>
-            ))}
-          </span>
-          <span>
-            <Crown size={13} />
-            {memberName(council.chair)} chairs
-          </span>
-          <span>
-            {council.repo ? <GithubLogo size={13} /> : <Globe size={13} />}
-            {council.repo ? <span className="mono">{council.repo}</span> : "Web research"}
-          </span>
-          <span>
-            <StatusIcon status={running ? "running" : council.status === "done" ? "succeeded" : council.status === "failed" ? "failed" : "cancelled"} size={13} />
+            );
+          })}
+          {!council.members.includes(council.chair) ? (
+            <span className="council-person">
+              <AgentLogo harness={council.chair} size={15} />
+              <span>{memberName(council.chair)}</span>
+              <Crown size={13} aria-label="Chairs" />
+            </span>
+          ) : null}
+        </div>
+
+        <ol className="council-steps" aria-label="Rounds">
+          {stages.map((r) => {
+            const name = roundName(r, council.rounds);
+            const state = r < council.round || council.status === "done" ? "done" : r === council.round && running ? "now" : "next";
+            return (
+              <li key={r} data-state={state}>
+                <span className="n">{r > council.rounds ? <Crown size={12} /> : r}</span>
+                <span className="t">{name}</span>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="council-bar">
+          <span className="council-status">
+            <StatusIcon status={running ? "running" : council.status === "done" ? "succeeded" : council.status === "failed" ? "failed" : "cancelled"} size={14} />
             {status}
           </span>
-          <span className="num">
-            {usd(view.spentUsd)}
-            {council.budgetUsd ? ` of ${usd(council.budgetUsd)} cap` : ""}
-          </span>
+          <span className="num dim">{usd(view.spentUsd)}</span>
+          <span className="spacer" />
+          {running && council.round < council.rounds ? (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={finish} title="This round is the last; then the chair writes the report">
+              <Crown size={13} />
+              Finish after this round
+            </button>
+          ) : null}
           {running ? (
             <button type="button" className="btn btn-secondary btn-sm" onClick={cancel}>
               <Stop size={13} weight="fill" />
@@ -204,7 +244,7 @@ export default function CouncilPage() {
             </button>
           ) : null}
         </div>
-      </div>
+      </header>
 
       {actionError || council.error ? (
         <div className="notice" data-tone={council.status === "failed" || actionError ? "danger" : "warn"} role="alert" style={{ marginBottom: 16 }}>
@@ -231,9 +271,9 @@ export default function CouncilPage() {
 
       {running && council.round <= council.rounds ? (
         <form className="council-note" onSubmit={addNote}>
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="A note for the next round, e.g. focus on roles that involve AI tools" maxLength={2000} aria-label="Note for the next round" />
-          <button type="submit" className="btn btn-secondary" disabled={!note.trim()}>
-            Add note
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Steer the next round: a question to settle, a point to dig into…" maxLength={2000} aria-label="Note for the next round" />
+          <button type="submit" className="btn btn-primary" disabled={!note.trim()}>
+            Send to the council
           </button>
         </form>
       ) : null}
@@ -257,7 +297,7 @@ export default function CouncilPage() {
             <section key={r} className="council-round">
               <header>
                 <h2>{r > council.rounds ? "Report" : `Round ${r}: ${name}`}</h2>
-                <p className="hint">{ROUND_HINT[name]}</p>
+                <p className="hint">{roundHint(name)}</p>
               </header>
               <div className="council-grid" style={{ ["--n" as string]: Math.max(1, inRound.length) }}>
                 {inRound.map((t) => (

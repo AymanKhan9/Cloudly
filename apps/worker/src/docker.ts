@@ -8,6 +8,7 @@ import { isProviderHarness, launcherPath, agentFeatures } from "@repo/shared/pro
 import { config, enabledProvider, providerRunCredentials, providerEnvProblem } from "@repo/db";
 import { ensureEgress, EGRESS_FLAGS, GATEWAY_URL, GATEWAY_TLS_URL, CA_BUNDLE_DIR, sandboxTrustFlags } from "./egress";
 import { placeholderCodexAuth } from "./egress-proxy";
+import { sandboxMemory, workerConcurrency } from "./concurrency";
 
 // What a run container gets instead of a real credential. Shaped like the real
 // thing in case a CLI checks the prefix; the gateway replaces it on the way out.
@@ -159,11 +160,9 @@ export function runnerMountFlags(root: string): string[] {
     return RUNNER_MOUNTS.flatMap((p) => ["-v", `${path.join(root, p)}:/repo/${p}:ro`]);
 }
 
-// Leave room for Postgres, the API, the worker and the web app.
-// ponytail: one cap per container; with WORKER_CONCURRENCY > 1 the runs can still
-// oversubscribe RAM together. Set SANDBOX_MEMORY explicitly on shared hosts.
-const SANDBOX_MEMORY = process.env.SANDBOX_MEMORY
-    ?? `${Math.max(512, Math.floor(totalmem() / 1048576) - 768)}m`;
+// Leave room for Postgres, the API, the worker and the web app, and split the
+// rest between the turns that run at once (see concurrency.ts).
+const SANDBOX_MEMORY = sandboxMemory(process.env.SANDBOX_MEMORY, Math.floor(totalmem() / 1048576), workerConcurrency());
 
 export const SANDBOX_LIMITS = [
     "--memory", SANDBOX_MEMORY,

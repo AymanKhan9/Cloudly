@@ -39,11 +39,12 @@ const ACTIVE = ["queued", "running", "finalizing"];
 const BACKSTOP_USD = 20;
 const OVERSHOOT_RATIO = 0.25;
 
+/** Round 1 is research; the last round, final positions; any between, debate. */
 export function roundName(round: number, rounds: number): string {
   if (round > rounds) return "Report";
   if (round === 1) return "Research";
-  if (round === 2) return "Cross-review";
-  return "Final positions";
+  if (round === rounds) return "Final positions";
+  return rounds > 3 ? `Debate ${round - 1}` : "Debate";
 }
 
 interface CouncilLike {
@@ -102,9 +103,9 @@ What's solid, and what's thin.
 ## My take
 Your own reading of it, with your confidence: low, medium or high.`;
   }
-  if (round === 2) {
+  if (round < c.rounds) {
     return `${q}${read}${gaps}
-Round 2 of ${c.rounds}: cross-review. Check the others' claims, and verify them where you can. Say plainly which you think are wrong, unsupported or out of date, and why; don't just agree. Add what everyone missed. Your answer, in Markdown:
+Round ${round} of ${c.rounds}: debate. Answer the others directly, by name: check their latest claims and verify them where you can. Say plainly which you think are wrong, unsupported or out of date, and why; push back on what they said about your answer if you still disagree, and concede where they're right. Don't just agree. Add what everyone missed. Your answer, in Markdown:
 
 ## Where I agree
 ## Where I disagree
@@ -113,7 +114,7 @@ Each: the claim, whose it is, and why.
 ## What changed in my view`;
   }
   return `${q}${read}${gaps}
-Round 3 of ${c.rounds}: your final position, after everything you've read. Short. Your answer, in Markdown:
+Round ${round} of ${c.rounds}: your final position, after everything you've read. Short. Your answer, in Markdown:
 
 ## Conclusion
 ## Confidence
@@ -240,6 +241,10 @@ export async function processCouncilTurn(run: Run, workerId: string, runContaine
     const onPlan = await harnessUsesPlan(run.harness);
     if (onPlan) await prisma.run.updateMany({ where: fenced, data: { onPlan: true } });
     const options: ContainerOptions = { image: await sandboxImage(), mcpServers: Object.keys(await gatewayMcpServers()) };
+    // The model and effort picked for this member (or the chair), else the agent's defaults.
+    const picked = ((c.settings ?? {}) as Record<string, { model?: string; effort?: string }>)[run.harness];
+    if (picked?.model) options.model = picked.model;
+    if (picked?.effort) options.effort = picked.effort;
     if (!onPlan) {
       const caps: number[] = [BACKSTOP_USD];
       const cap = c.budgetUsd?.toNumber();

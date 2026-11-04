@@ -92,7 +92,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="rail-foot">
-          {budget ? (
+          {/* Spend shows once there's a limit to measure it against. */}
+          {budget?.limitUsd ? (
             <Link href="/app/settings" className="rail-spend" aria-label="Spend this month, open settings">
               <span className="row">
                 <span>{budget.limitUsd ? "Spend this month" : "Spend, no limit set"}</span>

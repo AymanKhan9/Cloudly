@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { focusedSession, normalize, panes, workspace, type Split } from "./workspace";
+import { focusedSession, isNewTab, normalize, panes, workspace, type Split } from "./workspace";
 
 const layout = () => workspace.get();
 const shape = () => {
@@ -82,4 +82,24 @@ test("a tidy tree: empty panes go, and nested splits of one direction flatten wi
   expect(root.children.map((c) => c.id)).toEqual(["p1", "p2"]);
   expect(root.sizes).toEqual([0.5, 0.5]);
   expect(panes(root)[1]!.active).toBe("b");
+});
+
+test("+ opens a new-session tab; the session it starts takes the tab's place", () => {
+  workspace.open("x");
+  const pane = layout().focus;
+  workspace.newTab(pane);
+  const tab = panes(layout().root).find((p) => p.id === pane)!.active!;
+  expect(isNewTab(tab)).toBe(true);
+  expect(focusedSession(layout())).toBe(tab);
+  // A second + is another form, not the same one.
+  workspace.newTab(pane);
+  const second = panes(layout().root).find((p) => p.id === pane)!.active!;
+  expect(second).not.toBe(tab);
+
+  workspace.replace(pane, tab, "y");
+  const after = panes(layout().root).find((p) => p.id === pane)!;
+  expect(after.tabs.includes(tab)).toBe(false);
+  expect(after.tabs.includes("y")).toBe(true);
+  expect(after.active).toBe("y");
+  expect(isNewTab("y")).toBe(false);
 });

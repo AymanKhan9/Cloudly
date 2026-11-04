@@ -20,7 +20,7 @@ import { resolveCloneSource, isRepoSlug } from "./github";
 import { costFromDoneEvent } from "./cost";
 import { agentSessionIdFromEvent } from "./agent-session";
 import { promptWithHistory } from "./transcript";
-import { withPreamble, sandboxRules, isCommand, runExtras } from "./preamble";
+import { withPreamble, sandboxRules, isCommand, runExtras, NO_PROJECT_RULE } from "./preamble";
 import { materializeRepoFiles, syncRepoFiles, destroyFilesDir, type FilesDir } from "./repo-files";
 import { prepareArtifacts, collectArtifacts, destroyArtifactsDir, type ArtifactsDir } from "./artifacts";
 import { patchStats } from "./patch";
@@ -28,12 +28,13 @@ import { ensureRelay } from "./previews";
 import { prepareContext, recordTurn, destroyContext, type ContextDir } from "./shared-context";
 import { processCouncilTurn } from "./council";
 import { prepareSessions, collectOutbox, deliverMessages, sendReply, destroySessions, type SessionsDir } from "./peer-sessions";
-import { prepareAsk, recordQuestion, destroyAsk } from "./ask";
+import { prepareAsk, recordQuestion, recordSecretRequest, destroyAsk } from "./ask";
 import { repoSettings, checkCommandFor, runChecks, queueFix, type CheckResult } from "./checks";
 import { processReviewTurn, queueReview, branchDiff, baseRef } from "./review";
 import { notifyTurnEnd } from "./notify";
 import { processImport } from "./imports";
 import { processScreenshots, queueScreenshots } from "./screenshots";
+import { NO_PROJECT, pushScratch, scratchRepo } from "./scratch";
 import { takeSteers, steerDelivered, requeueSteers } from "./steer";
 import { processLessonsTurn } from "./lessons";
 import { processTrialRun } from "./trials";
@@ -197,7 +198,9 @@ export async function processRun(
       return;
     }
 
-    ws = await createWorkspace(await resolveCloneSource(run.repo), {
+    // A session without a project works in a repo of its own (see scratch.ts).
+    const noProject = run.repo === NO_PROJECT && Boolean(thread);
+    ws = await createWorkspace(noProject ? await scratchRepo(thread!.id) : await resolveCloneSource(run.repo), {
       branch: thread?.branch,
       baseBranch: run.baseBranch,
     });
@@ -273,6 +276,7 @@ export async function processRun(
       sessions: sessions ? { count: sessions.index.sessions.length, scope: sessions.index.scope, canSend: sessions.index.canSend > 0 } : undefined,
       ask: Boolean(askDir),
     });
+    if (run.repo === NO_PROJECT) extras.unshift(NO_PROJECT_RULE);
 
     const tools = sandboxToolsLabel(containerOptions.image === "cloud-agents-base" ? "" : await setupScript());
     // A command goes to the agent as typed; history in front of it would turn it into text.
@@ -376,6 +380,8 @@ export async function processRun(
     if (askDir && thread) {
       const question = await recordQuestion(thread.id, askDir).catch((err) => (console.error(`run ${run.id}: couldn't save its question:`, err), null));
       if (question) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "ask_user", question } }]);
+      const secret = await recordSecretRequest(thread.id, askDir).catch((err) => (console.error(`run ${run.id}: couldn't save its secret request:`, err), null));
+      if (secret) await insertEvents(run.id, [{ seq: ++lastSeq, ts: Date.now(), kind: "status", data: { type: "secret_request", ...secret } }]);
     }
 
     // Messages the agent sent other sessions become their next turns.
@@ -444,7 +450,7 @@ export async function processRun(
     // A cancelled turn or a /command isn't checked: nobody asked for it to be done.
     let check: CheckResult | null = null;
     let fixAttempts = 0;
-    if (!cancelled && !isCommand(run.prompt)) {
+    if (!cancelled && !isCommand(run.prompt) && run.repo !== NO_PROJECT) {
       const settings = await repoSettings(run.repo);
       fixAttempts = settings.fixAttempts;
       const command = await checkCommandFor(settings, ws.runDir);
@@ -483,6 +489,9 @@ export async function processRun(
     }
 
     if (leaseLost) return;
+
+    // Without a project, the work is kept in the session's own repo for its next turn.
+    if (run.repo === NO_PROJECT && thread) await pushScratch(publishResult, thread.id);
 
     // Only GitHub-slug repos have a real remote to push to — every worker
     // test fixture uses a local path, same gate `resolveCloneSource` uses.

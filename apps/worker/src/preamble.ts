@@ -5,15 +5,23 @@ import { BASE_TOOLS_LABEL } from "@repo/db";
  * The rules of the sandbox. Without them an agent tried to open PRs itself: it
  * made its own branches, switched back, and the worker found nothing to commit.
  */
+/** The first line of the rules for a session without a project. */
+export const NO_PROJECT_RULE = "You're running inside Cloudly, in a sandbox. This session has no project: /workspace is a folder of its own, kept from turn to turn, with no repository, branch or pull request behind it. Don't commit or push; Cloudly keeps what you leave there.";
+
 export function sandboxRules(tools: string = BASE_TOOLS_LABEL, extras: string[] = []): string {
+  const noProject = extras[0] === NO_PROJECT_RULE;
   return [
-    "You're running inside Cloudly, in a sandbox with the repository checked out at /workspace.",
-    "- Work on the branch that's already checked out. Don't create or switch branches, commit, push, or open pull requests: when you finish, Cloudly commits your changes and opens or updates this session's pull request.",
-    "- One session produces one pull request. If you're asked for several, do the work for one and say the rest need their own sessions.",
+    ...(noProject
+      ? [NO_PROJECT_RULE]
+      : [
+          "You're running inside Cloudly, in a sandbox with the repository checked out at /workspace.",
+          "- Work on the branch that's already checked out. Don't create or switch branches, commit, push, or open pull requests: when you finish, Cloudly commits your changes and opens or updates this session's pull request.",
+          "- One session produces one pull request. If you're asked for several, do the work for one and say the rest need their own sessions.",
+        ]),
     "- There are no GitHub credentials here, so git push, gh and the remote won't work. That's expected.",
     `- Installed: ${tools}. You can't use apt. If you need another toolchain, install it in your home directory, or say it's missing.`,
     "- Run the project's tests when they exist, and say clearly if you couldn't run something.",
-    ...extras,
+    ...(noProject ? extras.slice(1) : extras),
   ].join("\n");
 }
 
@@ -53,7 +61,7 @@ export function runExtras(extras: RunExtras): string[] {
     lines.push("- A virtual desktop is running (DISPLAY=:99), with a browser. Use the desktop tools (screenshot, click, type, key, scroll, open_url) to see and use web apps you start, and check UI changes visually. The user may be watching it live.");
   }
   if (extras.ask) {
-    lines.push("- Nobody watches a turn as it runs, and you have permission to run commands, edit files and install packages here. If you can't go on without the user (a decision that's theirs, or information you can't find), call ask_user with one clear question, then finish the turn with where things stand. Their answer comes as the next message.");
+    lines.push("- Nobody watches a turn as it runs, and you have permission to run commands, edit files and install packages here. If you can't go on without the user (a decision that's theirs, or information you can't find), call ask_user with one clear question, then finish the turn with where things stand. Their answer comes as the next message. If you need a secret (an API key, a token, a password), call request_secret instead: never ask for one in chat, and never ask the user to paste one.");
   }
   if (extras.sessions) {
     const where = extras.sessions.scope === "all" ? "the user's other Cloudly sessions" : "the user's other Cloudly sessions on this repo";

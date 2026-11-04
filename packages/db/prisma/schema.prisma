@@ -475,6 +475,8 @@ model Council {
   budgetUsd  Decimal?
   /// Notes the user added between rounds: [{ text, round, at }].
   guidance   Json     @default("[]")
+  /// Each member's (and the chair's) model and effort: { "<harness>": { model?, effort? } }.
+  settings   Json     @default("{}")
   report     String?
   error      String?
   createdAt  DateTime @default(now())

@@ -15,10 +15,11 @@ import { runPlanLoop } from "./plans";
 import { runHandoffLoop } from "./handoff";
 import { runLessonsLoop } from "./lessons";
 import { runTrialLoop } from "./trials";
+import { workerConcurrency } from "./concurrency";
 
 const workerId = process.env.WORKER_ID ?? `${hostname()}-${process.pid}`;
 // ponytail: poll and recovery each cap at this, so the true ceiling is 2x; share one counter if that matters.
-const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 1));
+const concurrency = workerConcurrency();
 
 const controller = new AbortController();
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

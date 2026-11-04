@@ -151,7 +151,7 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
     features: { resume: true, cost: "usage" },
     credentials: [OPENCODE, ANTHROPIC, OPENAI, OPENROUTER],
     hosts: ["opencode.ai", "models.dev"],
-    note: "Runs OpenCode's free models with no key, within a usage limit OpenCode sets that resets after a few hours. An OpenCode key (opencode.ai/auth, Zen credit or the Go plan) lifts it; a vendor key runs that vendor's models. The Anthropic and OpenAI keys from Settings are used when you leave those empty.",
+    note: "Runs OpenCode's free models with no key, within a usage limit OpenCode sets per account and IP address. An OpenCode key (opencode.ai/auth, Zen credit or the Go plan) runs its other models, the ones without \"Free\" in their name; it doesn't lift the free models' limit. A vendor key runs that vendor's models. The Anthropic and OpenAI keys from Settings are used when you leave those empty.",
   },
   {
     id: "acp-antigravity",

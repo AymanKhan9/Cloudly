@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { NotePencil, SquareSplitHorizontal, SquareSplitVertical, X } from "@phosphor-icons/react";
+import { NotePencil, Plus, SquareSplitHorizontal, SquareSplitVertical, X } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { StatusIcon } from "@/components/status";
 import { SessionView } from "@/components/session-view";
+import { NewSession } from "@/components/new-session";
 import type { RunStatus } from "@/lib/harness";
 import {
   DRAG_TYPE,
   focusedSession,
+  isNewTab,
   panes,
   setSessionInfo,
   useSessionInfo,
@@ -57,7 +59,8 @@ export function SessionWorkspace() {
     }
     if (seen.current === focused) return;
     seen.current = focused;
-    if (focused && pathname !== `/app/s/${focused}`) router.replace(`/app/s/${focused}`);
+    // A new-session tab has no address of its own; the address stays where it was.
+    if (focused && !isNewTab(focused) && pathname !== `/app/s/${focused}`) router.replace(`/app/s/${focused}`);
     // Every tab closed: back to a new session.
     if (!focused && panes(layout.root).every((p) => p.tabs.length === 0)) router.push("/app");
   }, [focused, pathname, router, layout.root]);
@@ -191,6 +194,7 @@ function zoneAt(e: React.DragEvent, el: HTMLElement): Zone {
 
 function PaneView({ pane, focused, many }: { pane: Pane; focused: boolean; many: boolean }) {
   const info = useSessionInfo();
+  const router = useRouter();
   const [zone, setZone] = useState<Zone | null>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const strip = useRef<HTMLDivElement>(null);
@@ -269,8 +273,8 @@ function PaneView({ pane, focused, many }: { pane: Pane; focused: boolean; many:
                 }
               }}
             >
-              <StatusIcon status={(s?.status ?? "queued") as RunStatus} pr={s?.pr} size={13} />
-              <span className="ws-tab-title">{s?.title ?? "Session"}</span>
+              {isNewTab(t) ? <NotePencil size={13} /> : <StatusIcon status={(s?.status ?? "queued") as RunStatus} pr={s?.pr} size={13} />}
+              <span className="ws-tab-title">{isNewTab(t) ? "New session" : s?.title ?? "Session"}</span>
               <button
                 type="button"
                 className="ws-tab-close"
@@ -286,6 +290,9 @@ function PaneView({ pane, focused, many }: { pane: Pane; focused: boolean; many:
             </div>
           );
         })}
+        <button type="button" className="ws-tab-new" aria-label="New session in a new tab" title="New session in a new tab" onClick={() => workspace.newTab(pane.id)}>
+          <Plus size={14} weight="bold" />
+        </button>
         <span className="ws-tab-end" data-slot={slot === pane.tabs.length || undefined} />
         <div className="ws-pane-actions">
           <button type="button" className="icon-btn" aria-label="Split right" title="Split right" onClick={() => workspace.split(pane.id, "right")}>
@@ -323,7 +330,23 @@ function PaneView({ pane, focused, many }: { pane: Pane; focused: boolean; many:
           workspace.drop(d.id, pane.id, z === "center" ? {} : { edge: z });
         }}
       >
-        {pane.active ? <SessionView key={pane.active} id={pane.active} /> : <EmptyPane pane={pane} />}
+        {pane.active && isNewTab(pane.active) ? (
+          <NewSession
+            key={pane.active}
+            onCreated={(made) => {
+              // A session takes this tab's place; a council, comparison or plan opens its own page.
+              if (made.kind === "session") workspace.replace(pane.id, pane.active!, made.id);
+              else {
+                workspace.close(pane.id, pane.active!);
+                router.push(`/app/${made.kind === "plan" ? "plans" : made.kind}/${made.id}`);
+              }
+            }}
+          />
+        ) : pane.active ? (
+          <SessionView key={pane.active} id={pane.active} />
+        ) : (
+          <EmptyPane pane={pane} />
+        )}
       </div>
       {zone ? <div className="ws-drop" data-zone={zone} aria-hidden="true" /> : null}
     </section>
@@ -349,7 +372,7 @@ function EmptyPane({ pane }: { pane: Pane }) {
             <button type="button" onClick={() => workspace.drop(t.id, pane.id, {})}>
               <StatusIcon status={t.lastStatus as RunStatus} pr={Boolean(t.prUrl)} size={14} />
               <span className="t">{t.title}</span>
-              <span className="dim">{open.has(t.id) ? "Open in another pane" : t.repo.split("/")[1]}</span>
+              <span className="dim">{open.has(t.id) ? "Open in another pane" : t.repo ? t.repo.split("/")[1] : "No project"}</span>
             </button>
           </li>
         ))}

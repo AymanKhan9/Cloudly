@@ -41,9 +41,9 @@ Whichever you use, the credential never enters the sandbox. See [Security model]
 
 ### OpenCode's free models and its key
 
-OpenCode needs no sign-in: its free models (the ones ending in `-free`) run as soon as you add it. OpenCode caps how much they can be used, and the cap resets after some hours. When a turn hits it, it fails with "Free usage limit reached". To keep going, either:
+OpenCode needs no sign-in: its free models (the ones with "Free" in their name) run as soon as you add it. OpenCode caps how much they can be used, per account and per IP address, and the cap resets after some hours. When a turn hits it, it fails with "Free usage limit reached". A server's IP is often shared or already used up, so the free models can fail on your VM while they work on your laptop. An OpenCode key doesn't lift the free models' cap. To keep going, either:
 
-- create a key at [opencode.ai/auth](https://opencode.ai/auth), with Zen credit or a Go subscription, and paste it as **OpenCode Zen or Go key** under **Settings → Agents → OpenCode**. Cloudly gives OpenCode the key the same way it gives agents every other key: the sandbox gets a placeholder that's swapped for the real key only on requests to opencode.ai. There's no `opencode auth login` to run, because sessions run in a fresh sandbox each time;
+- create a key at [opencode.ai/auth](https://opencode.ai/auth), with Zen credit or a Go subscription, paste it as **OpenCode Zen or Go key** under **Settings → Agents → OpenCode**, and pick one of OpenCode's models **without** "Free" in its name. Cloudly gives OpenCode the key the same way it gives agents every other key: the sandbox gets a placeholder that's swapped for the real key only on requests to opencode.ai. There's no `opencode auth login` to run, because sessions run in a fresh sandbox each time;
 - add an Anthropic, OpenAI or OpenRouter key, and pick one of that vendor's models;
 - or pick another agent.
 

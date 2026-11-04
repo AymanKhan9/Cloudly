@@ -12,6 +12,7 @@ import { SANDBOX_LIMITS, envFlags, runnerMountFlags, sandboxUser } from "./docke
 import { materializeRepoFiles } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
 import { pause } from "./pause";
+import { NO_PROJECT, scratchRepo } from "./scratch";
 
 // --- The relay --------------------------------------------------------------------
 // Started by the worker like the egress proxy. It joins the sandbox network to
@@ -83,7 +84,7 @@ export async function startPreview(id: string): Promise<void> {
   const dirs: string[] = [];
   try {
     await ensureRelay();
-    const ws = await createWorkspace(await resolveCloneSource(thread.repo), { branch: thread.branch, baseBranch: thread.baseBranch });
+    const ws = await createWorkspace(thread.repo === NO_PROJECT ? await scratchRepo(thread.id) : await resolveCloneSource(thread.repo), { branch: thread.branch, baseBranch: thread.baseBranch });
     dirs.push(ws.scratchDir);
     const files = await materializeRepoFiles(thread.repo);
     dirs.push(files.dir);

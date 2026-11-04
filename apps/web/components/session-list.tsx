@@ -50,7 +50,9 @@ function snoozeTimes(now = new Date()): { label: string; at: Date }[] {
 const until = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 
-type Section = "snoozed" | "settled" | "archived";
+const WORKING = ["queued", "running", "finalizing"];
+
+type Section = "working" | "snoozed" | "settled" | "archived";
 
 function DeleteDialog({ thread, onClose, onDeleted }: { thread: ThreadSummary; onClose: () => void; onDeleted: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -132,7 +134,7 @@ function Row({
       </form>
     );
   }
-  const where = `${t.repo.split("/")[1]} · ${harnessById(t.harness).name}${t.arenaId ? " in an arena" : ""}`;
+  const where = `${t.repo ? t.repo.split("/")[1] : "No project"} · ${harnessById(t.harness).name}${t.arenaId ? " in an arena" : ""}`;
   return (
     <Link
       href={href}
@@ -184,7 +186,7 @@ export function SessionList({ pathname }: { pathname: string }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<ThreadSummary | null>(null);
   const [repo, setRepo] = useState<string | null>(null);
-  const [open, setOpen] = useState<Record<Section, boolean>>({ snoozed: false, settled: false, archived: false });
+  const [open, setOpen] = useState<Record<Section, boolean>>({ working: true, snoozed: false, settled: false, archived: false });
 
   const load = useCallback(() => {
     api<{ councils: CouncilSummary[] }>("/councils").then((r) => setCouncils(r.councils)).catch(() => {});
@@ -233,7 +235,7 @@ export function SessionList({ pathname }: { pathname: string }) {
     const now = new Date().toISOString();
     const link = () => `${window.location.origin}/app/s/${t.id}`;
     const copy = (text: () => string) => () => void copyText(text());
-    const short = t.repo.split("/")[1] ?? t.repo;
+    const short = t.repo ? t.repo.split("/")[1] ?? t.repo : "No project";
     return [
       { kind: "action", label: `New session on ${short}`, icon: <NotePencil size={15} />, run: () => router.push(`/app?repo=${encodeURIComponent(t.repo)}&branch=${encodeURIComponent(t.baseBranch)}`) },
       t.pinnedAt
@@ -319,7 +321,9 @@ export function SessionList({ pathname }: { pathname: string }) {
   const archived = shown.filter((t) => t.archivedAt);
   const live = shown.filter((t) => !t.archivedAt);
   const snoozed = live.filter((t) => t.snoozed);
-  const awake = live.filter((t) => !t.snoozed);
+  // Sessions with a turn under way, together at the top, as in T3 Code.
+  const working = live.filter((t) => WORKING.includes(t.lastStatus));
+  const awake = live.filter((t) => !t.snoozed && !WORKING.includes(t.lastStatus));
   // A session that needs the user stays in view even if it was settled.
   const settled = awake.filter((t) => t.settledAt && !t.needsInput);
   const pinned = awake.filter((t) => t.pinnedAt && !(t.settledAt && !t.needsInput));
@@ -345,8 +349,8 @@ export function SessionList({ pathname }: { pathname: string }) {
     />
   );
 
-  const fold = (key: Section, label: string, list: ThreadSummary[]) =>
-    list.length ? (
+  const fold = (key: Section, label: string, list: ThreadSummary[], always = false) =>
+    list.length || always ? (
       <div className="rail-fold" key={key}>
         <button type="button" className="rail-group rail-fold-head" aria-expanded={open[key]} onClick={() => setOpen((o) => ({ ...o, [key]: !o[key] }))}>
           {open[key] ? <CaretDown size={11} weight="bold" /> : <CaretRight size={11} weight="bold" />}
@@ -369,6 +373,7 @@ export function SessionList({ pathname }: { pathname: string }) {
           </button>
         </div>
       ) : null}
+      {fold("working", "Working", working)}
       {pinned.length ? (
         <>
           <div className="rail-group">Pinned</div>
@@ -405,7 +410,7 @@ export function SessionList({ pathname }: { pathname: string }) {
         );
       })}
       {fold("snoozed", "Snoozed", snoozed)}
-      {fold("settled", "Settled", settled)}
+      {fold("settled", "Settled", settled, true)}
       {fold("archived", "Archived", archived)}
       {menu ? <ContextMenu items={itemsFor(menu.thread)} at={menu.at} label={`${menu.thread.title}: actions`} onClose={closeMenu} /> : null}
       {deleting ? (

@@ -39,6 +39,7 @@ checkpoints.post("/:id/rewind", zValidator("json", z.object({ runId: z.string().
   const user = c.get("user");
   const thread = await prisma.thread.findFirst({ where: { id: c.req.param("id"), userId: user.id } });
   if (!thread) return c.json({ message: "Session not found" }, 404);
+  if (!thread.repo) return c.json({ message: "Rewinding needs the session to be on a repository." }, 400);
   const target = await prisma.run.findFirst({ where: { id: c.req.valid("json").runId, threadId: thread.id } });
   const why = await problem(thread, target, true);
   if (why) return c.json({ message: why }, 409);
@@ -68,6 +69,7 @@ checkpoints.post("/:id/fork", zValidator("json", ForkSchema), async (c) => {
   const user = c.get("user");
   const parent = await prisma.thread.findFirst({ where: { id: c.req.param("id"), userId: user.id } });
   if (!parent) return c.json({ message: "Session not found" }, 404);
+  if (!parent.repo) return c.json({ message: "Forking needs the session to be on a repository." }, 400);
   const { runId, harness: picked, prompt } = c.req.valid("json");
   const target = await prisma.run.findFirst({ where: { id: runId, threadId: parent.id } });
   const why = await problem(parent, target, false);

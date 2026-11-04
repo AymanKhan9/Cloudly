@@ -27,7 +27,6 @@ import {
   Lightbulb,
   MagnifyingGlass,
   PencilSimpleLine,
-  Robot,
   Stop,
   TreeStructure,
   Terminal,
@@ -52,7 +51,10 @@ import { CheckpointRequest, ForkBanner, ImportBanner, TurnMenu } from "@/compone
 import { TurnArtifacts } from "@/components/artifacts";
 import { HandoffPanel } from "@/components/handoff-panel";
 import { setSessionInfo } from "@/lib/workspace";
+import { AgentModelPicker, type AgentChoice } from "@/components/agent-model-picker";
+import { useApp } from "@/components/app-context";
 import { ChangesPanel } from "@/components/changes-panel";
+import { SecretRequest, secretAsk } from "@/components/secret-request";
 
 const ACTIVE: RunStatus[] = ["queued", "running", "finalizing"];
 
@@ -214,6 +216,7 @@ function TurnView({
   onOpenChanges,
   checkpoint,
   artifacts,
+  secret,
 }: {
   turn: Turn;
   events: StreamEvent[];
@@ -224,6 +227,8 @@ function TurnView({
   checkpoint?: { threadId: string; canRewind: boolean; rewindNote?: string };
   /** The session's artifacts; the turn shows the ones it wrote. */
   artifacts?: ArtifactMeta[];
+  /** The session, and whether a secret this turn asked for still waits for the user. */
+  secret?: { threadId: string; open: boolean };
 }) {
   // A review runs with the repo's reviewer, not the session's agent.
   const harness = turn.harness ?? sessionHarness;
@@ -236,6 +241,7 @@ function TurnView({
     const e = events.find((x) => x.kind === "status" && (x.data as { type?: string } | null)?.type === "sessions.sent");
     return ((e?.data as { to?: { id: string; title: string; replyWanted: boolean }[] } | undefined)?.to ?? []).filter((t) => typeof t?.id === "string");
   }, [events]);
+  const asked = useMemo(() => secretAsk(events), [events]);
 
   return (
     <article className="turn" data-rewound={turn.rewoundAt ? true : undefined}>
@@ -271,6 +277,7 @@ function TurnView({
       <div className="msg-agent">
         <Blocks blocks={blocks} live={active} />
         {artifacts?.length ? <TurnArtifacts turnId={turn.id} all={artifacts} /> : null}
+        {asked && secret ? <SecretRequest key={asked.name} threadId={secret.threadId} ask={asked} open={secret.open} /> : null}
 
         {active && blocks.length === 0 ? (
           <p className="shimmer-text" role="status" style={{ fontSize: 14, justifySelf: "start" }}>
@@ -287,8 +294,9 @@ function TurnView({
 
         {turn.error && /free usage limit/i.test(turn.error) && harness.includes("opencode") ? (
           <p className="hint">
-            OpenCode caps how much its free models can be used, and the cap resets after some hours. To keep going, add an OpenCode key (Zen credit or the Go plan,
-            from opencode.ai/auth) or a vendor key under <Link href="/app/settings/agents">Settings → Agents → OpenCode</Link>, or pick another agent.
+            OpenCode caps its free models (the ones ending in &ldquo;Free&rdquo;) by account and by the server&rsquo;s IP address, and an OpenCode key doesn&rsquo;t lift that cap. With
+            an OpenCode key under <Link href="/app/settings/agents">Settings → Agents → OpenCode</Link>, pick a model without &ldquo;Free&rdquo; in its name: it runs on your Zen
+            credit or Go plan. Or add a vendor key there, or switch to another agent from the model picker.
           </p>
         ) : null}
 
@@ -358,6 +366,7 @@ function ContextRing({ tokens, max, percentage }: { tokens: number; max: number;
  * session workspace, which is what scrolls; `active` is whether it's on screen.
  */
 export function SessionView({ id, active = true }: { id: string; active?: boolean }) {
+  const { harnesses } = useApp();
   const rootRef = useRef<HTMLDivElement>(null);
   // The pane's scroll container (the window, outside the workspace).
   const scroller = () => (rootRef.current?.closest(".pane-body") as HTMLElement | null) ?? null;
@@ -608,7 +617,20 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
       setActionError(err instanceof Error ? err.message : `Couldn't change the ${field}.`);
     }
   }
-  const setModel = (model: string | null) => saveSetting("model", model);
+  // The agent, model and effort for the next turn. Another agent gets the conversation so far.
+  async function chooseAgent(next: AgentChoice) {
+    const t = view!.thread;
+    const before = { harness: t.harness, model: t.model ?? null, effort: t.effort ?? null };
+    const patch = next.harness !== t.harness ? next : { model: next.model, effort: next.effort };
+    setView((v) => (v ? { ...v, thread: { ...v.thread, ...next } } : v));
+    setActionError(null);
+    try {
+      await api(`/threads/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    } catch (err) {
+      setView((v) => (v ? { ...v, thread: { ...v.thread, ...before } } : v));
+      setActionError(err instanceof Error ? err.message : "Couldn't change the agent.");
+    }
+  }
 
   // The second line of a model in the menu: vendor logo, vendor, and a note.
   const by = (note?: string) => (
@@ -642,14 +664,20 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
         <div className="titles">
           <h1 title={thread.title}>{thread.title}</h1>
           <div className="meta">
-            <span>
-              <GithubLogo size={13} />
-              <span className="mono">{thread.repo}</span>
-            </span>
-            <span className="hide-sm">
-              <GitBranch size={13} />
-              <span className="mono">{thread.branch}</span>
-            </span>
+            {thread.repo ? (
+              <>
+                <span>
+                  <GithubLogo size={13} />
+                  <span className="mono">{thread.repo}</span>
+                </span>
+                <span className="hide-sm">
+                  <GitBranch size={13} />
+                  <span className="mono">{thread.branch}</span>
+                </span>
+              </>
+            ) : (
+              <span>No project</span>
+            )}
           </div>
         </div>
         <div className="tools">
@@ -665,15 +693,19 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
               <span className="hide-sm">Desktop</span>
             </button>
           ) : null}
+          {thread.repo ? (
           <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "changes"} onClick={() => toggle("changes")} title="What this session changed, the reviewer's findings, and your comments" aria-label="Changes">
             <GitDiff size={15} />
             <span className="hide-sm">Changes</span>
             {openFindings ? <span className="count num">{openFindings}</span> : null}
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title="Run this branch's app" aria-label="Preview">
+          ) : null}
+          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title={thread.repo ? "Run this branch's app" : "Run the app in this session's folder"} aria-label="Preview">
             <AppWindow size={15} />
             <span className="hide-sm">Preview</span>
           </button>
+          {thread.repo ? (
+          <>
           <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "context"} onClick={() => toggle("context")} title="Notes and work shared by every agent on this repo" aria-label="Context">
             <Notebook size={15} />
             <span className="hide-sm">Context</span>
@@ -686,6 +718,8 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             <Laptop size={15} />
             <span className="hide-sm">Local</span>
           </button>
+          </>
+          ) : null}
           {thread.prUrl && (thread.mergedAt || thread.autoMerge) ? (
             <span className="merge-chip" data-merged={thread.mergedAt ? true : undefined} title={thread.mergedAt ? "Merged by Cloudly when it was ready" : "Merge when ready is on"}>
               <GitMerge size={14} weight="bold" />
@@ -756,6 +790,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             harness={thread.harness}
             now={now}
             artifacts={thread.artifacts}
+            secret={{ threadId: thread.id, open: t.id === lastLiveTurn?.id && Boolean(thread.needsInput) && !busy }}
             checkpoint={
               !t.rewoundAt && t.kind !== "rewind" && t.kind !== "fork" && t.kind !== "import" && t.kind !== "screenshots" && (t.kind !== "import_turn" || t.id === lastImported?.id) && !ACTIVE.includes(t.status)
                 ? {
@@ -778,7 +813,15 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
           <div className="notice needs-you" data-tone="warn" role="status">
             <ChatsCircle size={16} weight="bold" />
             <span>
-              <strong>The agent needs your answer:</strong> {thread.needsInput}
+              {thread.needsInput.startsWith("The agent needs a secret:") ? (
+                <>
+                  <strong>{thread.needsInput}.</strong> Enter it in the box above; the agent never sees it.
+                </>
+              ) : (
+                <>
+                  <strong>The agent needs your answer:</strong> {thread.needsInput}
+                </>
+              )}
             </span>
           </div>
         ) : null}
@@ -827,7 +870,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
                 send();
               }
             }}
-            placeholder={commands.length ? "Reply to the agent, or type / for its commands" : "Ask for a change, or a question about the code"}
+            placeholder={commands.length ? "Reply to the agent, or type / for its commands" : thread.repo ? "Ask for a change, or a question about the code" : "Ask anything"}
             rows={1}
             maxLength={8000}
             aria-label="Message"
@@ -835,32 +878,18 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             aria-activedescendant={suggestions.length ? `cmd-${pick}` : undefined}
           />
           <div className="composer-bar">
-            <Picker
+            <AgentModelPicker
               ref={modelMenu}
-              label="Model"
-              icon={<AgentLogo harness={thread.harness} size={15} />}
               up
-              searchable
-              value={thread.model ?? "default"}
-              placeholder={context.model ?? "Default"}
-              options={[
-                { value: "default", label: "Default", hint: !thread.model ? context.model : undefined, sub: by("Chosen by the agent") },
-                ...(MODELS[thread.harness as HarnessId] ?? context.offered).map((m: { value: string; label: string; hint?: string }) => ({ value: m.value, label: m.label, sub: by(m.hint) })),
-              ]}
-              custom={(q) => `Use ${q}`}
-              note={busy ? "A new model applies from the next turn." : undefined}
-              onChange={(v) => {
-                setModel(v === "default" ? null : v);
+              harnesses={harnesses}
+              value={{ harness: thread.harness, model: thread.model ?? null, effort: thread.effort ?? null }}
+              offered={context.offered}
+              efforts={context.efforts}
+              note={busy ? "Changes apply from the next turn." : "Another agent takes over from the next turn, with this conversation so far."}
+              onChange={(next) => {
+                void chooseAgent(next);
                 inputRef.current?.focus();
               }}
-            />
-            <EffortControl
-              harness={thread.harness}
-              value={thread.effort ?? null}
-              offered={context.efforts}
-              up
-              note={busy ? "A new effort applies from the next turn." : undefined}
-              onChange={(effort) => saveSetting("effort", effort)}
             />
             <Picker
               label="Other sessions"
@@ -879,6 +908,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
               note="Which of your sessions this one's agent may read and send messages to. Applies from the next turn."
               onChange={(v) => saveSetting("peers", v)}
             />
+            {thread.repo ? (
             <button
               type="button"
               className="pill"
@@ -896,6 +926,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
               <GitMerge size={14} />
               <span className="pill-text">{thread.mergedAt ? "Merged" : "Merge when ready"}</span>
             </button>
+            ) : null}
             {caps?.desktop || thread.desktop ? (
               <button
                 type="button"
@@ -908,10 +939,6 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
                 <span className="pill-text">{thread.desktop ? "Desktop on" : "Desktop"}</span>
               </button>
             ) : null}
-            <span className="composer-meta">
-              <Robot size={14} />
-              {h.name}
-            </span>
             {context.usage ? <ContextRing {...context.usage} /> : null}
             {total > 0 ? (
               <span className="composer-meta num" title={h.cost === "estimated" ? "Session total, estimated" : "Session total"}>
@@ -940,7 +967,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
           </div>
         </div>
         <div className="composer-note" data-tone={hint?.tone === "danger" ? "danger" : undefined} role={hint?.tone ? "alert" : undefined}>
-          <span style={hint?.tone === "warn" ? { color: "var(--warn)" } : undefined}>{hint?.text ?? "Follow-ups continue on the same branch and pull request."}</span>
+          <span style={hint?.tone === "warn" ? { color: "var(--warn)" } : undefined}>{hint?.text ?? (thread.repo ? "Follow-ups continue on the same branch and pull request." : "Follow-ups continue in this session's own folder.")}</span>
           <span className="hide-sm">
             <kbd>Enter</kbd> to send
           </span>

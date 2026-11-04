@@ -155,6 +155,22 @@ export const workspace = {
     });
   },
 
+  /** A tab for starting a new session in this pane ("new:…" until the session exists). */
+  newTab(paneId: string) {
+    const l = current();
+    const tab = `${NEW_TAB}${newId("")}`;
+    commit({ root: mapTree(l.root, (n) => (n.id === paneId && n.kind === "pane" ? { ...n, tabs: [...n.tabs, tab], active: tab } : n)), focus: paneId });
+  },
+
+  /** A tab becomes another: a new-session tab, the session it started. */
+  replace(paneId: string, from: string, to: string) {
+    const l = current();
+    commit({
+      root: mapTree(withoutTab(l.root, to), (n) => (n.id === paneId && n.kind === "pane" ? { ...n, tabs: n.tabs.map((t) => (t === from ? to : t)), active: to } : n)),
+      focus: paneId,
+    });
+  },
+
   /** Opens a session in a new pane beside the focused one. */
   openBeside(id: string, edge: Edge = "right") {
     const l = current();
@@ -261,6 +277,10 @@ export function useWorkspace(): Layout {
   );
 }
 const SERVER = fresh();
+
+/** A tab that's a new-session form, not a session yet. */
+export const NEW_TAB = "new:";
+export const isNewTab = (id: string | null | undefined) => Boolean(id?.startsWith(NEW_TAB));
 
 /** The session shown in the focused pane. */
 export function focusedSession(l: Layout): string | null {

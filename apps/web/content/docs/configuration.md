@@ -56,7 +56,7 @@ These are normally entered in the browser. A value in `.env` is only used when n
 
 | Variable | What it is |
 |---|---|
-| `WORKER_CONCURRENCY` | Turns that run at the same time. Keep `1` on a 1 GB VM. |
+| `WORKER_CONCURRENCY` | Turns that run at the same time, across all sessions. `auto` (the default) runs about one per 1.5 GB of memory, from 1 to 4, and splits the sandbox memory between them. A number sets it. |
 | `SANDBOX_MEMORY` | Memory per run container. Default: the VM's RAM minus 768 MB, at least 512 MB. |
 | `SANDBOX_PIDS` | Process limit per run container. Default `2048`. |
 | `CLOUDLY_REPO_CACHE` | Where the worker keeps a copy of each repo so turns start fast. Default `~/.cloudly/repo-cache`; `off` clones the whole repo every turn. |

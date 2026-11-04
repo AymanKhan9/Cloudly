@@ -19,28 +19,27 @@ Before anything starts, Cloudly checks that each named agent can run. One that c
 You can also set it up by hand. On the new-session page, click **+** in the chat box and choose **Council**, then:
 
 1. **Pick the members**: two or more agents, built in or [added](/docs/agents#add-more-agents), each once. There's no limit beyond the agents you've set up; an agent that can't run yet is greyed out, with the reason when you point at it.
-2. **Pick the chair**, who writes the report. Claude Code by default; the chair can also be a member.
-3. **Pick the rounds** (three by default):
-   - **1 round**: research only, then the report.
-   - **2 rounds**: research, then cross-review.
-   - **3 rounds**: research, cross-review, then final positions.
-4. **Set a spending cap** for the whole council ($5 by default).
+2. **Pick each member's model and effort**, or leave them on the agent's default. You might put Claude on its strongest model at high effort and Codex on a fast model at low effort.
+3. **Pick the chair** (the crown), who writes the report. Claude Code by default; the chair can also be a member.
+4. **Pick the rounds**, from 1 to 10 (three by default). The first round is research and the last is final positions; every round in between is a debate.
 5. Choose **Web research** (the default) or **On a repo**, write the question and press **Enter**.
 
-Before it starts, Cloudly shows how many agent turns the council will take, and roughly what they'll cost based on your own recent turns. Each member takes a turn per round, so five members over three rounds is 16 turns with the report. Turns run one at a time unless the worker runs several (`WORKER_CONCURRENCY`), so a large council takes a while; the spending cap stops it either way.
+Before it starts, Cloudly shows how many agent turns the council will take, and roughly what they'll cost based on your own recent turns. Each member takes a turn per round, so five members over three rounds is 16 turns with the report. There's no cap for the council itself; its turns count toward your [spend limit](/docs/spend-limit) like any others.
 
 ## The rounds
 
 | Round | What each member does |
 |---|---|
 | **Research** | Works on its own, without seeing the others, so their answers don't steer each other. Gives findings with sources and dates, how sure it is, open questions, and its own take with a confidence. |
-| **Cross-review** | Reads everyone's research. Checks their claims, says plainly which it thinks are wrong or unsupported, adds what was missed, and says what changed its mind. |
-| **Final positions** | Its conclusion after everything it read: confidence, the reason that matters most, and what would change its mind. |
+| **Debate** (every round between the first and the last) | Reads everyone's latest answers and answers the others by name: checks their claims, says plainly which it thinks are wrong, unsupported or out of date, pushes back where it still disagrees, concedes where they're right, and adds what was missed. |
+| **Final positions** (the last round) | Its conclusion after everything it read: confidence, the reason that matters most, and what would change its mind. |
 | **Report** | The chair writes the council's report from every member's answers, attributing views by name. |
 
 A member that doesn't finish a round drops out of the later ones; the others carry on. If the chair doesn't finish, the report is each member's last answer, unedited.
 
-While it runs, the council page shows each member's progress live. Type a note between rounds, like "focus on roles that involve AI tools", and every later turn reads it. **Stop** ends the council early. When it's done, the report is at the top, with **Download** for a Markdown file. Each member's answer from every round is below it.
+The members of a round work at the same time, so a round takes as long as its slowest member, not the sum of them. When they've all finished, the next round starts with everyone's answers.
+
+While it runs, the council page shows each member's progress live. Type a note at any point, like "focus on roles that involve AI tools", and every later turn reads it. **Finish after this round** skips to the report once the current round is done; **Stop** ends the council straight away. When it's done, the report is at the top, with **Download** for a Markdown file. Each member's answer from every round is below it.
 
 ## Web research or a repo
 
@@ -50,9 +49,9 @@ While it runs, the council page shows each member's progress live. Type a note b
 
 ## Cost
 
-A council is several ordinary agent turns: members × rounds, plus the chair's report. A three-member, three-round council is ten turns, and web research turns are the expensive kind. Every turn counts toward your [spend limit](/docs/spend-limit) as usual; turns on a Claude or ChatGPT plan cost nothing extra. The council stops at its cap after the round in which it's reached, with a report made from what it has. Claude Code also stops itself mid-turn at the cap; Codex and Gemini can go over by that one turn.
+A council is several ordinary agent turns: members × rounds, plus the chair's report. A three-member, three-round council is ten turns, and web research turns are the expensive kind. Every turn counts toward your [spend limit](/docs/spend-limit) as usual; turns on a Claude or ChatGPT plan cost nothing extra.
 
-Turns run one at a time unless `WORKER_CONCURRENCY` is higher, so on a small VM a council takes a while. With more concurrency, the members of a round work in parallel.
+How many turns run at once depends on the worker's memory (`WORKER_CONCURRENCY`, see [Configuration](/docs/configuration)): about one per 1.5 GB, up to four. On a 1 GB VM the members of a round take turns; with 4 GB or more, a round's members work in parallel.
 
 ## Good to know
 

@@ -49,7 +49,14 @@ export function AgentLogo({ harness, size = 16, icon }: { harness: string; size?
   if (!b) {
     // A catalog agent's current mark beats the one saved when it was added.
     const src = catalogIconPath(harness) ?? icon ?? harnessById(harness).icon;
-    return src ? <MaskIcon src={src} size={size} /> : null;
+    if (src) return <MaskIcon src={src} size={size} />;
+    // No mark of its own: its initial, so it's never a blank.
+    const name = harnessById(harness).name || harness.replace(/^acp-/, "");
+    return (
+      <span aria-hidden="true" className="agent-initial" style={{ width: size, height: size, fontSize: Math.round(size * 0.62) }}>
+        {name.charAt(0).toUpperCase()}
+      </span>
+    );
   }
   // eslint-disable-next-line @next/next/no-img-element -- a 16px static mark needs no image optimisation
   if (b.src) return <img src={b.src} width={size} height={size} alt="" aria-hidden="true" style={{ flex: "none", borderRadius: 3 }} />;

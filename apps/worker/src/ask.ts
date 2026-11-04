@@ -34,6 +34,42 @@ export async function recordQuestion(threadId: string, dir: string): Promise<str
   return question;
 }
 
+export interface SecretRequest {
+  name: string;
+  description: string;
+  hosts: string[];
+}
+
+const SECRET_NAME = /^[A-Z_][A-Z0-9_]{0,63}$/;
+const HOST = /^(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
+
+/** The secret the agent asked for with request_secret this turn, if it asked for one. */
+export async function readSecretRequest(dir: string): Promise<SecretRequest | null> {
+  const bytes = await readRegular(path.join(dir, "secret.json"), 16 * 1024);
+  if (!bytes) return null;
+  try {
+    const raw = JSON.parse(new TextDecoder().decode(bytes));
+    const name = String(raw?.name ?? "");
+    const hosts = (Array.isArray(raw?.hosts) ? raw.hosts : []).map(String).filter((h: string) => HOST.test(h)).slice(0, 10);
+    if (!SECRET_NAME.test(name) || !hosts.length) return null;
+    return { name, description: String(raw?.description ?? "").slice(0, MAX_QUESTION), hosts };
+  } catch {
+    return null;
+  }
+}
+
+/** Flags the session as needing the user, for the secret the agent asked for. */
+export async function recordSecretRequest(threadId: string, dir: string): Promise<SecretRequest | null> {
+  const request = await readSecretRequest(dir);
+  if (request) {
+    await prisma.thread.update({
+      where: { id: threadId },
+      data: { needsInput: `The agent needs a secret: ${request.name}`, settledAt: null, snoozedUntil: null },
+    });
+  }
+  return request;
+}
+
 export async function destroyAsk(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }

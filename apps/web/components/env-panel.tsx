@@ -88,7 +88,7 @@ export function EnvPanel() {
                     {s.exposed ? "Real value in the sandbox" : `Filled in for ${hostsLabel(s.hosts)}`}
                     {s.preview ? ` (${s.preview})` : ""}
                   </div>
-                  <div className="hint">{s.repo === "*" ? "Every repository" : s.repo}</div>
+                  <div className="hint">{s.repo === "*" ? "Every repository" : s.repo === "" ? "Sessions without a project" : s.repo}</div>
                 </div>
                 <div className="mcp-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => edit(s)}>
@@ -140,6 +140,7 @@ export function EnvPanel() {
                 </label>
                 <select id="env-repo" className="select" value={repo} onChange={(e) => setRepo(e.target.value)}>
                   <option value="*">Every repository</option>
+                  <option value="">Sessions without a project</option>
                   {repos.map((r) => (
                     <option key={r.fullName} value={r.fullName}>
                       {r.fullName}

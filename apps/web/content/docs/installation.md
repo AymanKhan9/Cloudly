@@ -5,7 +5,7 @@ Cloudly runs on one Linux VM. Installing takes about fifteen minutes, most of it
 ## Requirements
 
 - Ubuntu 22.04 or newer, or Debian 12 or newer, on x86-64 or Arm.
-- 2 GB of RAM or more is comfortable. On 1 GB the installer adds a 2 GB swap file; keep one run at a time (`WORKER_CONCURRENCY=1`).
+- 2 GB of RAM or more is comfortable. On 1 GB the installer adds a 2 GB swap file; Cloudly then runs one turn at a time. With more memory, several sessions' turns run at once (`WORKER_CONCURRENCY=auto`).
 - Inbound ports open in your cloud firewall: **22** for SSH, and **80** and **443** for HTTPS. If you choose plain HTTP instead, open **3000**.
 
 ## Pick a VM

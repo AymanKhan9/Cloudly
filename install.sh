@@ -160,10 +160,13 @@ DATABASE_URL=$DB_URL
 API_PORT=8787
 CLOUDLY_SETUP_TOKEN=$SETUP_TOKEN
 CLOUDLY_SECRET_KEY=$SECRET_KEY
-WORKER_CONCURRENCY=1
+WORKER_CONCURRENCY=auto
 EOF
 else
   say "Keeping existing ${ENV_FILE}"
+  # Installs before 0.6.2 ran one turn at a time (the installer wrote 1). Turns now
+  # run side by side as memory allows; a number other than 1 is kept as chosen.
+  $SUDO sed -i 's/^WORKER_CONCURRENCY=1$/WORKER_CONCURRENCY=auto/' "$ENV_FILE"
   # Older installs with a domain have no SITE_ADDRESS line.
   if ! grep -q '^SITE_ADDRESS=' "$ENV_FILE"; then
     OLD_DOMAIN=$(grep '^DOMAIN=' "$ENV_FILE" | cut -d= -f2- || true)

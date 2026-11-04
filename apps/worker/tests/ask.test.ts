@@ -51,3 +51,21 @@ test("a question the agent asks with ask_user flags its session until the user a
     await fixture.cleanup();
   }
 });
+
+test("a secret the agent asks for is read as a name and hosts, never anything else", async () => {
+  const { mkdtemp } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { readSecretRequest } = await import("../src/ask");
+  const dir = await mkdtemp(path.join(tmpdir(), "ask-secret-"));
+  try {
+    expect(await readSecretRequest(dir)).toBeNull();
+    await writeFile(path.join(dir, "secret.json"), JSON.stringify({ name: "STRIPE_KEY", description: "Test key", hosts: ["api.stripe.com", "not a host"], value: "x" }));
+    expect(await readSecretRequest(dir)).toEqual({ name: "STRIPE_KEY", description: "Test key", hosts: ["api.stripe.com"] });
+    await writeFile(path.join(dir, "secret.json"), JSON.stringify({ name: "bad name", hosts: ["api.stripe.com"] }));
+    expect(await readSecretRequest(dir)).toBeNull();
+    await writeFile(path.join(dir, "secret.json"), JSON.stringify({ name: "STRIPE_KEY", hosts: [] }));
+    expect(await readSecretRequest(dir)).toBeNull();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
