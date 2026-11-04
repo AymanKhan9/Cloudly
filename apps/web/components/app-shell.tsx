@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { GearSix, List, NotePencil, SidebarSimple, SignOut, Warning, X } from "@phosphor-icons/react";
-import { api } from "@/lib/api";
+import { ArrowLeft, GearSix, List, NotePencil, SidebarSimple, Warning, X } from "@phosphor-icons/react";
 import { usd } from "@/lib/harness";
 import { useApp } from "./app-context";
 import { Mark } from "./icons";
@@ -12,6 +11,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { SpendBar } from "./status";
 import { SessionList } from "./session-list";
 import { RAIL_KEY } from "@/lib/theme";
+import { ManageNav } from "./manage-nav";
 
 /** Collapses or expands the sidebar, remembered in this browser. */
 function setRail(closed: boolean) {
@@ -28,7 +28,7 @@ const MANAGE = ["/app/settings", "/app/plans", "/app/scorecard", "/app/lessons",
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, budget } = useApp();
+  const { budget } = useApp();
   const [open, setOpen] = useState(false);
   const [closed, setClosed] = useState(false);
 
@@ -58,16 +58,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [router]);
 
-  async function signOut() {
-    await api("/auth/logout", { method: "POST" }).catch(() => {});
-    window.location.assign("/signin");
-  }
-
   const state = budget?.limitUsd ? budget.state : "fair";
+  // In settings, the sidebar is the settings menu (as in T3 Code), not the sessions.
+  const inManage = MANAGE.some((p) => pathname.startsWith(p));
 
   return (
     <div className="shell">
-      <aside className="rail" data-open={open || undefined} aria-label="Sessions">
+      <aside className="rail" data-open={open || undefined} aria-label={inManage ? "Settings" : "Sessions"}>
         <div className="rail-head">
           <Link href="/app" className="wordmark" aria-label="Cloudly, new session">
             <Mark />
@@ -81,47 +78,46 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <Link href="/app" className="btn btn-secondary rail-new" aria-current={pathname === "/app" ? "page" : undefined}>
-          <NotePencil size={16} />
-          New session
-          <kbd>Ctrl K</kbd>
-        </Link>
+        {inManage ? (
+          <>
+            <Link href="/app" className="rail-back">
+              <ArrowLeft size={15} />
+              Back to sessions
+            </Link>
+            <ManageNav />
+          </>
+        ) : (
+          <>
+            <Link href="/app" className="rail-new" aria-current={pathname === "/app" ? "page" : undefined}>
+              <NotePencil size={16} />
+              New session
+              <kbd>Ctrl K</kbd>
+            </Link>
 
-        <nav className="rail-list" aria-label="Sessions">
-          <SessionList pathname={pathname} />
-        </nav>
+            <nav className="rail-list" aria-label="Sessions">
+              <SessionList pathname={pathname} />
+            </nav>
+          </>
+        )}
 
         <div className="rail-foot">
           {/* Spend shows once there's a limit to measure it against. */}
-          {budget?.limitUsd ? (
+          {budget?.limitUsd && !inManage ? (
             <Link href="/app/settings" className="rail-spend" aria-label="Spend this month, open settings">
               <span className="row">
-                <span>{budget.limitUsd ? "Spend this month" : "Spend, no limit set"}</span>
+                <span>Spend this month</span>
                 <span className="num">
-                  {usd(budget.spentUsd)}
-                  {budget.limitUsd ? ` / ${usd(budget.limitUsd)}` : ""}
+                  {usd(budget.spentUsd)} / {usd(budget.limitUsd)}
                 </span>
               </span>
-              {budget.limitUsd ? <SpendBar ratio={budget.ratio} state={state} /> : null}
+              <SpendBar ratio={budget.ratio} state={state} />
             </Link>
           ) : null}
-          <Link href="/app/settings" className="rail-link" aria-current={MANAGE.some((p) => pathname.startsWith(p)) ? "page" : undefined}>
-            <GearSix size={17} />
-            Settings
-          </Link>
-          <div className="user-row">
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" />
-            ) : (
-              <span className="avatar" aria-hidden="true">
-                {user?.login.slice(0, 1).toUpperCase() ?? ""}
-              </span>
-            )}
-            <span className="name">{user?.login ?? ""}</span>
+          <div className="rail-tools">
+            <Link href="/app/settings" className="icon-btn" aria-label="Settings" title="Settings" aria-current={inManage ? "page" : undefined}>
+              <GearSix size={18} />
+            </Link>
             <ThemeToggle />
-            <button type="button" className="icon-btn" onClick={signOut} aria-label="Sign out" title="Sign out">
-              <SignOut size={17} />
-            </button>
           </div>
         </div>
       </aside>
@@ -136,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NotePencil size={18} />
         </Link>
         <span className="spacer" />
-        <Link href="/app/settings" className="icon-btn" aria-label="Settings" title="Settings" aria-current={MANAGE.some((p) => pathname.startsWith(p)) ? "page" : undefined}>
+        <Link href="/app/settings" className="icon-btn" aria-label="Settings" title="Settings" aria-current={inManage ? "page" : undefined}>
           <GearSix size={18} />
         </Link>
       </nav>

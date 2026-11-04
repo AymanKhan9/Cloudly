@@ -682,39 +682,39 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
         </div>
         <div className="tools">
           {thread.arenaId ? (
-            <Link href={`/app/arena/${thread.arenaId}`} className="btn btn-secondary btn-sm" title="Compare with the other agents on this task" aria-label="Arena">
+            <Link href={`/app/arena/${thread.arenaId}`} className="head-btn" title="Compare with the other agents on this task" aria-label="Arena">
               <Scales size={15} />
               <span className="hide-sm">Arena</span>
             </Link>
           ) : null}
           {desktopLive ? (
-            <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "desktop"} onClick={() => toggle("desktop")} title="Watch the agent's desktop" aria-label="Desktop">
+            <button type="button" className="head-btn" aria-pressed={panel === "desktop"} onClick={() => toggle("desktop")} title="Watch the agent's desktop" aria-label="Desktop">
               <Monitor size={15} />
               <span className="hide-sm">Desktop</span>
             </button>
           ) : null}
           {thread.repo ? (
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "changes"} onClick={() => toggle("changes")} title="What this session changed, the reviewer's findings, and your comments" aria-label="Changes">
+          <button type="button" className="head-btn" aria-pressed={panel === "changes"} onClick={() => toggle("changes")} title="What this session changed, the reviewer's findings, and your comments" aria-label="Changes">
             <GitDiff size={15} />
             <span className="hide-sm">Changes</span>
             {openFindings ? <span className="count num">{openFindings}</span> : null}
           </button>
           ) : null}
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title={thread.repo ? "Run this branch's app" : "Run the app in this session's folder"} aria-label="Preview">
+          <button type="button" className="head-btn" aria-pressed={panel === "preview"} onClick={() => toggle("preview")} title={thread.repo ? "Run this branch's app" : "Run the app in this session's folder"} aria-label="Preview">
             <AppWindow size={15} />
             <span className="hide-sm">Preview</span>
           </button>
           {thread.repo ? (
           <>
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "context"} onClick={() => toggle("context")} title="Notes and work shared by every agent on this repo" aria-label="Context">
+          <button type="button" className="head-btn" aria-pressed={panel === "context"} onClick={() => toggle("context")} title="Notes and work shared by every agent on this repo" aria-label="Context">
             <Notebook size={15} />
             <span className="hide-sm">Context</span>
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "files"} onClick={() => toggle("files")} title="The repo's kept files, at /files in every run" aria-label="Files">
+          <button type="button" className="head-btn" aria-pressed={panel === "files"} onClick={() => toggle("files")} title="The repo's kept files, at /files in every run" aria-label="Files">
             <FolderSimple size={15} />
             <span className="hide-sm">Files</span>
           </button>
-          <button type="button" className="btn btn-secondary btn-sm" aria-pressed={panel === "local"} onClick={() => toggle("local")} title="Continue this session on your computer" aria-label="On your computer">
+          <button type="button" className="head-btn" aria-pressed={panel === "local"} onClick={() => toggle("local")} title="Continue this session on your computer" aria-label="On your computer">
             <Laptop size={15} />
             <span className="hide-sm">Local</span>
           </button>
@@ -727,7 +727,7 @@ export function SessionView({ id, active = true }: { id: string; active?: boolea
             </span>
           ) : null}
           {thread.prUrl ? (
-            <a href={thread.prUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+            <a href={thread.prUrl} target="_blank" rel="noreferrer" className="head-btn head-pr">
               <GitPullRequest size={15} weight="bold" style={{ color: "var(--ok)" }} />
               <span className="hide-sm">Pull request</span>
             </a>

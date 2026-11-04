@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Copy, Check } from "@phosphor-icons/react";
 import { api, ApiError, type Repo, type RepoCheckSettings, type WebhookStatus } from "@/lib/api";
+import { LoadFailed } from "./status";
 import { relativeTime, HARNESSES, type Harness } from "@/lib/harness";
 
 function CopyField({ value, label }: { value: string; label: string }) {
@@ -51,7 +52,7 @@ function WebhookSetup() {
     }
   }
 
-  if (!status) return error ? <p className="hint" role="alert">{error}</p> : <div className="skeleton" style={{ width: "40%" }} />;
+  if (!status) return error ? <LoadFailed what="the webhook settings" detail={error} onRetry={load} /> : <div className="skeleton" style={{ width: "40%" }} />;
   const appSettings = status.appSlug ? `https://github.com/settings/apps/${status.appSlug}` : "https://github.com/settings/apps";
   const working = status.deliveries.length > 0;
 
@@ -133,18 +134,27 @@ function WebhookSetup() {
 function RepoTriggers() {
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [repo, setRepo] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const [agents, setAgents] = useState<Harness[]>(HARNESSES);
   const [s, setS] = useState<RepoCheckSettings["settings"] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
+  const [reposError, setReposError] = useState<string | null>(null);
+  const loadRepos = () => {
+    setReposError(null);
     api<{ repos: Repo[] }>("/repos")
       .then((r) => {
         setRepos(r.repos);
         setRepo(r.repos[0]?.fullName ?? "");
       })
-      .catch(() => setRepos([]));
+      .catch((e: Error) => {
+        setRepos([]);
+        setReposError(e.message);
+      });
+  };
+  useEffect(() => {
+    loadRepos();
     api<{ harnesses: Harness[] }>("/harnesses")
       .then((r) => r.harnesses.length && setAgents(r.harnesses))
       .catch(() => {});
@@ -157,7 +167,7 @@ function RepoTriggers() {
     api<RepoCheckSettings>(`/settings/repos/${repo}`)
       .then((v) => setS(v.settings))
       .catch((e: Error) => setMessage({ ok: false, text: e.message }));
-  }, [repo]);
+  }, [repo, attempt]);
 
   const set = <K extends keyof RepoCheckSettings["settings"]>(k: K, v: RepoCheckSettings["settings"][K]) => setS((cur) => (cur ? { ...cur, [k]: v } : cur));
 
@@ -196,6 +206,7 @@ function RepoTriggers() {
               </option>
             ))}
           </select>
+          {reposError ? <LoadFailed what="your repositories" detail={reposError} onRetry={loadRepos} /> : null}
         </div>
         {s ? (
           <div className="field">
@@ -269,6 +280,10 @@ function RepoTriggers() {
             </button>
           </div>
         </>
+      ) : repo && message && !message.ok ? (
+        <div className="panel-row">
+          <LoadFailed what={`the triggers for ${repo}`} detail={message.text} onRetry={() => setAttempt((n) => n + 1)} />
+        </div>
       ) : repo ? (
         <div className="panel-row" aria-busy="true">
           <div className="skeleton" style={{ width: "40%" }} />

@@ -1576,17 +1576,58 @@ kbd,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 12px 10px 18px;
+  height: 56px;
+  padding: 0 10px 0 16px;
 }
 
-.rail-new {
-  margin: 4px 12px 12px;
-  justify-content: flex-start;
+/* New session: a quiet row with its shortcut, not a big button. */
+.rail-new,
+.rail-back {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  margin: 2px 10px 10px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--bg);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.rail-new:hover,
+.rail-new[aria-current="page"],
+.rail-back:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+.rail-new:active,
+.rail-back:active {
+  transform: scale(0.99);
+}
+
+.rail-back {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 450;
+}
+
+.rail-back:hover {
+  border-color: transparent;
+  color: var(--text);
 }
 
 .rail-new kbd {
   margin-left: auto;
-  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 10.5px;
   color: var(--text-3);
 }
 
@@ -1598,8 +1639,8 @@ kbd,
 }
 
 .rail-group {
-  padding: 14px 10px 6px;
-  font-size: 12px;
+  padding: 16px 10px 6px;
+  font-size: 11.5px;
   color: var(--text-3);
   font-weight: 500;
 }
@@ -1608,13 +1649,14 @@ kbd,
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 10px;
-  padding: 8px 10px;
+  gap: 1px 10px;
+  padding: 7px 10px;
   border-radius: var(--r-control);
   transition: background 120ms var(--ease);
 }
 
-.rail-item:hover {
+.rail-item:hover,
+.rail-row:hover > .rail-item {
   background: var(--surface-2);
 }
 
@@ -1627,7 +1669,7 @@ kbd,
 }
 
 .rail-item .t {
-  font-size: 14px;
+  font-size: 13.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1638,7 +1680,7 @@ kbd,
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
@@ -1656,9 +1698,26 @@ kbd,
 
 .rail-foot {
   border-top: 1px solid var(--border);
-  padding: 10px 8px 12px;
+  padding: 8px 10px;
   display: grid;
+  gap: 4px;
+}
+
+/* Icons only: settings and the theme. Sign out lives in Settings > General. */
+.rail-tools {
+  display: flex;
+  align-items: center;
   gap: 2px;
+}
+
+.rail-tools .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.rail-tools .icon-btn[aria-current="page"] {
+  background: var(--surface-3);
+  color: var(--text);
 }
 
 .rail-link {
@@ -1742,28 +1801,6 @@ kbd,
   width: 1.5px;
   background: var(--text-3);
   opacity: 0.6;
-}
-
-.user-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  font-size: 14px;
-}
-
-.user-row img {
-  width: 24px;
-  height: 24px;
-  border-radius: 99px;
-}
-
-.user-row .name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .main {
@@ -1865,7 +1902,7 @@ kbd,
 }
 
 .page-head h1 {
-  font-size: clamp(1.6rem, 2.6vw, 2rem);
+  font-size: clamp(1.45rem, 2.2vw, 1.75rem);
 }
 
 .page-head p {
@@ -7546,22 +7583,18 @@ body[data-resizing] .pane-body {
 /* ---------- Settings: a menu of pages, as in T3 Code ---------- */
 
 .manage {
-  display: grid;
-  grid-template-columns: 236px minmax(0, 1fr);
   min-height: 100dvh;
 }
 
+/* The settings menu, in the sidebar's place. */
 .manage-nav {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 18px 10px 24px;
-  border-right: 1px solid var(--border);
+  padding: 0 8px 16px;
   scrollbar-width: thin;
 }
 
@@ -7571,7 +7604,7 @@ body[data-resizing] .pane-body {
   gap: 8px;
   height: 34px;
   padding: 0 10px;
-  margin-bottom: 10px;
+  margin: 0 2px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-control);
   background: var(--surface);
@@ -7594,7 +7627,10 @@ body[data-resizing] .pane-body {
 }
 
 .manage-search kbd {
-  font-size: 11px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 10.5px;
 }
 
 .manage-group {
@@ -7604,8 +7640,8 @@ body[data-resizing] .pane-body {
 }
 
 .manage-group-name {
-  padding: 8px 10px 4px;
-  font-size: 12px;
+  padding: 10px 10px 4px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--text-3);
 }
@@ -7614,9 +7650,9 @@ body[data-resizing] .pane-body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: var(--r-control);
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-2);
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
@@ -7703,11 +7739,7 @@ body[data-resizing] .pane-body {
 
 @media (max-width: 900px) {
   .manage {
-    grid-template-columns: 1fr;
     min-height: 0;
-  }
-  .manage-nav {
-    display: none;
   }
   .manage-select {
     display: block;
@@ -8294,4 +8326,520 @@ body[data-resizing] .pane-body {
   color: var(--text-2);
   font-weight: 600;
   line-height: 1;
+}
+
+/* ---------- Sidebar rows: hover actions, as in T3 Code ---------- */
+
+.rail-row {
+  position: relative;
+}
+
+.rail-actions {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding-left: 14px;
+  /* Fades the title out under the buttons instead of cutting it. */
+  background: linear-gradient(to right, transparent, var(--surface-2) 14px);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ease);
+}
+
+.rail-row:has(> .rail-item[aria-current="page"]) .rail-actions {
+  background: linear-gradient(to right, transparent, var(--surface-3) 14px);
+}
+
+.rail-row:hover .rail-actions,
+.rail-row:focus-within .rail-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-act {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-3);
+  transition: background 120ms var(--ease), color 120ms var(--ease), transform 120ms var(--ease);
+}
+
+.rail-act:hover {
+  background: var(--border-strong);
+  color: var(--text);
+}
+
+.rail-act:active {
+  transform: scale(0.92);
+}
+
+/* Settled: the tick stays green, so a click puts it back. */
+.rail-act[data-on] {
+  color: var(--ok);
+}
+
+/* Touch screens can't hover, so the buttons stay out. */
+@media (hover: none) and (pointer: coarse) {
+  .rail-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ---------- Settings pages: one calm column, rows that read label left, control right ---------- */
+
+.manage .page {
+  max-width: 760px;
+  padding: clamp(28px, 5vw, 52px) var(--gutter) 96px;
+}
+
+.manage .page-head {
+  margin-bottom: 36px;
+}
+
+.manage .page-head p {
+  font-size: 14px;
+  max-width: 60ch;
+}
+
+.manage .set-sec {
+  gap: 12px;
+  padding: 0 0 40px;
+}
+
+.manage .set-sec + .set-sec {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.manage .set-sec > header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.manage .set-sec > header p {
+  margin-top: 4px;
+  font-size: 13px;
+  max-width: 64ch;
+}
+
+.settings-page .set-sec:first-child > header {
+  margin-bottom: 12px;
+}
+
+.settings-page .set-sec:first-child > header h2 {
+  font-size: clamp(1.45rem, 2.2vw, 1.75rem);
+}
+
+.settings-page .set-sec:first-child > header p {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.manage .panel {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.manage .panel-row {
+  padding: 14px 16px;
+}
+
+.manage .panel-row.field,
+.manage .panel-row .field {
+  gap: 8px;
+}
+
+.manage .label {
+  font-size: 13.5px;
+}
+
+.manage .hint {
+  font-size: 12.5px;
+}
+
+.manage .setting-row > div:first-child {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.manage .setting-row .hint {
+  margin-top: 2px;
+}
+
+.manage .input,
+.manage .select,
+.manage .input-prefix input {
+  min-height: 36px;
+}
+
+.manage .form-foot {
+  padding-top: 4px;
+}
+
+.manage .usage-read .big {
+  font-size: 26px;
+}
+
+/* ================================================================
+   Product refresh: new session, chat, composer.
+   Quieter chrome so the conversation carries the page: controls are
+   borderless until hovered, one radius scale (10 controls, 14 boxes,
+   16 composer and bubbles), one accent for live state.
+   ================================================================ */
+
+/* ---------- New session ---------- */
+
+.start {
+  max-width: 780px;
+  padding-top: clamp(40px, 14vh, 136px);
+}
+
+.start h1 {
+  font-size: clamp(1.5rem, 2.4vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.start > p {
+  margin-top: 8px;
+  max-width: 60ch;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.start form {
+  margin-top: 24px;
+}
+
+.start .composer textarea {
+  min-height: 96px !important;
+}
+
+/* Starters: a wrapping row of chips, not a list. */
+.starters {
+  margin-top: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.starters h2 {
+  flex-basis: 100%;
+  margin-bottom: 2px;
+  padding: 0 2px;
+  font-size: 12.5px;
+}
+
+.starters button {
+  gap: 8px;
+  padding: 7px 12px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.starters button:hover {
+  border-color: var(--border-strong);
+}
+
+.starters button:active {
+  transform: scale(0.98);
+}
+
+.starters button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Composer (new session and the chat dock) ---------- */
+
+.composer {
+  border-color: var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm), 0 12px 32px -20px rgba(0, 0, 0, 0.35);
+}
+
+.composer:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm), 0 12px 32px -20px rgba(0, 0, 0, 0.35), 0 0 0 3px color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.composer textarea {
+  padding: 14px 16px 4px;
+  font-size: 14.5px;
+}
+
+.composer-bar {
+  gap: 2px;
+  padding: 6px 8px 8px;
+}
+
+/* Chips sit flat in the bar and only show a box on hover or when open. */
+.composer-bar .pill {
+  min-height: 30px;
+  padding: 0 9px;
+  border-color: transparent;
+  background: transparent;
+  border-radius: var(--r-control);
+}
+
+.composer-bar button.pill:hover:not(:disabled),
+.composer-bar button.pill[aria-expanded="true"],
+.composer-bar label.pill:hover,
+.composer-bar .pill:focus-within {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+.composer-bar button.pill[aria-pressed="true"] {
+  border-color: transparent;
+}
+
+.composer-bar .pill-text {
+  color: var(--text-2);
+}
+
+.composer-bar button.pill:hover .pill-text,
+.composer-bar button.pill[aria-expanded="true"] .pill-text {
+  color: var(--text);
+}
+
+.composer-bar .mode-chip {
+  background: var(--surface-2);
+}
+
+.composer-bar .mode-chip .pill-text {
+  color: var(--text);
+}
+
+.composer-bar .icon-pill {
+  width: 30px;
+  border: 1px solid var(--border);
+}
+
+.composer-bar .composer-meta {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.send {
+  width: 32px;
+  height: 32px;
+}
+
+.composer-note {
+  margin-top: 8px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.composer-note kbd {
+  padding: 0 5px;
+  font-size: 10.5px;
+  color: var(--text-2);
+}
+
+/* ---------- Chat ---------- */
+
+.chat-head {
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px var(--gutter);
+}
+
+.chat-head h1 {
+  font-size: 14px;
+}
+
+.chat-head .meta {
+  gap: 12px;
+  margin-top: 1px;
+  font-size: 12px;
+}
+
+.chat-head .tools {
+  gap: 2px;
+}
+
+/* Header actions: icon and a word, no box until hovered or open. */
+.head-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 450;
+  color: var(--text-2);
+  white-space: nowrap;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.head-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.head-btn:active {
+  transform: scale(0.98);
+}
+
+.head-btn[aria-pressed="true"] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.head-btn .count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11px;
+  text-align: center;
+}
+
+.head-btn.head-pr {
+  margin-left: 6px;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.head-btn.head-pr:hover {
+  border-color: var(--border-strong);
+}
+
+.thread {
+  max-width: 760px;
+  padding-top: 36px;
+}
+
+.turn + .turn {
+  margin-top: 44px;
+}
+
+.msg-user div {
+  padding: 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 6px 16px;
+  background: var(--surface-2);
+  font-size: 14.5px;
+}
+
+.msg-agent {
+  margin-top: 18px;
+  gap: 12px;
+}
+
+.reply {
+  font-size: 15px;
+  line-height: 1.68;
+}
+
+.reply code {
+  padding: 1px 5px;
+  border: 0;
+  background: var(--surface-3);
+  font-size: 0.85em;
+}
+
+.reply pre {
+  border-radius: 12px;
+}
+
+.activity summary {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.turn-foot {
+  gap: 12px;
+  font-size: 12px;
+}
+
+.pr-chip {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.dock {
+  padding-bottom: 14px;
+}
+
+.dock .composer,
+.dock .needs-you,
+.dock .composer-note {
+  max-width: 760px;
+}
+
+.composer-bar .pill-text {
+  max-width: 170px;
+}
+
+/* Wide screens: one row of controls; long labels shorten instead of wrapping. */
+@media (min-width: 760px) {
+  .start .composer-bar {
+    flex-wrap: nowrap;
+  }
+  .start .composer-bar > * {
+    min-width: 0;
+  }
+  .start .composer-bar .pill {
+    padding: 0 7px;
+    gap: 5px;
+  }
+  /* The chips open on click anyway; the arrows cost the room the labels need. */
+  .start .composer-bar .pill-caret {
+    display: none;
+  }
+  .start .composer-bar > .send,
+  .start .composer-bar > .icon-pill,
+  .start .composer-bar .more-menu {
+    flex: none;
+  }
+}
+
+/* A panel's data didn't load: say so where the loading bar was, with a retry. */
+.load-failed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-control);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.load-failed > svg {
+  flex: none;
+}
+
+.load-failed > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.load-failed .dim {
+  color: var(--text-2);
+}
+
+.load-failed .btn {
+  flex: none;
 }

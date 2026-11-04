@@ -51,7 +51,7 @@ If the turn ends before the agent gets to it, the message becomes the next turn,
 
 ## Keep the sidebar tidy
 
-Right-click a session in the sidebar (or focus it and press **Shift+F10**) for the same actions T3 Code has for threads:
+Hover a session in the sidebar for two buttons: the tick settles it (click it again to bring it back) and **⋯** opens the same actions T3 Code has for threads. Right-clicking it, or focusing it and pressing **Shift+F10**, opens them too:
 
 | Action | What it does |
 |---|---|
@@ -63,7 +63,7 @@ Right-click a session in the sidebar (or focus it and press **Shift+F10**) for t
 | Mark unread / Mark as read | Sets the dot by hand. |
 | Show only *repo* | Filters the sidebar to one repository. Clear it with the × above the list. |
 | Open in a new tab, Open pull request | |
-| Copy | Its link, branch, a reference or its id. See [Sessions that talk to each other](#sessions-that-talk-to-each-other). |
+| Copy | A reference, its id, its path, its link or its branch. See [Sessions that talk to each other](#sessions-that-talk-to-each-other). |
 | Archive | Hides it under **Archived**, and other sessions can no longer read or message it. |
 | Delete | Deletes it and its turns for good, after asking. Its branch and pull request stay on GitHub. Not while a turn is running. |
 
@@ -118,14 +118,15 @@ The agent has three tools for it:
 - **read_session:** a session's conversation (what it was asked and what its agent answered, the last 12 turns) and the branch its work is on. In the same repo, the agent can fetch that branch and look at the code too.
 - **send_to_session:** a message to another session. It runs there as that session's next turn, by that session's own agent, on its own branch. If the agent asks for a reply, the answer comes back as a new turn in the session that asked.
 
-To point an agent at a particular session, right-click it in the sidebar and choose **Copy** (see [Keep the sidebar tidy](#keep-the-sidebar-tidy) for the rest of that menu):
+To point an agent at a particular session, hover it in the sidebar and click **⋯** (or right-click it), then pick one of the **Copy** items (see [Keep the sidebar tidy](#keep-the-sidebar-tidy) for the rest of that menu):
 
 | Copy | What you get |
 |---|---|
-| Link | The session's address. |
-| Branch | The branch its work is on, `agent/thread-…`. |
-| Session | A line naming the session, its id, repo and branch, ready to paste into another session. |
-| Session ID | Just its id. |
+| Copy session reference | A line naming the session, its id, repo and branch, ready to paste into another session. |
+| Copy session ID | Just its id. |
+| Copy path | Where its work lives: `github.com/<repo>/tree/<branch>`. |
+| Copy link | The session's address. |
+| Copy branch | The branch its work is on, `agent/thread-…`. |
 
 Paste any of them into a message in another session, for example "read this session and reuse its date handling", followed by the copied line. The agent's tools also accept the first characters of an id (at least 6, if only one session starts with them) or a session's exact title. Archived sessions are out of reach until you unarchive them.
 

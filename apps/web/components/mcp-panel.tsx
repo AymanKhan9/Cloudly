@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CaretRight, CheckCircle, Circle, Plugs, Trash, WarningCircle } from "@phosphor-icons/react";
 import { api, ApiError, type McpServerRow } from "@/lib/api";
+import { LoadFailed } from "./status";
 
 const STATE: Record<McpServerRow["status"], string> = {
   connected: "Connected",
@@ -178,14 +179,19 @@ export function McpPanel() {
   const params = useSearchParams();
   const [servers, setServers] = useState<McpServerRow[] | null>(null);
   const [redirectUri, setRedirectUri] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(
     () =>
       api<{ servers: McpServerRow[]; redirectUri: string }>("/settings/mcp")
         .then((r) => {
           setServers(r.servers);
           setRedirectUri(r.redirectUri);
+          setLoadError(null);
         })
-        .catch(() => setServers([])),
+        .catch((e: Error) => {
+          setServers([]);
+          setLoadError(e.message);
+        }),
     [],
   );
   useEffect(() => {
@@ -218,6 +224,10 @@ export function McpPanel() {
           {servers === null ? (
             <div className="panel-row" aria-busy="true">
               <div className="skeleton" style={{ width: "50%" }} />
+            </div>
+          ) : loadError ? (
+            <div className="panel-row">
+              <LoadFailed what="your MCP servers" detail={loadError} onRetry={load} />
             </div>
           ) : servers.length === 0 ? (
             <div className="panel-row hint">No servers yet. Add one below; every session from the next turn on can use it.</div>

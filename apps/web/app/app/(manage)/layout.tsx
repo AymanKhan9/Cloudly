@@ -1,10 +1,10 @@
-import { ManageNav } from "@/components/manage-nav";
+import { ManageSelect } from "@/components/manage-nav";
 
-// Settings, split into pages with their own menu, and the pages that used to sit in the sidebar.
+// Settings pages. Their menu takes the sidebar's place (see components/app-shell.tsx).
 export default function ManageLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="manage">
-      <ManageNav />
+      <ManageSelect />
       <div className="manage-body">{children}</div>
     </div>
   );

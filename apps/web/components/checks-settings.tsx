@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError, type Repo, type RepoCheckSettings } from "@/lib/api";
+import { LoadFailed } from "./status";
 import { relativeTime, HARNESSES, type Harness } from "@/lib/harness";
 
 type Mode = RepoCheckSettings["settings"]["checks"];
@@ -13,6 +14,7 @@ type Mode = RepoCheckSettings["settings"]["checks"];
 export function ChecksSettings() {
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [repo, setRepo] = useState("");
+  const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<RepoCheckSettings | null>(null);
   const [mode, setMode] = useState<Mode>("auto");
   const [command, setCommand] = useState("");
@@ -31,13 +33,21 @@ export function ChecksSettings() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
+  const [reposError, setReposError] = useState<string | null>(null);
+  const loadRepos = () => {
+    setReposError(null);
     api<{ repos: Repo[] }>("/repos")
       .then((r) => {
         setRepos(r.repos);
         setRepo(r.repos[0]?.fullName ?? "");
       })
-      .catch(() => setRepos([]));
+      .catch((e: Error) => {
+        setRepos([]);
+        setReposError(e.message);
+      });
+  };
+  useEffect(() => {
+    loadRepos();
     api<{ harnesses: Harness[] }>("/harnesses")
       .then((r) => r.harnesses.length && setAgents(r.harnesses))
       .catch(() => {});
@@ -65,7 +75,7 @@ export function ChecksSettings() {
         setShotPages((v.settings.screenshotPaths.length ? v.settings.screenshotPaths : ["/"]).join("\n"));
       })
       .catch((e: Error) => setMessage({ ok: false, text: e.message }));
-  }, [repo]);
+  }, [repo, attempt]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -114,7 +124,11 @@ export function ChecksSettings() {
                 </option>
               ))}
             </select>
-            {repos && repos.length === 0 ? <p className="hint">No repositories yet.</p> : null}
+            {reposError ? (
+              <LoadFailed what="your repositories" detail={reposError} onRetry={loadRepos} />
+            ) : repos && repos.length === 0 ? (
+              <p className="hint">No repositories yet.</p>
+            ) : null}
           </div>
           {view ? (
             <>
@@ -297,6 +311,10 @@ export function ChecksSettings() {
                 </button>
               </div>
             </>
+          ) : repo && message && !message.ok ? (
+            <div className="panel-row">
+              <LoadFailed what={`the settings for ${repo}`} detail={message.text} onRetry={() => setAttempt((n) => n + 1)} />
+            </div>
           ) : repo ? (
             <div className="panel-row" aria-busy="true">
               <div className="skeleton" style={{ width: "40%" }} />

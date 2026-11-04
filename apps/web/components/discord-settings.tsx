@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Copy, Check } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
+import { LoadFailed } from "./status";
 
 interface DiscordStatus {
   applicationId: string | null;
@@ -199,6 +200,15 @@ export function DiscordSettings() {
               </button>
             </div>
           </form>
+        ) : message && !message.ok ? (
+          <LoadFailed
+            what="the Discord settings"
+            detail={message.text}
+            onRetry={() => {
+              setMessage(null);
+              load();
+            }}
+          />
         ) : (
           <div className="skeleton" style={{ width: "40%" }} />
         )}
@@ -342,6 +352,15 @@ export function NotificationSettings() {
               </button>
             </div>
           </div>
+        ) : message && !message.ok ? (
+          <LoadFailed
+            what="your notification settings"
+            detail={message.text}
+            onRetry={() => {
+              setMessage(null);
+              load();
+            }}
+          />
         ) : (
           <div className="skeleton" style={{ width: "40%" }} />
         )}
@@ -490,6 +509,15 @@ export function SlackSettings() {
               </button>
             </div>
           </form>
+        ) : message && !message.ok ? (
+          <LoadFailed
+            what="the Slack settings"
+            detail={message.text}
+            onRetry={() => {
+              setMessage(null);
+              load();
+            }}
+          />
         ) : (
           <div className="skeleton" style={{ width: "40%" }} />
         )}

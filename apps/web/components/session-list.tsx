@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Archive, ArrowSquareOut, BellSimpleZ, CaretDown, CaretRight, ChatsCircle, CheckCircle, Copy, Envelope, EnvelopeOpen,
-  Funnel, GitBranch, GitPullRequest, Hash, LinkSimple, NotePencil, PencilSimpleLine, PushPin, PushPinSlash, Trash,
+  Archive, ArrowSquareOut, BellSimpleZ, CaretDown, CaretRight, ChatsCircle, Check, CheckCircle, DotsThree, Envelope, EnvelopeOpen,
+  FolderSimple, Funnel, GitBranch, GitPullRequest, Hash, LinkSimple, NotePencil, PencilSimpleLine, PushPin, PushPinSlash, Trash,
   SquareSplitHorizontal, SquareSplitVertical, UsersThree, X,
 } from "@phosphor-icons/react";
 import { api, ApiError, type CouncilSummary, type ThreadSummary } from "@/lib/api";
 import { harnessById, relativeTime } from "@/lib/harness";
 import { StatusIcon } from "./status";
 import { DRAG_TYPE, setSessionInfo, workspace } from "@/lib/workspace";
-import { ContextMenu, copyText, sessionReference, type MenuItem } from "./session-menu";
+import { ContextMenu, copyText, sessionPath, sessionReference, type MenuItem } from "./session-menu";
 
 // The sidebar's sessions, with T3 Code's thread actions on right-click: pin,
 // settle, snooze, rename, mark unread, filter by repo, copy, archive, delete.
@@ -99,12 +99,14 @@ function Row({
   renaming,
   onRenamed,
   onMenu,
+  onSettle,
 }: {
   t: ThreadSummary;
   pathname: string;
   renaming: boolean;
   onRenamed: (title: string | null) => void;
   onMenu: (t: ThreadSummary, at: { x: number; y: number }, from: HTMLElement) => void;
+  onSettle: (t: ThreadSummary) => void;
 }) {
   const href = `/app/s/${t.id}`;
   const [title, setTitle] = useState(t.title);
@@ -135,44 +137,73 @@ function Row({
     );
   }
   const where = `${t.repo ? t.repo.split("/")[1] : "No project"} · ${harnessById(t.harness).name}${t.arenaId ? " in an arena" : ""}`;
+  const settled = Boolean(t.settledAt);
   return (
-    <Link
-      href={href}
-      className="rail-item"
-      aria-current={pathname === href ? "page" : undefined}
-      aria-haspopup="menu"
-      data-unread={t.unread || t.needsInput ? true : undefined}
-      onDragStart={(e) => {
-        // Into a pane of the workspace: drop on its middle to open there, on an edge to split.
-        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ id: t.id }));
-        e.dataTransfer.effectAllowed = "copyMove";
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        const from = e.currentTarget;
-        // Shift+F10 or the menu key: no pointer position, so open beside the item.
-        const r = from.getBoundingClientRect();
-        onMenu(t, e.clientX || e.clientY ? { x: e.clientX, y: e.clientY } : { x: r.left + 24, y: r.bottom }, from);
-      }}
-    >
-      <StatusIcon status={t.lastStatus} pr={Boolean(t.prUrl)} size={15} />
-      <span className="t">{t.title}</span>
-      {t.needsInput ? (
-        <span className="rail-badge" title={t.needsInput}>
-          Needs you
+    <div className="rail-row">
+      <Link
+        href={href}
+        className="rail-item"
+        aria-current={pathname === href ? "page" : undefined}
+        aria-haspopup="menu"
+        data-unread={t.unread || t.needsInput ? true : undefined}
+        onDragStart={(e) => {
+          // Into a pane of the workspace: drop on its middle to open there, on an edge to split.
+          e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ id: t.id }));
+          e.dataTransfer.effectAllowed = "copyMove";
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const from = e.currentTarget;
+          // Shift+F10 or the menu key: no pointer position, so open beside the item.
+          const r = from.getBoundingClientRect();
+          onMenu(t, e.clientX || e.clientY ? { x: e.clientX, y: e.clientY } : { x: r.left + 24, y: r.bottom }, from);
+        }}
+      >
+        <StatusIcon status={t.lastStatus} pr={Boolean(t.prUrl)} size={15} />
+        <span className="t">{t.title}</span>
+        {t.needsInput ? (
+          <span className="rail-badge" title={t.needsInput}>
+            Needs you
+          </span>
+        ) : t.unread ? (
+          <span className="rail-dot" title="New since you last looked">
+            <span className="visually-hidden">Unread</span>
+          </span>
+        ) : (
+          <span />
+        )}
+        <span className="m">
+          {t.pinnedAt ? <PushPin size={11} weight="fill" aria-label="Pinned" /> : null}
+          {t.snoozed && t.snoozedUntil ? `Snoozed until ${until(t.snoozedUntil)} · ${where}` : `${where}, ${relativeTime(t.updatedAt)}`}
         </span>
-      ) : t.unread ? (
-        <span className="rail-dot" title="New since you last looked">
-          <span className="visually-hidden">Unread</span>
-        </span>
-      ) : (
-        <span />
-      )}
-      <span className="m">
-        {t.pinnedAt ? <PushPin size={11} weight="fill" aria-label="Pinned" /> : null}
-        {t.snoozed && t.snoozedUntil ? `Snoozed until ${until(t.snoozedUntil)} · ${where}` : `${where}, ${relativeTime(t.updatedAt)}`}
+      </Link>
+      {/* T3 Code's hover actions: settle with the tick, everything else under the dots. */}
+      <span className="rail-actions">
+        <button
+          type="button"
+          className="rail-act"
+          data-on={settled || undefined}
+          onClick={() => onSettle(t)}
+          aria-label={settled ? `Unsettle ${t.title}` : `Settle ${t.title}`}
+          title={settled ? "Unsettle" : "Settle: done for now"}
+        >
+          <Check size={13} weight="bold" />
+        </button>
+        <button
+          type="button"
+          className="rail-act"
+          aria-haspopup="menu"
+          aria-label={`${t.title}: actions`}
+          title="More: copy, pin, rename"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onMenu(t, { x: r.left, y: r.bottom + 4 }, e.currentTarget);
+          }}
+        >
+          <DotsThree size={16} weight="bold" />
+        </button>
       </span>
-    </Link>
+    </div>
   );
 }
 
@@ -287,17 +318,15 @@ export function SessionList({ pathname }: { pathname: string }) {
       },
       { kind: "action", label: "Open in a new browser tab", icon: <ArrowSquareOut size={15} />, run: () => window.open(link(), "_blank", "noopener") },
       ...(t.prUrl ? [{ kind: "action" as const, label: "Open pull request", icon: <GitPullRequest size={15} />, run: () => window.open(t.prUrl!, "_blank", "noopener,noreferrer") }] : []),
-      {
-        kind: "submenu",
-        label: "Copy",
-        icon: <Copy size={15} />,
-        items: [
-          { kind: "action", label: "Link", icon: <LinkSimple size={15} />, run: copy(link), done: "Copied the session's link" },
-          { kind: "action", label: "Branch", icon: <GitBranch size={15} />, run: copy(() => t.branch), done: `Copied ${t.branch}` },
-          { kind: "action", label: "Session", icon: <ChatsCircle size={15} />, run: copy(() => sessionReference(t)), done: "Copied a reference to paste into another session" },
-          { kind: "action", label: "Session ID", icon: <Hash size={15} />, run: copy(() => t.id), done: "Copied the session's id" },
-        ],
-      },
+      { kind: "separator" },
+      // Copy: ways to point at this session from another one (see the sessions tools).
+      { kind: "action", label: "Copy session reference", icon: <ChatsCircle size={15} />, run: copy(() => sessionReference(t)), done: "Copied. Paste it into another session" },
+      { kind: "action", label: "Copy session ID", icon: <Hash size={15} />, run: copy(() => t.id), done: "Copied the session's id" },
+      ...(t.repo
+        ? [{ kind: "action" as const, label: "Copy path", icon: <FolderSimple size={15} />, run: copy(() => sessionPath(t)), done: `Copied ${sessionPath(t)}` }]
+        : []),
+      { kind: "action", label: "Copy link", icon: <LinkSimple size={15} />, run: copy(link), done: "Copied the session's link" },
+      ...(t.repo ? [{ kind: "action" as const, label: "Copy branch", icon: <GitBranch size={15} />, run: copy(() => t.branch), done: `Copied ${t.branch}` }] : []),
       { kind: "separator" },
       t.archivedAt
         ? { kind: "action", label: "Unarchive", icon: <Archive size={15} />, run: () => update(t, { archived: false }, { archivedAt: null }, "Back in the list") }
@@ -346,6 +375,11 @@ export function SessionList({ pathname }: { pathname: string }) {
         if (title && title !== t.title) update(t, { title }, { title }, "Renamed");
       }}
       onMenu={(thread, at, from) => setMenu({ thread, at, from })}
+      onSettle={(x) =>
+        x.settledAt
+          ? update(x, { settled: false }, { settledAt: null }, "Back in the list")
+          : update(x, { settled: true }, { settledAt: new Date().toISOString() }, "Settled. New activity brings it back")
+      }
     />
   );
 

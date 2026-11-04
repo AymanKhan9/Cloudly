@@ -30,7 +30,14 @@ export async function copyText(text: string): Promise<boolean> {
 
 /** How another session's agent is told about this one: everything it needs to find it. */
 export function sessionReference(t: Pick<ThreadSummary, "id" | "title" | "repo" | "branch">): string {
-  return `Cloudly session "${t.title}" (id ${t.id}) on ${t.repo}, branch ${t.branch}`;
+  return t.repo
+    ? `Cloudly session "${t.title}" (id ${t.id}) on ${t.repo}, branch ${t.branch}`
+    : `Cloudly session "${t.title}" (id ${t.id}), no project`;
+}
+
+/** Where its work lives: the repo and branch, as a path on GitHub (T3 Code's "Copy path"). */
+export function sessionPath(t: Pick<ThreadSummary, "repo" | "branch">): string {
+  return `github.com/${t.repo}/tree/${t.branch}`;
 }
 
 export type MenuItem = Item;

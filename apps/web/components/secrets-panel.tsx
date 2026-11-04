@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle, Circle, LockSimple, Trash } from "@phosphor-icons/react";
+import { LoadFailed } from "./status";
 import { api, ApiError } from "@/lib/api";
 
 interface SettingRow {
@@ -141,7 +142,20 @@ function RestorePanel({ locked, onChange }: { locked: SettingRow[]; onChange: ()
 
 export function SecretsPanel() {
   const [rows, setRows] = useState<SettingRow[] | null>(null);
-  const load = useCallback(() => api<{ settings: SettingRow[] }>("/settings/secrets").then((r) => setRows(r.settings)).catch(() => setRows([])), []);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(
+    () =>
+      api<{ settings: SettingRow[] }>("/settings/secrets")
+        .then((r) => {
+          setRows(r.settings);
+          setFailed(false);
+        })
+        .catch(() => {
+          setRows([]);
+          setFailed(true);
+        }),
+    [],
+  );
   useEffect(() => {
     load();
   }, [load]);
@@ -162,6 +176,11 @@ export function SecretsPanel() {
           {rows === null ? (
             <div className="panel-row" aria-busy="true">
               <div className="skeleton" style={{ width: "50%" }} />
+            </div>
+          ) : null}
+          {failed ? (
+            <div className="panel-row">
+              <LoadFailed what="your keys" onRetry={load} />
             </div>
           ) : null}
           {rows?.some((r) => r.locked) ? <RestorePanel locked={rows.filter((r) => r.locked)} onChange={load} /> : null}

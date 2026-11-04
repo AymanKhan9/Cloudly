@@ -103,61 +103,66 @@ export function ManageNav() {
   }, [q]);
 
   return (
-    <>
-      <nav className="manage-nav" aria-label="Settings">
-        <label className="manage-search">
-          <MagnifyingGlass size={15} />
-          <span className="visually-hidden">Search settings</span>
-          <input
-            ref={search}
-            type="search"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              const first = groups[0]?.items[0];
-              if (e.key === "Enter" && first) {
-                router.push(first.href);
-                setQ("");
-                search.current?.blur();
-              }
-              if (e.key === "Escape") setQ("");
-            }}
-          />
-          <kbd>/</kbd>
-        </label>
-        {groups.map((g) => (
-          <div key={g.group} className="manage-group">
-            {g.group !== "Settings" ? <p className="manage-group-name">{g.group}</p> : null}
-            {g.items.map((i) => {
-              const Icon = i.icon;
-              return (
-                <Link key={i.href} href={i.href} className="manage-link" aria-current={current.href === i.href ? "page" : undefined}>
-                  <Icon size={16} />
-                  {i.label}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-        {groups.length === 0 ? <p className="manage-none">Nothing matches.</p> : null}
-      </nav>
-
-      {/* On a phone: one menu instead of the list. */}
-      <label className="manage-select">
-        <span className="visually-hidden">Settings page</span>
-        <select className="select" value={current.href} onChange={(e) => router.push(e.target.value)}>
-          {MANAGE_NAV.map((g) => (
-            <optgroup key={g.group} label={g.group}>
-              {g.items.map((i) => (
-                <option key={i.href} value={i.href}>
-                  {i.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+    <nav className="manage-nav" aria-label="Settings">
+      <label className="manage-search">
+        <MagnifyingGlass size={15} />
+        <span className="visually-hidden">Search settings</span>
+        <input
+          ref={search}
+          type="search"
+          placeholder="Search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            const first = groups[0]?.items[0];
+            if (e.key === "Enter" && first) {
+              router.push(first.href);
+              setQ("");
+              search.current?.blur();
+            }
+            if (e.key === "Escape") setQ("");
+          }}
+        />
+        <kbd>/</kbd>
       </label>
-    </>
+      {groups.map((g) => (
+        <div key={g.group} className="manage-group">
+          {g.group !== "Settings" ? <p className="manage-group-name">{g.group}</p> : null}
+          {g.items.map((i) => {
+            const Icon = i.icon;
+            return (
+              <Link key={i.href} href={i.href} className="manage-link" aria-current={current.href === i.href ? "page" : undefined}>
+                <Icon size={16} />
+                {i.label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+      {groups.length === 0 ? <p className="manage-none">Nothing matches.</p> : null}
+    </nav>
+  );
+}
+
+/** On a phone: one menu instead of the list (the list lives in the sidebar drawer). */
+export function ManageSelect() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const current = navItemFor(pathname) ?? ALL[0]!;
+  return (
+    <label className="manage-select">
+      <span className="visually-hidden">Settings page</span>
+      <select className="select" value={current.href} onChange={(e) => router.push(e.target.value)}>
+        {MANAGE_NAV.map((g) => (
+          <optgroup key={g.group} label={g.group}>
+            {g.items.map((i) => (
+              <option key={i.href} value={i.href}>
+                {i.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
   );
 }

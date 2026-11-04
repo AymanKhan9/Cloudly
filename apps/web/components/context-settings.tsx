@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Copy, Key, Trash } from "@phosphor-icons/react";
 import { api, ApiError } from "@/lib/api";
+import { LoadFailed } from "./status";
 import { relativeTime } from "@/lib/harness";
 
 interface TokenRow {
@@ -70,8 +71,17 @@ export function ContextSettings() {
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState("https://<your instance>/api/mcp");
 
+  const [tokensError, setTokensError] = useState<string | null>(null);
   const load = useCallback(() => {
-    api<{ tokens: TokenRow[] }>("/settings/tokens").then((r) => setTokens(r.tokens)).catch(() => setTokens([]));
+    api<{ tokens: TokenRow[] }>("/settings/tokens")
+      .then((r) => {
+        setTokens(r.tokens);
+        setTokensError(null);
+      })
+      .catch((e: Error) => {
+        setTokens([]);
+        setTokensError(e.message);
+      });
     api<{ repos: RepoRow[] }>("/context").then((r) => setRepos(r.repos)).catch(() => {});
   }, []);
   useEffect(() => {
@@ -134,6 +144,7 @@ export function ContextSettings() {
               Create a token for each editor, then add Cloudly as an MCP server there. The editor gets four tools: list_repos, repo_context, add_note and record_work. A token
               reaches shared context and session imports (the Import page&apos;s command), nothing else in Cloudly.
             </p>
+            {tokensError ? <LoadFailed what="your editor tokens" detail={tokensError} onRetry={load} /> : null}
             {tokens?.length ? (
               <ul className="file-list">
                 {tokens.map((t) => (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, LockSimple, Trash, Eye } from "@phosphor-icons/react";
 import { api, ApiError, type EnvSecretRow, type Repo } from "@/lib/api";
+import { LoadFailed } from "./status";
 
 function hostsLabel(hosts: string) {
   const list = hosts.split("\n").filter(Boolean);
@@ -20,8 +21,19 @@ export function EnvPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadSecrets = () =>
+    api<{ secrets: EnvSecretRow[] }>("/settings/env")
+      .then((r) => {
+        setSecrets(r.secrets);
+        setLoadError(null);
+      })
+      .catch((e: Error) => {
+        setSecrets([]);
+        setLoadError(e.message);
+      });
   useEffect(() => {
-    api<{ secrets: EnvSecretRow[] }>("/settings/env").then((r) => setSecrets(r.secrets)).catch(() => setSecrets([]));
+    loadSecrets();
     api<{ repos: Repo[] }>("/repos").then((r) => setRepos(r.repos)).catch(() => {});
   }, []);
 
@@ -75,6 +87,10 @@ export function EnvPanel() {
           {secrets === null ? (
             <div className="panel-row" aria-busy="true">
               <div className="skeleton" style={{ width: "50%" }} />
+            </div>
+          ) : loadError ? (
+            <div className="panel-row">
+              <LoadFailed what="your secrets" detail={loadError} onRetry={loadSecrets} />
             </div>
           ) : secrets.length === 0 ? (
             <div className="panel-row hint">None yet.</div>

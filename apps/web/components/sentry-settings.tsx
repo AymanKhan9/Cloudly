@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Trash } from "@phosphor-icons/react";
 import { api, ApiError, type Repo } from "@/lib/api";
+import { LoadFailed } from "./status";
 import { relativeTime, type Harness } from "@/lib/harness";
 import { useApp } from "./app-context";
 import { CopyText } from "./discord-settings";
@@ -226,6 +227,15 @@ export function SentrySettings() {
               </div>
             ) : null}
           </div>
+        ) : message && !message.ok ? (
+          <LoadFailed
+            what="the Sentry settings"
+            detail={message.text}
+            onRetry={() => {
+              setMessage(null);
+              load();
+            }}
+          />
         ) : (
           <div className="skeleton" style={{ height: 120 }} aria-busy="true" />
         )}

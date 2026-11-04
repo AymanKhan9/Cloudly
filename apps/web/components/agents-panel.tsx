@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShieldCheck, ArrowCircleUp, ArrowSquareOut, ArrowsClockwise, CheckCircle, Circle, Info, MagnifyingGlass, Plus, Terminal, Trash, WarningCircle, X } from "@phosphor-icons/react";
 import { api, ApiError, type AgentRow, type AgentsSettings, type CatalogItem, type RegistryItem } from "@/lib/api";
+import { LoadFailed } from "./status";
 import { AgentLogo, MaskIcon } from "@/components/agent-logo";
 import { catalogIconPath } from "@repo/shared/providers";
 import { useApp } from "@/components/app-context";
@@ -709,8 +710,13 @@ export function AgentsPanel() {
   const [adding, setAdding] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(async () => {
-    const s = await api<AgentsSettings>("/settings/agents").catch(() => null);
+    setLoadError(null);
+    const s = await api<AgentsSettings>("/settings/agents").catch((e: Error) => {
+      setLoadError(e.message);
+      return null;
+    });
     setSettings(s);
     refreshHarnesses().catch(() => {});
   }, [refreshHarnesses]);
@@ -775,7 +781,11 @@ export function AgentsPanel() {
               </div>
             </div>
           ))}
-          {settings === null ? (
+          {settings === null && loadError ? (
+            <div className="panel-row">
+              <LoadFailed what="your added agents" detail={loadError} onRetry={load} />
+            </div>
+          ) : settings === null ? (
             <div className="panel-row" aria-busy="true">
               <div className="skeleton" style={{ width: "50%" }} />
             </div>

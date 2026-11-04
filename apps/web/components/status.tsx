@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, CircleDashed, CircleNotch, GitPullRequest, Prohibit, XCircle } from "@phosphor-icons/react";
+import { CheckCircle, CircleDashed, CircleNotch, GitPullRequest, Prohibit, WarningCircle, XCircle } from "@phosphor-icons/react";
 import { STATUS_LABEL, type RunStatus } from "@/lib/harness";
 
 export type BudgetState = "fair" | "change" | "storm";
@@ -36,6 +36,23 @@ export function SpendBar({ ratio, state, large = false }: { ratio: number; state
     <div className={`bar${large ? " bar-lg" : ""}`} data-state={state} role="presentation">
       <i style={{ width: `${Math.min(100, ratio * 100)}%` }} />
       {large ? <span className="bar-mark" style={{ left: "80%" }} /> : null}
+    </div>
+  );
+}
+
+/** What a settings panel shows when its data didn't load, in place of the loading bar. */
+export function LoadFailed({ what, detail, onRetry }: { what: string; detail?: string | null; onRetry?: () => void }) {
+  return (
+    <div className="load-failed" role="alert">
+      <WarningCircle size={16} weight="bold" />
+      <span>
+        Couldn&apos;t load {what}.{detail ? <span className="dim"> {detail}</span> : null}
+      </span>
+      {onRetry ? (
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }

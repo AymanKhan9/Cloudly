@@ -14,18 +14,27 @@ import { ChecksSettings } from "@/components/checks-settings";
 import { GitHubTriggers } from "@/components/github-triggers";
 import { DiscordSettings, NotificationSettings, SlackSettings } from "@/components/discord-settings";
 import { SentrySettings } from "@/components/sentry-settings";
+import { LoadFailed } from "@/components/status";
 
 // A repo's kept files (/files in its runs), picked from the installation's repos.
 function RepoFilesSection() {
   const [repos, setRepos] = useState<Repo[] | null>(null);
   const [repo, setRepo] = useState("");
-  useEffect(() => {
+  const [error, setError] = useState<string | null>(null);
+  const load = () => {
+    setError(null);
     api<{ repos: Repo[] }>("/repos")
       .then((r) => {
         setRepos(r.repos);
         setRepo(r.repos[0]?.fullName ?? "");
       })
-      .catch(() => setRepos([]));
+      .catch((e: Error) => {
+        setRepos([]);
+        setError(e.message);
+      });
+  };
+  useEffect(() => {
+    load();
   }, []);
   return (
     <section className="set-sec" aria-labelledby="files-h" id="files">
@@ -47,7 +56,15 @@ function RepoFilesSection() {
               ))}
             </select>
           </div>
-          <div className="panel-row">{repo ? <FilesPanel repo={repo} /> : <p className="hint">{repos ? "No repositories yet." : "Loading"}</p>}</div>
+          <div className="panel-row">
+            {error ? (
+              <LoadFailed what="your repositories" detail={error} onRetry={load} />
+            ) : repo ? (
+              <FilesPanel repo={repo} />
+            ) : (
+              <p className="hint">{repos ? "No repositories yet." : "Loading"}</p>
+            )}
+          </div>
         </div>
       </div>
     </section>
