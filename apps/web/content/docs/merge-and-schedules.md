@@ -23,7 +23,7 @@ Under **Settings → Checks and review**, a repository can have it **on for new 
 
 ## Schedules
 
-**Schedules** in the sidebar runs tasks on their own, for example:
+**Schedules** (under **Settings**, in its menu's Automation group) runs tasks on their own, for example:
 
 - every night: update outdated dependencies, run the tests, and fix what breaks;
 - every Monday: an [audit](/docs/checks#audit-a-repository) of the repository;

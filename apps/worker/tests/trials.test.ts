@@ -80,7 +80,8 @@ test("an update with testing on is tried on merged tasks, then installed if it h
   const pass = await addPi("pass");
   const fail = await addPi("fail");
   const none = await addPi("none");
-  for (const p of [pass, fail]) {
+  const broke = await addPi("broke");
+  for (const p of [pass, fail, broke]) {
     const t = await prisma.thread.create({
       data: { userId: user.id, repo: "acme/t", baseBranch: "main", harness: p.id, title: `Merged task ${p.id}`, branch: "b", mergedAt: new Date(), diffBase: "c".repeat(40), diff: "diff --git a/src/a.ts b/src/a.ts\n" },
     });
@@ -89,7 +90,7 @@ test("an update with testing on is tried on merged tasks, then installed if it h
 
   // The check opens trials instead of installing.
   const results = (await checkProviderUpdates(src("0.0.35"))).filter((r) => ids.includes(r.id));
-  expect(results.map((r) => r.outcome)).toEqual(["testing", "testing", "testing"]);
+  expect(results.map((r) => r.outcome)).toEqual(["testing", "testing", "testing", "testing"]);
   expect((await prisma.provider.findUniqueOrThrow({ where: { id: pass.id } })).updateState).toBe("testing");
   expect((await checkProviderUpdates(src("0.0.36"))).filter((r) => ids.includes(r.id))).toEqual([]);
 
@@ -97,8 +98,8 @@ test("an update with testing on is tried on merged tasks, then installed if it h
   // No merged tasks to try it on: installed as usual.
   expect(await prisma.provider.findUniqueOrThrow({ where: { id: none.id } })).toMatchObject({ updateState: "updating", version: "0.0.35 · pi-coding-agent 1.5.0" });
   // Two runs per task, from the commit the task started on.
-  const runs = await prisma.run.findMany({ where: { harness: { in: [pass.id, fail.id] }, kind: "trial" } });
-  expect(runs).toHaveLength(4);
+  const runs = await prisma.run.findMany({ where: { harness: { in: [pass.id, fail.id, broke.id] }, kind: "trial" } });
+  expect(runs).toHaveLength(6);
   expect(runs.every((r) => r.status === "queued" && r.prompt === "Add the cart" && (r.trigger as any).base === "c".repeat(40))).toBe(true);
 
   // What each side did.
@@ -113,7 +114,13 @@ test("an update with testing on is tried on merged tasks, then installed if it h
   // One side still running: not judged yet.
   expect((await prisma.agentTrial.findFirstOrThrow({ where: { providerId: fail.id } })).status).toBe("running");
   await done(fail.id, "candidate", { checkStatus: "failed" });
+  await done(broke.id, "current", {});
+  await done(broke.id, "candidate", { status: "failed", output: null, checkStatus: null, costUsd: null, error: "The new version of Pi didn't install: npm ERR! 404 Not Found" });
   await advanceTrials();
+  // Its new version never installed: that's what it says, and it keeps the version it has.
+  const broken = await prisma.provider.findUniqueOrThrow({ where: { id: broke.id } });
+  expect(broken).toMatchObject({ updateState: "failed", version: "0.0.34" });
+  expect(broken.updateNote).toContain("was tried first. The new version of Pi didn't install: npm ERR! 404 Not Found");
 
   const passed = await prisma.provider.findUniqueOrThrow({ where: { id: pass.id } });
   expect(passed).toMatchObject({ updateState: "updating", version: "0.0.35 · pi-coding-agent 1.5.0" });

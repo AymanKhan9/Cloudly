@@ -1,65 +1,130 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { api, ApiError, type Repo } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
+import { THEME_KEY, RAIL_KEY } from "@/lib/theme";
 import { useApp } from "@/components/app-context";
 import { SpendBar } from "@/components/status";
 import { usd } from "@/lib/harness";
-import { SecretsPanel } from "@/components/secrets-panel";
-import { SandboxPanel } from "@/components/sandbox-panel";
-import { McpPanel } from "@/components/mcp-panel";
-import { EnvPanel } from "@/components/env-panel";
-import { FilesPanel } from "@/components/files-panel";
-import { ContextSettings } from "@/components/context-settings";
-import { AgentsPanel } from "@/components/agents-panel";
-import { ChecksSettings } from "@/components/checks-settings";
-import { GitHubTriggers } from "@/components/github-triggers";
-import { DiscordSettings, NotificationSettings, SlackSettings } from "@/components/discord-settings";
-import { SentrySettings } from "@/components/sentry-settings";
 
-// A repo's kept files (/files in its runs), picked from the installation's repos.
-function RepoFilesSection() {
-  const [repos, setRepos] = useState<Repo[] | null>(null);
-  const [repo, setRepo] = useState("");
+const STATE_TEXT = { fair: "Runs start normally", change: "Warning sent", storm: "New runs blocked" };
+
+// Where /app/settings#<section> links (from before settings had pages) now go.
+const OLD_ANCHORS: Record<string, string> = {
+  keys: "keys", agents: "agents", mcp: "mcp", sandbox: "sandbox", network: "sandbox", secrets: "secrets", files: "files", context: "context",
+  checks: "checks", triggers: "github", sentry: "sentry", notifications: "notifications", discord: "chat", slack: "chat",
+};
+
+function Appearance() {
+  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
+  const [rail, setRailShown] = useState(true);
   useEffect(() => {
-    api<{ repos: Repo[] }>("/repos")
-      .then((r) => {
-        setRepos(r.repos);
-        setRepo(r.repos[0]?.fullName ?? "");
-      })
-      .catch(() => setRepos([]));
+    const t = document.documentElement.dataset.theme;
+    setTheme(t === "light" || t === "dark" ? t : "system");
+    setRailShown(document.documentElement.dataset.rail !== "closed");
   }, []);
+  const pickTheme = (t: "system" | "light" | "dark") => {
+    setTheme(t);
+    try {
+      if (t === "system") {
+        delete document.documentElement.dataset.theme;
+        localStorage.removeItem(THEME_KEY);
+      } else {
+        document.documentElement.dataset.theme = t;
+        localStorage.setItem(THEME_KEY, t);
+      }
+    } catch {}
+  };
+  const pickRail = (shown: boolean) => {
+    setRailShown(shown);
+    if (shown) delete document.documentElement.dataset.rail;
+    else document.documentElement.dataset.rail = "closed";
+    try {
+      localStorage.setItem(RAIL_KEY, shown ? "open" : "closed");
+    } catch {}
+  };
   return (
-    <section className="set-sec" aria-labelledby="files-h" id="files">
+    <section className="set-sec" aria-labelledby="appearance-h" id="appearance">
       <header>
-        <h2 id="files-h">Repo files</h2>
-        <p>Files a repo&apos;s sessions find at /files: data, fixtures, a local config. They aren&apos;t committed, and what the agent saves there is kept for the next session.</p>
+        <h2 id="appearance-h">Appearance</h2>
+        <p>For this browser.</p>
       </header>
       <div className="set-body">
         <div className="panel">
-          <div className="panel-row field">
-            <label className="label" htmlFor="files-repo">
-              Repository
-            </label>
-            <select id="files-repo" className="select" value={repo} onChange={(e) => setRepo(e.target.value)} disabled={!repos?.length} style={{ maxWidth: 360 }}>
-              {(repos ?? []).map((r) => (
-                <option key={r.fullName} value={r.fullName}>
-                  {r.fullName}
-                </option>
+          <div className="panel-row setting-row">
+            <div>
+              <span className="label">Theme</span>
+              <p className="hint">System follows your device.</p>
+            </div>
+            <div className="segmented" role="radiogroup" aria-label="Theme">
+              {(["system", "light", "dark"] as const).map((t) => (
+                <button key={t} type="button" role="radio" aria-checked={theme === t} onClick={() => pickTheme(t)}>
+                  {t[0]!.toUpperCase() + t.slice(1)}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
-          <div className="panel-row">{repo ? <FilesPanel repo={repo} /> : <p className="hint">{repos ? "No repositories yet." : "Loading"}</p>}</div>
+          <div className="panel-row setting-row">
+            <div>
+              <span className="label">Sidebar</span>
+              <p className="hint">Show or hide it any time with Ctrl B (⌘B on a Mac).</p>
+            </div>
+            <div className="segmented" role="radiogroup" aria-label="Sidebar">
+              <button type="button" role="radio" aria-checked={rail} onClick={() => pickRail(true)}>
+                Shown
+              </button>
+              <button type="button" role="radio" aria-checked={!rail} onClick={() => pickRail(false)}>
+                Hidden
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-const STATE_TEXT = { fair: "Runs start normally", change: "Warning sent", storm: "New runs blocked" };
+function Account() {
+  const { user } = useApp();
+  return (
+    <section className="set-sec" aria-labelledby="account-h" id="account">
+      <header>
+        <h2 id="account-h">Account</h2>
+        <p>Who can sign in is under Keys and sign-ins.</p>
+      </header>
+      <div className="set-body">
+        <div className="panel">
+          <div className="panel-row setting-row">
+            <div>
+              <span className="label">Signed in as {user?.login ?? ""}</span>
+              <p className="hint">With GitHub.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={async () => {
+                await api("/auth/logout", { method: "POST" }).catch(() => {});
+                window.location.assign("/signin");
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const { budget, refreshBudget } = useApp();
+  const router = useRouter();
+  // An old link to a section of the one long settings page goes to that section's page.
+  useEffect(() => {
+    const to = OLD_ANCHORS[window.location.hash.slice(1)];
+    if (to) router.replace(`/app/settings/${to}${window.location.search}`);
+  }, [router]);
   const [limit, setLimit] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,8 +162,8 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Settings</h1>
-        <p>Spend limit, keys, agents, MCP servers, secrets, files and sandbox tools for this instance.</p>
+        <h1>General</h1>
+        <p>Spend, how Cloudly looks in this browser, and your account. Everything else is in the menu.</p>
       </div>
 
       <section className="set-sec" aria-labelledby="spend-h">
@@ -168,28 +233,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <SecretsPanel />
-
-      <AgentsPanel />
-
-      <Suspense fallback={null}>
-        <McpPanel />
-      </Suspense>
-
-      <EnvPanel />
-
-      <ChecksSettings />
-      <GitHubTriggers />
-      <NotificationSettings />
-      <DiscordSettings />
-      <SlackSettings />
-      <SentrySettings />
-
-      <RepoFilesSection />
-
-      <ContextSettings />
-
-      <SandboxPanel />
+      <Appearance />
+      <Account />
     </div>
   );
 }

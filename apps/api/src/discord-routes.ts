@@ -347,7 +347,7 @@ discordSettings.put(
 discordSettings.post("/notifications/test", async (c) => {
   const userId = c.get("user").id;
   await prisma.notification.create({
-    data: { userId, kind: "test", title: "Notifications work", body: "This is how Cloudly will tell you when a session needs you, finishes, fails or merges.", url: `${webOrigin()}/app/settings#notifications`, key: `test:${userId}:${Date.now()}` },
+    data: { userId, kind: "test", title: "Notifications work", body: "This is how Cloudly will tell you when a session needs you, finishes, fails or merges.", url: `${webOrigin()}/app/settings/notifications`, key: `test:${userId}:${Date.now()}` },
   });
   return c.json({ ok: true });
 });

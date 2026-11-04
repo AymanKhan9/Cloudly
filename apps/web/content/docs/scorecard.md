@@ -1,6 +1,6 @@
 # Agent scorecard
 
-With several agents on the same repos, Cloudly can tell you which one does best where. **Scorecard** in the sidebar shows, per agent, for one repo or all of them, over the last 30 to 365 days:
+With several agents on the same repos, Cloudly can tell you which one does best where. **Scorecard** (under **Settings**, in its menu's Workspace group) shows, per agent, for one repo or all of them, over the last 30 to 365 days:
 
 | Column | What it is |
 |---|---|

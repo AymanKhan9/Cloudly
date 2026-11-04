@@ -7139,3 +7139,581 @@ div.msg-system {
 .mode-chip > svg:last-child {
   opacity: 0.6;
 }
+
+/* ---------- Session workspace: panes with tabs, splits and dividers ---------- */
+
+.main:has(> .workspace) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.ws-split {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ws-split[data-dir="column"] {
+  flex-direction: column;
+}
+
+.ws-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ws-pane {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.ws-tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ws-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 auto;
+  min-width: 90px;
+  max-width: 220px;
+  padding: 0 6px 0 12px;
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ws-tab:hover {
+  color: var(--text);
+}
+
+.ws-tab[aria-selected="true"] {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* The shown tab joins its pane. */
+.ws-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--bg);
+}
+
+/* The focused pane's tab, when there's more than one pane. */
+.workspace:has(.ws-divider) .ws-pane[data-focused] .ws-tab[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.ws-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ws-tab-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-tab-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ws-tab:hover .ws-tab-close,
+.ws-tab[aria-selected="true"] .ws-tab-close {
+  opacity: 0.6;
+}
+
+.ws-tab-close:hover {
+  opacity: 1;
+  background: var(--surface-3);
+}
+
+/* Where a dragged tab would go. */
+.ws-tab[data-slot],
+.ws-tab-end[data-slot] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.ws-tab-end {
+  flex: 1;
+  min-width: 24px;
+}
+
+.ws-pane-actions {
+  position: sticky;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  background: var(--surface);
+}
+
+.ws-pane-actions .icon-btn {
+  width: 28px;
+  height: 28px;
+  color: var(--text-3);
+}
+
+.ws-pane-actions .icon-btn:hover {
+  color: var(--text);
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  container: pane / inline-size;
+}
+
+.pane-body > .chat {
+  min-height: 100%;
+}
+
+.workspace .chat-head {
+  top: 0;
+}
+
+/* A narrow pane: the header's buttons drop their labels. */
+@container pane (max-width: 760px) {
+  .hide-sm {
+    display: none;
+  }
+  .chat-head .tools {
+    gap: 6px;
+  }
+}
+
+.ws-divider {
+  position: relative;
+  z-index: 3;
+  flex: none;
+  background: var(--border);
+  touch-action: none;
+}
+
+.ws-divider[data-dir="row"] {
+  width: 1px;
+  cursor: col-resize;
+}
+
+.ws-divider[data-dir="column"] {
+  height: 1px;
+  cursor: row-resize;
+}
+
+/* A wider grip than the line itself. */
+.ws-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.ws-divider[data-dir="column"]::after {
+  inset: -4px 0;
+}
+
+.ws-divider:hover,
+.ws-divider:focus-visible {
+  background: var(--accent);
+  outline: none;
+}
+
+body[data-resizing] {
+  user-select: none;
+}
+
+body[data-resizing="row"] * {
+  cursor: col-resize !important;
+}
+
+body[data-resizing="column"] * {
+  cursor: row-resize !important;
+}
+
+/* Panes don't swallow the pointer while a divider moves. */
+body[data-resizing] .pane-body {
+  pointer-events: none;
+}
+
+.ws-drop {
+  position: absolute;
+  z-index: 40;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  transition: inset 120ms var(--ease);
+}
+
+.ws-drop[data-zone="center"] {
+  inset: 46px 8px 8px;
+}
+
+.ws-drop[data-zone="left"] {
+  inset: 46px 50% 8px 8px;
+}
+
+.ws-drop[data-zone="right"] {
+  inset: 46px 8px 8px 50%;
+}
+
+.ws-drop[data-zone="top"] {
+  inset: 46px 8px calc(50% - 19px) 8px;
+}
+
+.ws-drop[data-zone="bottom"] {
+  inset: calc(50% + 19px) 8px 8px 8px;
+}
+
+.ws-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  max-width: 520px;
+  margin: 56px auto;
+  padding: 0 var(--gutter);
+}
+
+.ws-empty h2 {
+  font-size: 17px;
+}
+
+.ws-empty p {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.ws-empty ul {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 8px;
+}
+
+.ws-empty li button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-empty li button:hover {
+  background: var(--surface-2);
+}
+
+.ws-empty .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-empty .dim {
+  font-size: 12.5px;
+}
+
+/* On a phone: only the focused pane, with its tabs, taking the whole width. */
+@media (max-width: 900px) {
+  .ws-cell:not([data-has-focus]),
+  .ws-divider,
+  .ws-pane-actions [aria-label^="Split"] {
+    display: none;
+  }
+  .ws-cell {
+    flex: 1 1 0px !important;
+  }
+}
+
+/* A very narrow pane: the title gets the first line, the buttons the next. */
+@container pane (max-width: 520px) {
+  .chat-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chat-head .titles {
+    flex-basis: 100%;
+  }
+}
+
+/* ---------- The sidebar, hidden or shown (Ctrl/Cmd+B) ---------- */
+
+.rail-mini {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  html[data-rail="closed"] .shell {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+  html[data-rail="closed"] .rail {
+    display: none;
+  }
+  html[data-rail="closed"] .rail-mini {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 0;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    z-index: 30;
+  }
+  html[data-rail="closed"] .rail-mini .spacer {
+    flex: 1;
+  }
+  html[data-rail="closed"] .rail-mini .icon-btn[aria-current="page"] {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+.rail-head .desktop-only {
+  color: var(--text-3);
+}
+
+/* ---------- Settings: a menu of pages, as in T3 Code ---------- */
+
+.manage {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.manage-nav {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px 24px;
+  border-right: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+
+.manage-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--text-3);
+}
+
+.manage-search:focus-within {
+  border-color: var(--text-3);
+}
+
+.manage-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  outline: none;
+}
+
+.manage-search kbd {
+  font-size: 11px;
+}
+
+.manage-group {
+  display: grid;
+  gap: 1px;
+  margin-bottom: 10px;
+}
+
+.manage-group-name {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.manage-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--r-control);
+  font-size: 14px;
+  color: var(--text-2);
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.manage-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.manage-link[aria-current="page"] {
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.manage-none {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.manage-select {
+  display: none;
+}
+
+.manage-body {
+  min-width: 0;
+}
+
+/* A page of settings: each section's title above its panel. */
+.manage .set-sec {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 0 36px;
+  border-top: 0;
+}
+
+.manage .set-sec + .set-sec {
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-page .set-sec:first-child > header h2 {
+  font-size: clamp(22px, 3vw, 26px);
+  letter-spacing: -0.02em;
+}
+
+.settings-page .set-sec:first-child > header p {
+  font-size: 14.5px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+}
+
+.segmented button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: calc(var(--r-control) - 2px);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segmented button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+@media (max-width: 900px) {
+  .manage {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .manage-nav {
+    display: none;
+  }
+  .manage-select {
+    display: block;
+    padding: 12px var(--gutter) 0;
+  }
+  .manage-select .select {
+    width: 100%;
+  }
+}

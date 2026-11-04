@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarBlank, ChartBar, DownloadSimple, GearSix, Lightbulb, TreeStructure, List, NotePencil, SignOut, Warning, X } from "@phosphor-icons/react";
+import { GearSix, List, NotePencil, SidebarSimple, SignOut, Warning, X } from "@phosphor-icons/react";
 import { api } from "@/lib/api";
 import { usd } from "@/lib/harness";
 import { useApp } from "./app-context";
@@ -11,14 +11,34 @@ import { Mark } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
 import { SpendBar } from "./status";
 import { SessionList } from "./session-list";
+import { RAIL_KEY } from "@/lib/theme";
+
+/** Collapses or expands the sidebar, remembered in this browser. */
+function setRail(closed: boolean) {
+  if (closed) document.documentElement.dataset.rail = "closed";
+  else delete document.documentElement.dataset.rail;
+  try {
+    localStorage.setItem(RAIL_KEY, closed ? "closed" : "open");
+  } catch {}
+}
+
+// Pages that live under Settings (see app/app/(manage)).
+const MANAGE = ["/app/settings", "/app/plans", "/app/scorecard", "/app/lessons", "/app/import", "/app/schedules"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, budget } = useApp();
   const [open, setOpen] = useState(false);
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => setClosed(document.documentElement.dataset.rail === "closed"), []);
+  const toggleRail = () => {
+    const next = document.documentElement.dataset.rail !== "closed";
+    setRail(next);
+    setClosed(next);
+  };
 
   // Ctrl/Cmd+K starts a new session from anywhere in the app.
   useEffect(() => {
@@ -26,6 +46,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         router.push("/app");
+      }
+      // Ctrl/Cmd+B shows or hides the sidebar.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleRail();
       }
       if (e.key === "Escape") setOpen(false);
     };
@@ -50,6 +75,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
           <button type="button" className="icon-btn mobile-only" onClick={() => setOpen(false)} aria-label="Close menu">
             <X size={18} />
+          </button>
+          <button type="button" className="icon-btn desktop-only" onClick={toggleRail} aria-label="Hide the sidebar" aria-expanded={!closed} title="Hide the sidebar (Ctrl B)">
+            <SidebarSimple size={18} />
           </button>
         </div>
 
@@ -76,27 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {budget.limitUsd ? <SpendBar ratio={budget.ratio} state={state} /> : null}
             </Link>
           ) : null}
-          <Link href="/app/plans" className="rail-link" aria-current={pathname.startsWith("/app/plans") ? "page" : undefined}>
-            <TreeStructure size={17} />
-            Plans
-          </Link>
-          <Link href="/app/scorecard" className="rail-link" aria-current={pathname.startsWith("/app/scorecard") ? "page" : undefined}>
-            <ChartBar size={17} />
-            Scorecard
-          </Link>
-          <Link href="/app/lessons" className="rail-link" aria-current={pathname.startsWith("/app/lessons") ? "page" : undefined}>
-            <Lightbulb size={17} />
-            Lessons
-          </Link>
-          <Link href="/app/import" className="rail-link" aria-current={pathname.startsWith("/app/import") ? "page" : undefined}>
-            <DownloadSimple size={17} />
-            Import
-          </Link>
-          <Link href="/app/schedules" className="rail-link" aria-current={pathname.startsWith("/app/schedules") ? "page" : undefined}>
-            <CalendarBlank size={17} />
-            Schedules
-          </Link>
-          <Link href="/app/settings" className="rail-link" aria-current={pathname.startsWith("/app/settings") ? "page" : undefined}>
+          <Link href="/app/settings" className="rail-link" aria-current={MANAGE.some((p) => pathname.startsWith(p)) ? "page" : undefined}>
             <GearSix size={17} />
             Settings
           </Link>
@@ -117,6 +125,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="scrim" data-open={open || undefined} onClick={() => setOpen(false)} />
+
+      {/* While the sidebar is hidden: a slim bar to bring it back. */}
+      <nav className="rail-mini" aria-label="Sidebar hidden">
+        <button type="button" className="icon-btn" onClick={toggleRail} aria-label="Show the sidebar" aria-expanded={!closed} title="Show the sidebar (Ctrl B)">
+          <SidebarSimple size={18} />
+        </button>
+        <Link href="/app" className="icon-btn" aria-label="New session" title="New session (Ctrl K)">
+          <NotePencil size={18} />
+        </Link>
+        <span className="spacer" />
+        <Link href="/app/settings" className="icon-btn" aria-label="Settings" title="Settings" aria-current={MANAGE.some((p) => pathname.startsWith(p)) ? "page" : undefined}>
+          <GearSix size={18} />
+        </Link>
+      </nav>
 
       <div className="main">
         <div className="mobile-bar">

@@ -121,7 +121,7 @@ async function startTrial(trial: { id: string; providerId: string; toVersion: st
 async function finishTrial(trial: { id: string; providerId: string; toVersion: string; fromVersion: string | null; results: unknown; launch: unknown }): Promise<boolean> {
   const tasks = ((trial.results as { tasks?: TrialTask[] } | null)?.tasks ?? []);
   const ids = tasks.flatMap((t) => [t.current, t.candidate]);
-  const runs = await prisma.run.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, checkStatus: true, costUsd: true, output: true } });
+  const runs = await prisma.run.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, checkStatus: true, costUsd: true, output: true, error: true } });
   if (runs.length < ids.length || runs.some((r) => ["queued", "running", "finalizing"].includes(r.status))) return false;
   const side = (id: string): TrialSide => {
     const r = runs.find((x) => x.id === id)!;
@@ -132,7 +132,11 @@ async function finishTrial(trial: { id: string; providerId: string; toVersion: s
     return { status: r.status, checks: r.checkStatus, costUsd: r.costUsd ? Number(r.costUsd) : null, files };
   };
   const judged = tasks.map((t) => ({ title: t.title, threadId: t.threadId, merged: t.merged, current: side(t.current), candidate: side(t.candidate) }));
-  const verdict = judgeTrial(judged);
+  // The new version never installed in the sandbox: say that, not how its (empty) runs compared.
+  const installErrors = tasks.map((t) => runs.find((r) => r.id === t.candidate)?.error ?? "").filter((e) => e.startsWith("The new version of "));
+  const verdict = installErrors.length === tasks.length
+    ? { passed: false, reason: installErrors[0]!.slice(0, 500), summary: judgeTrial(judged).summary }
+    : judgeTrial(judged);
   await prisma.agentTrial.update({ where: { id: trial.id }, data: { status: verdict.passed ? "passed" : "failed", verdict: verdict.reason, results: { tasks, judged, summary: verdict.summary } as never } });
   if (verdict.passed) {
     await installTrialUpdate(trial.id, `Updated to ${trial.toVersion} after trying it: ${verdict.reason}`);

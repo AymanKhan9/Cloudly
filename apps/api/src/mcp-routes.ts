@@ -20,7 +20,7 @@ function apiOrigin(): string {
 }
 function settingsUrl(params: Record<string, string>): string {
   const web = (process.env.WEB_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
-  return `${web}/app/settings?${new URLSearchParams(params)}#mcp`;
+  return `${web}/app/settings/mcp?${new URLSearchParams(params)}`;
 }
 export const mcpRedirectUri = () => `${apiOrigin()}/settings/mcp/oauth/callback`;
 

@@ -93,7 +93,7 @@ export function ContextPanel({ repo }: { repo: string }) {
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => save({ enabled: true })}>
             Turn on shared context
           </button>
-          <Link href="/app/settings#context" className="btn btn-secondary">
+          <Link href="/app/settings/context" className="btn btn-secondary">
             <Plugs size={15} />
             Connect an editor
           </Link>
@@ -189,7 +189,7 @@ export function ContextPanel({ repo }: { repo: string }) {
       </div>
 
       <div className="form-foot" style={{ justifyContent: "space-between" }}>
-        <Link href="/app/settings#context" className="text-link">
+        <Link href="/app/settings/context" className="text-link">
           Connect Cursor or Claude Code to this context
         </Link>
         <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => save({ enabled: false })}>

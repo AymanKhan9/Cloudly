@@ -63,6 +63,21 @@ Sending a message to a session brings it back from Settled, Snoozed or Archived.
 - **Needs you:** the agent asked you something (below). Hover over it to read the question.
 - **A spinning ring:** a turn is running.
 
+## Several sessions side by side
+
+Sessions open as tabs. Click a session in the sidebar and it opens as a new tab in the pane you're working in, or goes to its tab if it's already open.
+
+- **Split:** the buttons at the right of a pane's tabs split it to the right or downward. The new pane lists your recent sessions to pick from. You can also right-click a session in the sidebar and choose **Open to the side** or **Open below**.
+- **Move and arrange:** drag a tab, or a session from the sidebar, onto a pane. Drop it in the middle to move it there, or near an edge to split that pane on that side. Drag a tab along a tab bar to reorder it.
+- **Resize:** drag the line between two panes. With the line focused, the arrow keys move it, and double-clicking evens out the panes on either side.
+- **Close:** the × on a tab, or a middle-click. The × at the right of a pane's tabs closes the pane.
+
+Each pane scrolls on its own, and the layout is kept in your browser for next time. On a phone you see one pane at a time, with its tabs.
+
+## Show or hide the sidebar
+
+The button at the top of the sidebar hides it, leaving a slim bar with buttons to show it again, start a session, or open Settings. **Ctrl+B** (**⌘B** on a Mac) does the same from anywhere. Cloudly remembers your choice in this browser; **Settings > General** has it too.
+
 ## When an agent needs you
 
 Agents in Cloudly work with nobody watching, so they never stop to ask permission: they can already run commands, edit files and install packages in their sandbox, and nothing they do there leaves it except through Cloudly's own checks. When an agent can't go on without you, because a decision is yours to make or it can't find something, it asks with its `ask_user` tool and ends its turn. The session then shows **Needs you** in the sidebar, and its question sits above the chat box. Reply as usual; your answer is the next turn, and the flag clears.

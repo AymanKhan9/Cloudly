@@ -6,11 +6,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Archive, ArrowSquareOut, BellSimpleZ, CaretDown, CaretRight, ChatsCircle, CheckCircle, Copy, Envelope, EnvelopeOpen,
   Funnel, GitBranch, GitPullRequest, Hash, LinkSimple, NotePencil, PencilSimpleLine, PushPin, PushPinSlash, Trash,
-  UsersThree, X,
+  SquareSplitHorizontal, SquareSplitVertical, UsersThree, X,
 } from "@phosphor-icons/react";
 import { api, ApiError, type CouncilSummary, type ThreadSummary } from "@/lib/api";
 import { harnessById, relativeTime } from "@/lib/harness";
 import { StatusIcon } from "./status";
+import { DRAG_TYPE, setSessionInfo, workspace } from "@/lib/workspace";
 import { ContextMenu, copyText, sessionReference, type MenuItem } from "./session-menu";
 
 // The sidebar's sessions, with T3 Code's thread actions on right-click: pin,
@@ -139,6 +140,11 @@ function Row({
       aria-current={pathname === href ? "page" : undefined}
       aria-haspopup="menu"
       data-unread={t.unread || t.needsInput ? true : undefined}
+      onDragStart={(e) => {
+        // Into a pane of the workspace: drop on its middle to open there, on an edge to split.
+        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ id: t.id }));
+        e.dataTransfer.effectAllowed = "copyMove";
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         const from = e.currentTarget;
@@ -182,7 +188,12 @@ export function SessionList({ pathname }: { pathname: string }) {
 
   const load = useCallback(() => {
     api<{ councils: CouncilSummary[] }>("/councils").then((r) => setCouncils(r.councils)).catch(() => {});
-    return api<{ threads: ThreadSummary[] }>("/threads").then((r) => setThreads(r.threads)).catch(() => {});
+    return api<{ threads: ThreadSummary[] }>("/threads")
+      .then((r) => {
+        setThreads(r.threads);
+        setSessionInfo(r.threads);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -254,7 +265,25 @@ export function SessionList({ pathname }: { pathname: string }) {
         ? { kind: "action", label: "Show every repo", icon: <Funnel size={15} />, run: () => setRepo(null) }
         : { kind: "action", label: `Show only ${short}`, icon: <Funnel size={15} />, run: () => setRepo(t.repo) },
       { kind: "separator" },
-      { kind: "action", label: "Open in a new tab", icon: <ArrowSquareOut size={15} />, run: () => window.open(link(), "_blank", "noopener") },
+      {
+        kind: "action",
+        label: "Open to the side",
+        icon: <SquareSplitHorizontal size={15} />,
+        run: () => {
+          workspace.openBeside(t.id, "right");
+          router.push(`/app/s/${t.id}`);
+        },
+      },
+      {
+        kind: "action",
+        label: "Open below",
+        icon: <SquareSplitVertical size={15} />,
+        run: () => {
+          workspace.openBeside(t.id, "bottom");
+          router.push(`/app/s/${t.id}`);
+        },
+      },
+      { kind: "action", label: "Open in a new browser tab", icon: <ArrowSquareOut size={15} />, run: () => window.open(link(), "_blank", "noopener") },
       ...(t.prUrl ? [{ kind: "action" as const, label: "Open pull request", icon: <GitPullRequest size={15} />, run: () => window.open(t.prUrl!, "_blank", "noopener,noreferrer") }] : []),
       {
         kind: "submenu",
@@ -385,7 +414,8 @@ export function SessionList({ pathname }: { pathname: string }) {
           onClose={() => setDeleting(null)}
           onDeleted={() => {
             say("Deleted");
-            if (pathname === `/app/s/${deleting.id}`) router.push("/app");
+            // Its tab closes; the workspace moves on to another session, or a new one.
+            workspace.forget(deleting.id);
             load();
           }}
         />
