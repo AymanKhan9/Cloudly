@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 
 import { prisma, config, providerInstallScript, settleProviderUpdates } from "@repo/db";
+import { pause } from "./pause";
 
 export const BASE_IMAGE = "cloud-agents-base";
 const LOG_CHARS = 8000;
@@ -115,6 +116,6 @@ export async function syncSandboxImage(): Promise<void> {
 export async function runSandboxImageLoop(signal: AbortSignal, intervalMs = 10_000): Promise<void> {
   while (!signal.aborted) {
     await syncSandboxImage().catch((err) => console.error("[sandbox] sync failed:", err));
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

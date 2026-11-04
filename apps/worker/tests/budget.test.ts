@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { prisma, currentMonth } from "@repo/db";
+import { prisma, currentMonth, budgetStatus } from "@repo/db";
 import { enforceBudget } from "../src/budget";
 
 test("warns once at 80%, then stops at 100%: queued runs cancelled, a running turn left to finish", async () => {
@@ -27,6 +27,21 @@ test("warns once at 80%, then stops at 100%: queued runs cancelled, a running tu
     expect(stillRunning.cancelRequested).toBe(false);
     expect(stillRunning.status).toBe("running");
     expect((await prisma.budget.findUniqueOrThrow({ where: { userId: user.id } })).stoppedMonth).toBe(currentMonth());
+  } finally {
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+});
+
+test("a limit of 0 is no limit: nothing is stopped and turns get the usual backstop", async () => {
+  const user = await prisma.user.create({ data: { githubId: Math.floor(Math.random() * 1e9), login: `budget-zero-${Date.now()}` } });
+  try {
+    await prisma.budget.create({ data: { userId: user.id, monthlyLimitUsd: 0 } });
+    const base = { repo: "test/repo", baseBranch: "main", prompt: "t", harness: "native-claude", userId: user.id };
+    await prisma.run.create({ data: { ...base, status: "succeeded", costUsd: 3 } });
+    const queued = await prisma.run.create({ data: { ...base, status: "queued" } });
+    expect(await budgetStatus(user.id)).toMatchObject({ limitUsd: null, state: "fair", spentUsd: 3 });
+    expect((await enforceBudget(user.id)).state).toBe("fair");
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: queued.id } })).status).toBe("queued");
   } finally {
     await prisma.user.delete({ where: { id: user.id } });
   }

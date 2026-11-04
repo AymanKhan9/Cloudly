@@ -1,6 +1,7 @@
 import { prisma } from "@repo/db";
 import { RunSchema, type Run } from "@repo/shared/run";
 import { removeContainer } from "./docker";
+import { pause } from "./pause";
 
 export const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -84,14 +85,14 @@ export async function runRecoverySweepLoop(
     await failExhaustedRuns();
 
     if (active >= maxConcurrency) {
-      await sleep(intervalMs);
+      await pause(intervalMs, signal);
       continue;
     }
 
     const run = await reclaimExpiredRun(workerId);
 
     if (!run) {
-      await sleep(intervalMs);
+      await pause(intervalMs, signal);
       continue;
     }
 
@@ -104,8 +105,6 @@ export async function runRecoverySweepLoop(
         active--;
       });
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  // Stopping: the turns already running finish first.
+  while (active > 0) await Bun.sleep(500);
 }

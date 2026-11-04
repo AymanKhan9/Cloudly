@@ -259,7 +259,9 @@ function workCommit() {
     execFileSync("git", ["add", "-A"], { cwd: root, env, stdio: "ignore" });
     const tree = execFileSync("git", ["write-tree"], { cwd: root, env, encoding: "utf8" }).trim();
     if (tree === git("rev-parse", "HEAD^{tree}")) return { sha: head, dirty: false };
-    const sha = execFileSync("git", ["commit-tree", tree, "-p", head, "-m", "Work in progress, imported into Cloudly"], { cwd: root, encoding: "utf8" }).trim();
+    // A machine where git has no name or email set (a fresh server or container) still gets a commit.
+    const who = git("var", "GIT_AUTHOR_IDENT") ? {} : { GIT_AUTHOR_NAME: "Cloudly import", GIT_AUTHOR_EMAIL: "import@cloudly.invalid", GIT_COMMITTER_NAME: "Cloudly import", GIT_COMMITTER_EMAIL: "import@cloudly.invalid" };
+    const sha = execFileSync("git", ["commit-tree", tree, "-p", head, "-m", "Work in progress, imported into Cloudly"], { cwd: root, env: { ...process.env, ...who }, encoding: "utf8" }).trim();
     return { sha, dirty: true };
   } finally {
     rmSync(tmp, { recursive: true, force: true });

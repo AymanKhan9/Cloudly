@@ -17,6 +17,7 @@ import { costFromDoneEvent } from "./cost";
 import { enforceBudget } from "./budget";
 import { readRegular } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
+import { pause } from "./pause";
 
 // A council: several agents on one question, in rounds. Each member researches
 // on its own, then reads the others' answers and cross-examines them, then gives
@@ -203,7 +204,7 @@ export async function runCouncilLoop(signal: AbortSignal, intervalMs = 3000): Pr
     } catch (err) {
       console.error("[council] sweep failed:", err);
     }
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }
 

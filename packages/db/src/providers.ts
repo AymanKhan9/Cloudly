@@ -4,6 +4,7 @@ import {
   isProviderHarness,
   providerInstallBlock,
   validProviderId,
+  type AgentLaunch,
   type ProviderCredential,
   type ProviderSpec,
 } from "@repo/shared/providers";
@@ -294,7 +295,20 @@ export async function providerProxySecrets(): Promise<{ placeholder: string; val
 /** Hosts the added agents need beyond their keys' (sign-in, model lists). */
 export async function providerHosts(): Promise<string[]> {
   const rows = await prisma.provider.findMany({ where: { enabled: true } });
-  return [...new Set(rows.flatMap((r) => specOf(r).hosts))];
+  // A trial installs the new version inside the sandbox, so it needs its download host.
+  const trials = await prisma.agentTrial.findMany({ where: { status: { in: ["pending", "running"] } }, select: { launch: true } });
+  const downloads = trials.flatMap((t) => {
+    const install = (t.launch as unknown as AgentLaunch | null)?.install;
+    if (install?.kind !== "binary") return [];
+    return Object.values(install.builds).flatMap((b) => {
+      try {
+        return b ? [new URL(b.url).hostname] : [];
+      } catch {
+        return [];
+      }
+    });
+  });
+  return [...new Set([...rows.flatMap((r) => specOf(r).hosts), ...downloads])];
 }
 
 /**

@@ -47,7 +47,8 @@ export async function budgetStatus(userId: string): Promise<BudgetStatus> {
     prisma.budget.findUnique({ where: { userId } }),
   ])
   const spentUsd = agg._sum.costUsd?.toNumber() ?? 0
-  const limitUsd = budget ? budget.monthlyLimitUsd.toNumber() : null
+  // 0 is how a limit is cleared: no limit, the same as never having set one.
+  const limitUsd = budget && budget.monthlyLimitUsd.toNumber() > 0 ? budget.monthlyLimitUsd.toNumber() : null
   return {
     spentUsd,
     limitUsd,

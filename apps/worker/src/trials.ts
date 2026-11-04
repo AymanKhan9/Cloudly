@@ -14,6 +14,7 @@ import { patchFiles } from "./screenshots";
 import { repoSettings, checkCommandFor, runChecks } from "./checks";
 import { sandboxImage } from "./sandbox-image";
 import { withPreamble } from "./preamble";
+import { pause } from "./pause";
 
 // Trying an added agent's update before switching to it (Settings > Agents,
 // "Test updates first"). The update check opens an AgentTrial instead of
@@ -73,6 +74,11 @@ export function judgeTrial(tasks: { merged: string[]; current: TrialSide; candid
     tasks: tasks.length, currentDone: cur.done, candidateDone: cand.done, currentChecks: cur.checked, candidateChecks: cand.checked,
     currentClose: Math.round(cur.close * 100) / 100, candidateClose: Math.round(cand.close * 100) / 100, currentCost: cur.cost, candidateCost: cand.cost,
   };
+  // Nothing finished on either side (the trial couldn't run them, or the tasks no
+  // longer work): that shows nothing about the new version, so it isn't a pass.
+  if (cur.done === 0 && cand.done === 0) {
+    return { passed: false, reason: `Neither version finished any of the ${tasks.length} past task${tasks.length === 1 ? "" : "s"}, so the trial shows nothing either way.`, summary };
+  }
   if (problems.length) return { passed: false, reason: `Worse on ${tasks.length} past task${tasks.length === 1 ? "" : "s"}: ${problems.join("; ")}.`, summary };
   return {
     passed: true,
@@ -160,7 +166,7 @@ export async function advanceTrials(): Promise<void> {
 export async function runTrialLoop(signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     await advanceTrials().catch((err) => console.error("trials:", err));
-    await Bun.sleep(15_000);
+    await pause(15_000, signal);
   }
 }
 
@@ -187,9 +193,9 @@ export async function processTrialRun(run: Run, workerId: string, heartbeatInter
     const t = row?.trigger as { trialId?: string; side?: string; base?: string } | null;
     const trial = t?.trialId ? await prisma.agentTrial.findUnique({ where: { id: t.trialId } }) : null;
     if (!trial || !t?.base) throw new Error("Not a trial run.");
-    ws = await createWorkspace(await resolveCloneSource(run.repo), { baseBranch: run.baseBranch });
-    const at = await Bun.$`git -C ${ws.runDir} checkout -q --detach ${t.base}`.nothrow().quiet();
-    if (at.exitCode !== 0) throw new Error(`The task's starting commit ${t.base.slice(0, 7)} isn't in the repo any more.`);
+    // At the commit the task started from. (Not a checkout afterwards: the run clone's
+    // history is only readable inside the sandbox.)
+    ws = await createWorkspace(await resolveCloneSource(run.repo), { baseBranch: run.baseBranch, commit: t.base });
 
     const options: ContainerOptions = { image: await sandboxImage(), maxBudgetUsd: BACKSTOP_USD };
     if (t.side === "candidate") options.trialLaunch = trialInstall(trial.providerId, trial.launch as unknown as AgentLaunch);

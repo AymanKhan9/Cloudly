@@ -285,7 +285,7 @@ function TurnView({
           </div>
         ) : null}
 
-        {turn.error && /free usage limit/i.test(turn.error) ? (
+        {turn.error && /free usage limit/i.test(turn.error) && harness.includes("opencode") ? (
           <p className="hint">
             OpenCode caps how much its free models can be used, and the cap resets after some hours. To keep going, add an OpenCode key (Zen credit or the Go plan,
             from opencode.ai/auth) or a vendor key under <Link href="/app/settings#agents">Settings → Agents → OpenCode</Link>, or pick another agent.

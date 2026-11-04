@@ -2,6 +2,7 @@ import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
 import { RequestError } from "@octokit/request-error";
 import { githubAppCredentials, credentialsFingerprint } from "@repo/db";
+import { githubApiUrl, githubCloneUrl } from "@repo/shared/github-host";
 
 let octokit: { fingerprint: string; client: Octokit } | undefined;
 let auth: { fingerprint: string; strategy: ReturnType<typeof createAppAuth> } | undefined;
@@ -15,7 +16,8 @@ async function credentials() {
 async function getOctokit(): Promise<Octokit> {
     const { creds, fingerprint } = await credentials();
     if (octokit?.fingerprint !== fingerprint) {
-        octokit = { fingerprint, client: new Octokit({ authStrategy: createAppAuth, auth: { ...creds } }) };
+        const baseUrl = githubApiUrl();
+        octokit = { fingerprint, client: new Octokit({ authStrategy: createAppAuth, auth: { ...creds }, ...(baseUrl ? { baseUrl } : {}) }) };
     }
     return octokit.client;
 }
@@ -34,14 +36,18 @@ async function getAuth(): Promise<ReturnType<typeof createAppAuth>> {
  * something the caller needs to cache itself.
  */
 export async function getInstallationToken(): Promise<string> {
+    if (githubApiUrl()) {
+        // A stand-in GitHub: the client knows where it is.
+        const { token } = (await (await getOctokit()).auth({ type: "installation" })) as { token: string };
+        return token;
+    }
     const authenticate = await getAuth();
     const result = await authenticate({ type: "installation" });
     return result.token;
 }
 
 export async function authenticatedCloneUrl(owner: string, repo: string): Promise<string> {
-    const token = await getInstallationToken();
-    return `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+    return githubCloneUrl(owner, repo, await getInstallationToken());
 }
 
 const REPO_SLUG_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;

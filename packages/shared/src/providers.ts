@@ -410,13 +410,21 @@ export const TRIAL_AGENTS_DIR = "/tmp/cloudly-trial";
 /** Updates that can be tried inside a sandbox before they're installed (they install without root). */
 export const trialable = (launch: AgentLaunch) => launch.install.kind === "npm" || launch.install.kind === "binary";
 
-/** The install block for a trial: the same steps, under TRIAL_AGENTS_DIR; and where its `run` ends up. */
+/**
+ * The install block for a trial: the same steps, under TRIAL_AGENTS_DIR; and where its `run` ends up.
+ * Strict, unlike the image's: a failed install fails the trial run with why.
+ */
 export function trialInstall(id: string, launch: AgentLaunch): { block: string; run: string } {
-  const block = providerInstallBlock(id, launch).split(`${AGENTS_DIR}/${id}`).join(`${TRIAL_AGENTS_DIR}/${id}`);
+  const block = providerInstallBlock(id, launch, { strict: true }).split(`${AGENTS_DIR}/${id}`).join(`${TRIAL_AGENTS_DIR}/${id}`);
   return { block, run: `${TRIAL_AGENTS_DIR}/${id}/run` };
 }
 
-export function providerInstallBlock(id: string, launch: AgentLaunch): string {
+/**
+ * The shell that installs an added agent. In the image build one agent failing
+ * mustn't fail the image, so a failure is reported and skipped; `strict` makes
+ * it fail instead (a trial installing a new version in the sandbox).
+ */
+export function providerInstallBlock(id: string, launch: AgentLaunch, { strict = false } = {}): string {
   if (!validProviderId(id)) throw new Error(`invalid agent id: ${id}`);
   const dir = `${AGENTS_DIR}/${id}`;
   const { steps, target, lead } = installSteps(id, launch.install);
@@ -430,6 +438,7 @@ export function providerInstallBlock(id: string, launch: AgentLaunch): string {
     `printf ' "$@"\\n' >> ${run}`,
     `chmod 755 ${run}`,
   ];
+  if (strict) return ["set -eux", `rm -rf ${shellQuote(dir)} && mkdir -p ${shellQuote(dir)}`, ...steps, ...lines].join("\n");
   // Not `if ! ( … )`: a shell ignores set -e inside a subshell whose status it's testing.
   return [
     `# cloudly-agent:${id}`,

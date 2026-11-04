@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { createHash, randomBytes } from "node:crypto";
 import { config, setSetting, EGRESS_DEFAULT_HOSTS, parseHostList, gatewayMcpServers, proxySecrets, refreshMcpTokens, providerProxySecrets, providerHosts } from "@repo/db";
+import { pause } from "./pause";
 
 // Run containers join an internal network: no route out and no outside DNS.
 // The proxy container sits on it and on the normal network, and is the only
@@ -200,7 +201,7 @@ export async function runMcpRefreshLoop(signal: AbortSignal, intervalMs = 60_000
     } catch (err) {
       console.error("[mcp] refresh failed:", err);
     }
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }
 

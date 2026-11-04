@@ -2,6 +2,7 @@ import { prisma, budgetStatus, harnessUsesPlan } from "@repo/db";
 import { nextRun, type Frequency } from "@repo/shared/schedule";
 
 import { repoSettings } from "./checks";
+import { pause } from "./pause";
 
 // Schedules: a task that runs on its own at set times. Each firing is either a
 // new session or the next turn of the schedule's one session; both are ordinary
@@ -90,6 +91,6 @@ export async function fireDueSchedules(now = new Date()): Promise<number> {
 export async function runScheduleLoop(signal: AbortSignal, intervalMs = 30_000): Promise<void> {
   while (!signal.aborted) {
     await fireDueSchedules().catch((err) => console.error("[schedules] loop:", err));
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

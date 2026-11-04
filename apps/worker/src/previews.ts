@@ -11,6 +11,7 @@ import { ensureEgress, EGRESS_FLAGS, SANDBOX_NETWORK, sandboxTrustFlags } from "
 import { SANDBOX_LIMITS, envFlags, runnerMountFlags, sandboxUser } from "./docker";
 import { materializeRepoFiles } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
+import { pause } from "./pause";
 
 // --- The relay --------------------------------------------------------------------
 // Started by the worker like the egress proxy. It joins the sandbox network to
@@ -170,6 +171,6 @@ export async function syncPreviews(workerId: string): Promise<void> {
 export async function runPreviewLoop(workerId: string, signal: AbortSignal, intervalMs = 2000): Promise<void> {
   while (!signal.aborted) {
     await syncPreviews(workerId).catch((err) => console.error("[preview] sync failed:", err));
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

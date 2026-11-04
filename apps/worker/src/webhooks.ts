@@ -5,6 +5,7 @@ import { repoSettings } from "./checks";
 import { maybeMerge } from "./merge";
 import { notify } from "./notify";
 import { onSentry } from "./sentry";
+import { pause } from "./pause";
 
 // GitHub triggers. The API stores each signed webhook delivery; this turns them
 // into sessions and turns:
@@ -404,6 +405,6 @@ export async function runWebhookLoop(signal: AbortSignal, intervalMs = 2000): Pr
     } catch (err) {
       console.error("[webhooks] loop:", err);
     }
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

@@ -33,6 +33,8 @@ export interface WorkspaceStart {
   branch?: string;
   /** The branch the user asked to build on. */
   baseBranch?: string;
+  /** An exact commit to start from, detached (an update trial's past task). */
+  commit?: string;
 }
 
 async function branchExists(mirrorDir: string, name: string): Promise<boolean> {
@@ -249,9 +251,13 @@ export async function createWorkspace(
     }
 
     // Record the exact starting commit.
-    const baseSha = (
-      await Bun.$`git --git-dir=${mirrorDir} rev-parse ${startBranch ? `refs/heads/${startBranch}` : "HEAD"}`.text()
-    ).trim();
+    if (start.commit) {
+      const known = await Bun.$`git --git-dir=${mirrorDir} rev-parse --verify --quiet ${`${start.commit}^{commit}`}`.nothrow().quiet();
+      if (known.exitCode !== 0) throw new Error(`The starting commit ${start.commit.slice(0, 7)} isn't in the repo any more.`);
+    }
+    const baseSha = start.commit
+      ? (await Bun.$`git --git-dir=${mirrorDir} rev-parse ${`${start.commit}^{commit}`}`.text()).trim()
+      : (await Bun.$`git --git-dir=${mirrorDir} rev-parse ${startBranch ? `refs/heads/${startBranch}` : "HEAD"}`.text()).trim();
 
     // Create the working clone. It borrows the repo's history from the mirror
     // (--shared) instead of copying it, which on a big repo was most of the
@@ -269,14 +275,16 @@ export async function createWorkspace(
     }
     // Writing the files is what's left of the time on a big repo; one checkout
     // worker per core roughly halves it.
-    if (startBranch) {
+    if (start.commit) {
+      await Bun.$`git -C ${runDir} -c checkout.workers=0 checkout -q --detach ${baseSha}`;
+    } else if (startBranch) {
       await Bun.$`git -C ${runDir} -c checkout.workers=0 checkout -q -B ${startBranch} ${baseSha}`;
     } else {
       await Bun.$`git -C ${runDir} -c checkout.workers=0 checkout -q`;
     }
     if (shared) {
       // From here on the run clone is only used inside containers, where the
-      // objects are mounted at SHARED_OBJECTS.
+      // objects are mounted at SHARED_OBJECTS: git on the host can't read it.
       await writeFile(path.join(runDir, ".git", "objects", "info", "alternates"), `${SHARED_OBJECTS}\n`);
     }
 

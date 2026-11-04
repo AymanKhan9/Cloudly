@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
+import { inlineMath } from "@/lib/inline-math";
 import "katex/dist/katex.min.css";
 import { CodeBlock } from "./code-block";
 
@@ -114,7 +115,7 @@ export function RichMarkdown({ children, resolveImage }: { children: string; res
       rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore" }], [rehypeHighlight, { detect: false, plainText: ["mermaid", "text", "txt"] }]]}
       components={components}
     >
-      {children}
+      {inlineMath(children)}
     </Markdown>
   );
 }

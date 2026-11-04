@@ -17,6 +17,7 @@ import { enforceBudget } from "./budget";
 import { readRegular } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
 import { notify } from "./notify";
+import { pause } from "./pause";
 
 // Plans: a big task broken into smaller ones, each its own session and pull
 // request. The planner agent reads the repo (changing nothing) and writes the
@@ -252,6 +253,6 @@ export async function advancePlans(): Promise<void> {
 export async function runPlanLoop(signal: AbortSignal, intervalMs = 5000): Promise<void> {
   while (!signal.aborted) {
     await advancePlans().catch((err) => console.error("[plans] loop:", err));
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

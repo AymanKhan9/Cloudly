@@ -1,5 +1,6 @@
 import { claimRun } from "./claim";
 import type { Run } from "@repo/shared/run";
+import { pause } from "./pause";
 
 const POLL_INTERVAL_MS = 1000;
 
@@ -13,14 +14,14 @@ export async function runPollLoop(
 
   while (!signal.aborted) {
     if (active >= maxConcurrency) {
-      await sleep(POLL_INTERVAL_MS);
+      await pause(POLL_INTERVAL_MS, signal);
       continue;
     }
 
     const run = await claimRun(workerId);
 
     if (!run) {
-      await sleep(POLL_INTERVAL_MS);
+      await pause(POLL_INTERVAL_MS, signal);
       continue;
     }
 
@@ -31,8 +32,6 @@ export async function runPollLoop(
         active--;
       });
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  // Stopping: the turns already running finish first.
+  while (active > 0) await Bun.sleep(500);
 }

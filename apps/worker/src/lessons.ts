@@ -16,6 +16,7 @@ import { enforceBudget } from "./budget";
 import { readRegular } from "./repo-files";
 import { sandboxImage } from "./sandbox-image";
 import { repoSettings } from "./checks";
+import { pause } from "./pause";
 
 // Lessons from a repo's sessions. Cloudly sees what went wrong: the reviewer's
 // findings (and which the user dismissed), turns the user rewound, what they
@@ -266,6 +267,6 @@ export async function queueWeeklyLessons(now = Date.now()): Promise<number> {
 export async function runLessonsLoop(signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     await queueWeeklyLessons().catch((err) => console.error("lessons:", err));
-    await Bun.sleep(3600_000);
+    await pause(3600_000, signal);
   }
 }

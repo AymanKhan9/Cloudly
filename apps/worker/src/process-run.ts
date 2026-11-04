@@ -50,6 +50,18 @@ import path from "node:path";
 import { enforceBudget } from "./budget";
 import { agentFeatures, isProviderHarness } from "@repo/shared/providers";
 
+/**
+ * Why a turn failed, in words. A failed command (git, mostly) says only "Failed
+ * with exit code 128"; its own reason is the first "fatal:" or "error:" line.
+ */
+export function failureText(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const stderr = (err as { stderr?: unknown } | null)?.stderr;
+  const text = stderr instanceof Uint8Array ? new TextDecoder().decode(stderr) : typeof stderr === "string" ? stderr : "";
+  const reason = text.split("\n").map((l) => l.trim()).find((l) => /^(fatal|error):/i.test(l));
+  return reason && !message.includes(reason) ? `${message}: ${reason.slice(0, 400)}` : message;
+}
+
 const HEARTBEAT_INTERVAL_MS = 20_000;
 
 // Agents that resume their own session across turns, so /compact, /context and
@@ -536,7 +548,7 @@ export async function processRun(
       where: { id: run.id, workerId, leaseGen: run.leaseGen },
       data: {
         status: "failed",
-        error: agentError ?? (err instanceof Error ? err.message : String(err)),
+        error: agentError ?? failureText(err),
       },
     });
     throw err;

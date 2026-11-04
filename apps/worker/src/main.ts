@@ -51,3 +51,6 @@ await Promise.all([
   runLessonsLoop(controller.signal),
   runTrialLoop(controller.signal),
 ]);
+// Every loop has stopped and the turns that were running have finished.
+console.log("[worker] stopped");
+process.exit(0);

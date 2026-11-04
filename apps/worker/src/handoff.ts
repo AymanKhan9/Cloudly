@@ -9,6 +9,7 @@ import { findCodexRollout } from "./context-usage";
 import { CODEX_HOME } from "./docker";
 import { promptWithHistory } from "./transcript";
 import { readRegular } from "./repo-files";
+import { pause } from "./pause";
 
 // A session going back to the user's computer (the import command's "pull";
 // see SessionHandoff). Its code is on its branch; this gets the rest ready: the
@@ -83,6 +84,6 @@ export async function processHandoffs(): Promise<number> {
 export async function runHandoffLoop(signal: AbortSignal): Promise<void> {
   while (!signal.aborted) {
     await processHandoffs().catch((err) => console.error("handoffs:", err));
-    await Bun.sleep(1500);
+    await pause(1500, signal);
   }
 }

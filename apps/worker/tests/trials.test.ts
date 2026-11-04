@@ -42,6 +42,11 @@ test("the verdict: not worse at finishing, checks, closeness to what merged, or 
   expect(worse.reason).toContain("it finished 1 of 2 tasks to the current version's 2");
   expect(worse.reason).toContain("the checks passed on 1 of 2 tasks, to the current version's 2");
   expect(judgeTrial([{ merged: ["a.ts"], current: side({ costUsd: 1 }), candidate: side({ costUsd: 2 }) }]).reason).toContain("it cost $2.00 to $1.00");
+  // Neither side finished anything: no evidence, so no switch.
+  const failedBoth = side({ status: "failed", files: [], checks: null, costUsd: null });
+  const nothing = judgeTrial([{ merged: ["a.ts"], current: failedBoth, candidate: failedBoth }, { merged: ["b.ts"], current: failedBoth, candidate: failedBoth }]);
+  expect(nothing.passed).toBe(false);
+  expect(nothing.reason).toBe("Neither version finished any of the 2 past tasks, so the trial shows nothing either way.");
 });
 
 test("a trial installs under /tmp, away from the image's copy", () => {
@@ -49,6 +54,24 @@ test("a trial installs under /tmp, away from the image's copy", () => {
   expect(t.run).toBe("/tmp/cloudly-trial/acp-pi/run");
   expect(t.block).toContain("npm install --prefix '/tmp/cloudly-trial/acp-pi'");
   expect(t.block).not.toContain("/opt/cloudly/agents");
+  // A failed install fails the trial run (the image's own block carries on instead).
+  expect(t.block.startsWith("set -eux\n")).toBe(true);
+  expect(t.block).not.toContain("the rest of the image is unaffected");
+  const r = Bun.spawnSync(["bash", "-c", trialInstall("acp-x", { install: { kind: "binary", builds: { x86_64: { url: "http://127.0.0.1:1/none.tar.gz", cmd: "./x" }, aarch64: { url: "http://127.0.0.1:1/none.tar.gz", cmd: "./x" } } }, args: [] } as never).block.replaceAll("/tmp/cloudly-trial", `/tmp/cloudly-trial-test-${stamp}`)]);
+  expect(r.exitCode).not.toBe(0);
+});
+
+test("while an update is tried, its download host is reachable from the sandbox", async () => {
+  const { providerHosts } = await import("@repo/db");
+  const p = await addPi("hosts");
+  const trial = await prisma.agentTrial.create({
+    data: { providerId: p.id, fromVersion: "1", toVersion: "2", status: "running", launch: { install: { kind: "binary", builds: { x86_64: { url: "https://downloads.example-agent.dev/a-2.tar.gz", cmd: "./a" } } }, args: [] } },
+  });
+  expect(await providerHosts()).toContain("downloads.example-agent.dev");
+  await prisma.agentTrial.update({ where: { id: trial.id }, data: { status: "installed" } });
+  expect(await providerHosts()).not.toContain("downloads.example-agent.dev");
+  await prisma.agentTrial.delete({ where: { id: trial.id } });
+  await prisma.provider.delete({ where: { id: p.id } });
 });
 
 test("an update with testing on is tried on merged tasks, then installed if it holds up or kept back if not", async () => {

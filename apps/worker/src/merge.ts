@@ -3,6 +3,7 @@ import { prisma } from "@repo/db";
 import { github as realGitHub, type GitHubPort } from "./github";
 import { repoSettings } from "./checks";
 import { notify } from "./notify";
+import { pause } from "./pause";
 
 // Merge when ready: a session with it on gets its pull request merged once
 // nothing stands in the way. Cloudly's side first (no turn running, nothing
@@ -137,6 +138,6 @@ export async function runMergeLoop(signal: AbortSignal, intervalMs = 60_000): Pr
   while (!signal.aborted) {
     await mergeSweep().catch((err) => console.error("[merge] sweep:", err));
     await outcomeSweep().catch((err) => console.error("[merge] outcomes:", err));
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

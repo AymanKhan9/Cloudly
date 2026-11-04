@@ -2,6 +2,7 @@ import { prisma, config, unseal } from "@repo/db";
 import { discordApi, sessionMessage, slackMessage, DISCORD_WEBHOOK, SLACK_WEBHOOK, type NotifyKind } from "@repo/shared/discord";
 import { slackApi, slackBlocks } from "@repo/shared/slack";
 import { replyText } from "./transcript";
+import { pause } from "./pause";
 
 // Notifications: when a session settles (its last automatic turn is done), needs
 // the user, fails or merges, a Notification row is written; the loop below
@@ -214,6 +215,6 @@ export async function runNotifyLoop(signal: AbortSignal, intervalMs = 3000): Pro
     } catch (err) {
       console.error("[notify] loop:", err);
     }
-    await Bun.sleep(intervalMs);
+    await pause(intervalMs, signal);
   }
 }

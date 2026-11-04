@@ -277,3 +277,13 @@ test("a turn stopped at the ceiling before changing anything says so, with no co
     await fixture.cleanup();
   }
 }, 30000);
+
+test("a failed git command's reason is in the turn's error", async () => {
+  const { failureText } = await import("../src/process-run");
+  const err = Object.assign(new Error("Failed with exit code 128"), {
+    stderr: new TextEncoder().encode("Cloning into bare repository '/tmp/x'...\nfatal: detected dubious ownership in repository at '/srv/repo.git'\nfatal: Could not read from remote repository.\n"),
+  });
+  expect(failureText(err)).toBe("Failed with exit code 128: fatal: detected dubious ownership in repository at '/srv/repo.git'");
+  expect(failureText(new Error("Monthly spend limit reached"))).toBe("Monthly spend limit reached");
+  expect(failureText("plain")).toBe("plain");
+});

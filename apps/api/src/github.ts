@@ -1,6 +1,7 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/core";
 import { githubAppCredentials, credentialsFingerprint } from "@repo/db";
+import { githubApiUrl } from "@repo/shared/github-host";
 
 let cached: { fingerprint: string; octokit: Octokit } | undefined;
 
@@ -9,7 +10,8 @@ async function client(): Promise<Octokit> {
   if (!creds) throw new Error("The GitHub App isn't set up yet. Finish setup at /setup.");
   const fingerprint = credentialsFingerprint(creds);
   if (cached?.fingerprint !== fingerprint) {
-    cached = { fingerprint, octokit: new Octokit({ authStrategy: createAppAuth, auth: { ...creds } }) };
+    const baseUrl = githubApiUrl();
+    cached = { fingerprint, octokit: new Octokit({ authStrategy: createAppAuth, auth: { ...creds }, ...(baseUrl ? { baseUrl } : {}) }) };
   }
   return cached.octokit;
 }

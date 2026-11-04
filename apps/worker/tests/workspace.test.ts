@@ -87,3 +87,25 @@ test("continues from the thread's branch when an earlier turn pushed one", async
     await fixture.cleanup();
   }
 });
+
+test("starts at an exact earlier commit (an update trial's past task), or says it's gone", async () => {
+  const fixture = await createFixtureRepo();
+  try {
+    const first = (await Bun.$`git -C ${fixture.repoPath} rev-parse HEAD`.text()).trim();
+    await Bun.write(`${fixture.repoPath}/later.txt`, "later\n");
+    await Bun.$`git -C ${fixture.repoPath} add -A`;
+    await Bun.$`git -C ${fixture.repoPath} commit -q -m "later"`;
+
+    const ws = await createWorkspace(fixture.repoPath, { baseBranch: "main", commit: first });
+    try {
+      expect(ws.baseSha).toBe(first);
+      expect(await Bun.file(`${ws.runDir}/later.txt`).exists()).toBe(false);
+      expect(await Bun.file(`${ws.runDir}/README.md`).exists()).toBe(true);
+    } finally {
+      await destroyWorkspace(ws);
+    }
+    await expect(createWorkspace(fixture.repoPath, { commit: "0123456789abcdef0123456789abcdef01234567" })).rejects.toThrow("The starting commit 0123456 isn't in the repo any more.");
+  } finally {
+    await fixture.cleanup();
+  }
+});
