@@ -4,7 +4,7 @@ Give the same task to two or three agents at once, look at what each one did, an
 
 ## Start an arena
 
-On the new-session page, click **Compare**, then pick the agents (at least two) instead of one. Write the task as usual and press **Enter**.
+On the new-session page, click **+** in the chat box and choose **Compare**, then pick the agents (at least two) instead of one. Write the task as usual and press **Enter**.
 
 Each agent gets its own session and its own branch. None of them opens a pull request on its own.
 

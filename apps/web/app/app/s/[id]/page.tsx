@@ -37,7 +37,7 @@ import {
 } from "@phosphor-icons/react";
 import { type ArtifactMeta, api, ApiError, type Capabilities, type ThreadView, type Turn } from "@/lib/api";
 import { harnessById, MODELS, STATUS_LABEL, usd, type HarnessId, type RunStatus } from "@/lib/harness";
-import { buildBlocks, type Block, type StreamEvent } from "@/lib/events";
+import { buildBlocks, showsError, type Block, type StreamEvent } from "@/lib/events";
 import { StatusIcon } from "@/components/status";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
@@ -278,11 +278,18 @@ function TurnView({
           </p>
         ) : null}
 
-        {turn.error ? (
+        {turn.error && !showsError(blocks, turn.error) ? (
           <div className="notice" data-tone="danger" role="alert">
             <WarningCircle size={16} weight="bold" />
             {turn.error}
           </div>
+        ) : null}
+
+        {turn.error && /free usage limit/i.test(turn.error) ? (
+          <p className="hint">
+            OpenCode caps how much its free models can be used, and the cap resets after some hours. To keep going, add an OpenCode key (Zen credit or the Go plan,
+            from opencode.ai/auth) or a vendor key under <Link href="/app/settings#agents">Settings → Agents → OpenCode</Link>, or pick another agent.
+          </p>
         ) : null}
 
         <footer className="turn-foot">

@@ -70,6 +70,8 @@ const NewThreadSchema = CreateRunSchema.extend({
   mode: z.enum(['chat', 'audit']).optional(),
   /** Merge the pull request once it's ready. Left out: the repo's default. */
   autoMerge: z.boolean().optional(),
+  /** A model picked before the session starts; the same as "/model" later. */
+  model: z.string().trim().min(1).max(100).regex(/^\S+$/, 'one model ID').optional(),
 });
 const MessageSchema = z.object({
   prompt: z.string().trim().min(1).max(8000),
@@ -339,7 +341,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
   if (budget.state === 'storm' && !(await harnessUsesPlan(c.req.valid('json').harness))) {
     return c.json({ message: 'Monthly spend limit reached. Raise it in Settings to start new sessions.', budget }, 402);
   }
-  const { repo, baseBranch, prompt, harness, effort, desktop, mode, autoMerge } = c.req.valid('json');
+  const { repo, baseBranch, prompt, harness, effort, desktop, mode, autoMerge, model } = c.req.valid('json');
   const audit = mode === 'audit';
   if (effort && !effortAllowed(harness, effort)) {
     return c.json({ message: `${harness} has no "${effort}" effort.` }, 400);
@@ -349,7 +351,7 @@ app.post('/threads', zValidator('json', NewThreadSchema), async (c) => {
     data: {
       id, userId: user.id, repo, baseBranch, harness,
       title: audit ? `Audit: ${threadTitle(prompt)}` : threadTitle(prompt),
-      model: modelCommand(prompt) ?? undefined,
+      model: modelCommand(prompt) ?? model,
       effort: effort ?? undefined,
       desktop: desktop ?? false,
       autoMerge: autoMerge ?? (await prisma.repoSettings.findUnique({ where: { repo }, select: { autoMerge: true } }))?.autoMerge ?? false,

@@ -35,9 +35,17 @@ Whichever you use, the credential never enters the sandbox. See [Security model]
 |---|---|---|
 | Cursor | Cursor API key | Cursor trades the key for a short-lived session token, which the agent holds while it runs. |
 | Grok | xAI API key | |
-| OpenCode | None needed | Runs OpenCode's free models. Add an Anthropic, OpenAI or OpenRouter key for their models. |
+| OpenCode | None needed | Runs OpenCode's free models, up to OpenCode's usage limit. Add an OpenCode key (Zen credit or the Go plan) to lift it, or an Anthropic, OpenAI or OpenRouter key for their models. |
 | Antigravity | Gemini API key | Adds about 1.3 GB to the sandbox image. Google account sign-in isn't available. |
 | Pi | At least one model key | Anthropic, OpenAI, Gemini or OpenRouter. |
+
+### OpenCode's free models and its key
+
+OpenCode needs no sign-in: its free models (the ones ending in `-free`) run as soon as you add it. OpenCode caps how much they can be used, and the cap resets after some hours. When a turn hits it, it fails with "Free usage limit reached". To keep going, either:
+
+- create a key at [opencode.ai/auth](https://opencode.ai/auth), with Zen credit or a Go subscription, and paste it as **OpenCode Zen or Go key** under **Settings → Agents → OpenCode**. Cloudly gives OpenCode the key the same way it gives agents every other key: the sandbox gets a placeholder that's swapped for the real key only on requests to opencode.ai. There's no `opencode auth login` to run, because sessions run in a fresh sandbox each time;
+- add an Anthropic, OpenAI or OpenRouter key, and pick one of that vendor's models;
+- or pick another agent.
 
 For OpenCode, Pi and Antigravity, a key you leave empty falls back to the same key under **Keys and connections**, so you don't have to enter it twice.
 
@@ -83,14 +91,14 @@ The effort menu lists the levels the agent reported on its last turn, since they
 
 Other added agents:
 
-- **Model:** the chat's model menu lists the models the agent reported on its last turn. `/model <name>` is passed to the agent through ACP.
+- **Model:** the model menus, on the new-session page and in the chat, list the models the agent reported on its last turn. Before its first turn you can type a model ID. `/model <name>` is passed to the agent through ACP.
 - **Effort:** the menu appears when the agent offers a thinking or effort option.
 - **Sessions:** each turn starts clean with the recent conversation in its prompt, the same way Gemini CLI does.
 - **Cost:** recorded when the agent reports it the way OpenCode does. Otherwise turns record no cost, and don't count toward the spend limit, unless you set prices for the agent. See [Configuration](/docs/configuration#prices).
 
 ## Choose a model
 
-Click the model in the chat box, or type `/model` and press **Enter**. Pick a model from the list, or type any model ID your account can use and choose **Use <ID>**.
+Pick one on the new-session page, next to the agent, before the session starts. Later, click the model in the chat box, or type `/model` and press **Enter**. Pick a model from the list, or type any model ID your account can use and choose **Use <ID>**.
 
 The choice is saved on the session and applies from the next turn, so you can change it while a turn is running. It sticks for the rest of the session. On Claude Code it also overrides a model pinned in the repo's `.claude/settings.json`. Pick **Default** to go back to the agent's own default.
 

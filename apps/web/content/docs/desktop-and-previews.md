@@ -6,7 +6,7 @@ Agents can use a virtual desktop with a browser, and you can watch it live or ta
 
 The desktop needs a few packages in the sandbox image. In **Settings → Sandbox tools**, tick **Desktop and browser** and save. The image builds in the background (about 600 MB).
 
-Then, in a session, click **Desktop** in the chat box (or on the new-session page) before sending a message. From the next turn the agent gets:
+Then, in a session, click **Desktop** in the chat box (on the new-session page, it's under **+**) before sending a message. From the next turn the agent gets:
 
 - a virtual display (1280 × 800) with Chromium, and
 - desktop tools: `screenshot`, `click`, `type`, `key`, `scroll`, `open_url` and `wait`.

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { agentReadiness, harnessAvailable, listProviders, type AgentReadiness } from '@repo/db';
+import { agentReadiness, harnessAvailable, listProviders, prisma, type AgentReadiness } from '@repo/db';
 import { isProviderHarness, providerDisplayName, agentFeatures } from '@repo/shared/providers';
 
 export const HARNESSES = [
@@ -34,6 +34,32 @@ export interface HarnessInfo {
   ready: boolean;
   /** Why not, when it isn't. */
   reason?: string;
+  /** Added agents: the models it offered at the start of its last turn, so one can be picked before a session starts. */
+  models?: { value: string; label: string }[];
+  /** And the one it uses when none is picked. */
+  defaultModel?: string;
+}
+
+/**
+ * An added agent lists its models only once a session starts, so the list is
+ * the one from its most recent turns that reported one.
+ */
+export async function reportedModels(harness: string): Promise<{ models: { value: string; label: string }[]; defaultModel?: string } | null> {
+  const runs = await prisma.run.findMany({ where: { harness }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true } });
+  if (!runs.length) return null;
+  const events = await prisma.runEvent.findMany({
+    where: { runId: { in: runs.map((r) => r.id) }, kind: 'status', data: { path: ['type'], equals: 'models' } },
+    orderBy: { ts: 'desc' },
+    take: 1,
+    select: { data: true },
+  });
+  const d = events[0]?.data as { current?: unknown; options?: unknown } | undefined;
+  if (!d || !Array.isArray(d.options)) return null;
+  const models = (d.options as { value?: unknown; label?: unknown }[])
+    .filter((o) => typeof o?.value === 'string')
+    .slice(0, 400)
+    .map((o) => ({ value: String(o.value), label: typeof o.label === 'string' ? o.label : String(o.value) }));
+  return models.length ? { models, ...(typeof d.current === 'string' ? { defaultModel: d.current } : {}) } : null;
 }
 
 /** Built-in agents, then the added ones that are turned on. */
@@ -53,8 +79,8 @@ export async function listHarnesses(): Promise<HarnessInfo[]> {
     })),
   ];
   return Promise.all(list.map(async (h) => {
-    const r = await agentReadiness(h.id);
-    return { ...h, ready: r.ready, ...(r.reason ? { reason: r.reason } : {}) };
+    const [r, offered] = await Promise.all([agentReadiness(h.id), isProviderHarness(h.id) ? reportedModels(h.id) : null]);
+    return { ...h, ready: r.ready, ...(r.reason ? { reason: r.reason } : {}), ...(offered ?? {}) };
   }));
 }
 

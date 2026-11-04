@@ -16,6 +16,10 @@ export interface Harness {
   ready?: boolean;
   /** Why not, when it isn't. */
   reason?: string;
+  /** An added agent's models, as it listed them at the start of its last turn. */
+  models?: { value: string; label: string }[];
+  /** The one it uses when none is picked. */
+  defaultModel?: string;
 }
 
 export const HARNESSES: Harness[] = [

@@ -16,7 +16,7 @@ The new-session page turns that into a council of those agents as you type: it s
 
 Before anything starts, Cloudly checks that each named agent can run. One that can't is listed under the question, with the reason (it needs a key, its plan sign-in isn't set, it isn't added under **Settings → Agents**, or it's still being installed), and the council goes ahead with the ones that can, if there are at least two. You can change the members and chair before you press **Enter**.
 
-You can also set it up by hand. On the new-session page, click **Council**, then:
+You can also set it up by hand. On the new-session page, click **+** in the chat box and choose **Council**, then:
 
 1. **Pick the members**: two or more agents, built in or [added](/docs/agents#add-more-agents), each once. There's no limit beyond the agents you've set up; an agent that can't run yet is greyed out, with the reason when you point at it.
 2. **Pick the chair**, who writes the report. Claude Code by default; the chair can also be a member.

@@ -78,7 +78,7 @@ function WebhookSetup() {
       {!working ? (
         <div className="panel-row field">
           <span className="label">In the GitHub App&apos;s settings</span>
-          <ol className="steps">
+          <ol className="howto">
             <li>
               Open{" "}
               <a href={appSettings} target="_blank" rel="noreferrer">

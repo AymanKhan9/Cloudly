@@ -73,7 +73,13 @@ function readSecret(blob: string | null, key: Buffer): Record<string, string> {
 type ProviderRow = Awaited<ReturnType<typeof prisma.provider.findMany>>[number];
 
 function specOf(row: ProviderRow): ProviderSpec {
-  return row.spec as unknown as ProviderSpec;
+  const spec = row.spec as unknown as ProviderSpec;
+  // A catalog agent added before its entry gained a key or host gets them now.
+  const entry = row.source === "catalog" ? catalogEntry(row.sourceId ?? "") : undefined;
+  if (!entry) return spec;
+  const keys = entry.credentials.filter((c) => !spec.credentials.some((k) => k.env === c.env));
+  const hosts = entry.hosts.filter((h) => !spec.hosts.includes(h));
+  return keys.length || hosts.length ? { ...spec, credentials: [...spec.credentials, ...keys], hosts: [...spec.hosts, ...hosts] } : spec;
 }
 
 async function view(row: ProviderRow, key: Buffer): Promise<ProviderView> {

@@ -4,7 +4,7 @@ Some work is too big for one session: "add multi-currency billing" touches the s
 
 ## Making a plan
 
-On the new-session page, choose **Plan**, pick the repository and an agent, and describe the work. The agent reads the repository (changing nothing) and writes the tasks:
+On the new-session page, click **+** in the chat box and choose **Plan**, pick the repository and an agent, and describe the work. The agent reads the repository (changing nothing) and writes the tasks:
 
 - a title and instructions for each, saying what to change, where, and how to check it;
 - which tasks each one **waits for**: the ones whose code it builds on.

@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat, MagnifyingGlass, TreeStructure } from "@phosphor-icons/react";
+import { ArrowUp, Check, CurrencyDollar, GitBranch, GithubLogo, Lightning, Monitor, Scales, UsersThree, Crown, Repeat, MagnifyingGlass, TreeStructure, Plus, X } from "@phosphor-icons/react";
 import { api, ApiError, type AgentReadiness, type Capabilities, type Repo } from "@/lib/api";
 import { agentsAskedFor } from "@repo/shared/agent-names";
 import { isProviderHarness } from "@repo/shared/providers";
-import { costLabel } from "@/lib/harness";
+import { costLabel, MODELS, type HarnessId } from "@/lib/harness";
 import { useApp } from "@/components/app-context";
 import { Picker } from "@/components/picker";
 import { AgentLogo, providerOf } from "@/components/agent-logo";
@@ -26,6 +26,83 @@ const COUNCIL_STARTERS = [
 
 type Mode = "session" | "compare" | "council" | "audit" | "plan";
 
+const MODES: { id: Exclude<Mode, "session">; label: string; about: string; Icon: typeof Plus }[] = [
+  { id: "plan", label: "Plan", about: "Break a big task into sessions that run side by side", Icon: TreeStructure },
+  { id: "audit", label: "Audit", about: "Review the whole repo, then pick what to fix", Icon: MagnifyingGlass },
+  { id: "compare", label: "Compare", about: "The same task to several agents; keep the best", Icon: Scales },
+  { id: "council", label: "Council", about: "Several agents research a question and report", Icon: UsersThree },
+];
+
+/** The composer's "+": what kind of start this is, and the desktop. */
+function MoreMenu({ mode, setMode, desktop, setDesktop }: { mode: Mode; setMode: (m: Mode) => void; desktop: boolean | null; setDesktop: (on: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <div className="more-menu" ref={root}>
+      <button type="button" className="pill icon-pill" aria-label="More ways to start" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Plus size={15} weight="bold" />
+      </button>
+      {open ? (
+        <div className="menu more-menu-pop" role="menu">
+          {MODES.map(({ id, label, about, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={mode === id}
+              onClick={() => {
+                setMode(mode === id ? "session" : id);
+                setOpen(false);
+              }}
+            >
+              <Icon size={15} />
+              <span>
+                {label}
+                <span className="dim">{about}</span>
+              </span>
+              {mode === id ? <Check size={14} weight="bold" className="more-check" /> : null}
+            </button>
+          ))}
+          {desktop !== null ? (
+            <>
+              <hr />
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={desktop}
+                onClick={() => {
+                  setDesktop(!desktop);
+                  setOpen(false);
+                }}
+              >
+                <Monitor size={15} />
+                <span>
+                  Desktop
+                  <span className="dim">Give the agent a virtual desktop and browser</span>
+                </span>
+                {desktop ? <Check size={14} weight="bold" className="more-check" /> : null}
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface Estimate {
   turns: number;
   usd: number | null;
@@ -43,6 +120,8 @@ export default function NewSessionPage() {
   // "Auto": the agent with the best record on this repo (the scorecard's pick).
   const [pick, setPick] = useState<{ harness: string; reason: string } | null>(null);
   const [effort, setEffort] = useState<string | null>(null);
+  // null: the agent's own default.
+  const [model, setModel] = useState<string | null>(null);
   // Compare: the same task to several agents at once (an arena). Council: several
   // agents answer one question together, in rounds, and a chair writes the report.
   const [mode, setMode] = useState<Mode>("session");
@@ -136,6 +215,8 @@ export default function NewSessionPage() {
     !submitting && !stopped && (audit || Boolean(prompt.trim())) && (!needsRepo || (Boolean(repo) && Boolean(branch.trim()))) && (single || rivals.length >= 2);
   const chosen = harness === "auto" ? pick?.harness ?? harnesses.find((x) => x.ready !== false)?.id ?? "native-claude" : harness;
   const h = harnesses.find((x) => x.id === chosen) ?? harnesses[0]!;
+  const models = MODELS[chosen as HarnessId] ?? h.models ?? [];
+  const desktopOffered = Boolean(caps?.desktop) && !council && !audit && !planMode;
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -179,8 +260,8 @@ export default function NewSessionPage() {
         method: "POST",
         body: JSON.stringify(
           audit
-            ? { repo, baseBranch: branch, prompt: prompt.trim() ? `Audit the repository: ${prompt.trim()}` : "Audit the repository", harness: chosen, effort, mode: "audit" }
-            : { repo, baseBranch: branch, prompt, harness: chosen, effort, desktop },
+            ? { repo, baseBranch: branch, prompt: prompt.trim() ? `Audit the repository: ${prompt.trim()}` : "Audit the repository", harness: chosen, effort, mode: "audit", model: model ?? undefined }
+            : { repo, baseBranch: branch, prompt, harness: chosen, effort, desktop: desktopOffered && desktop, model: model ?? undefined },
         ),
       });
       router.push(`/app/s/${id}`);
@@ -244,6 +325,14 @@ export default function NewSessionPage() {
             style={{ minHeight: 112 }}
           />
           <div className="composer-bar">
+            <MoreMenu mode={mode} setMode={setMode} desktop={desktopOffered ? desktop : null} setDesktop={setDesktop} />
+            {MODES.filter((m) => m.id === mode).map(({ id, label, Icon }) => (
+              <button key={id} type="button" className="pill mode-chip" onClick={() => setMode("session")} title={`Back to a plain session`} aria-label={`${label}: back to a plain session`}>
+                <Icon size={14} />
+                <span className="pill-text">{label}</span>
+                <X size={11} weight="bold" />
+              </button>
+            ))}
             {council ? (
               <button type="button" className="pill" aria-pressed={onRepo} onClick={() => setOnRepo((r) => !r)} title="Without a repo, the council researches on the open web. With one, it reads the repo and changes nothing.">
                 <GithubLogo size={14} />
@@ -269,7 +358,7 @@ export default function NewSessionPage() {
             <label className="pill" title="Base branch: the pull request targets it">
               <GitBranch size={15} />
               <span className="visually-hidden">Base branch</span>
-              <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} />
+              <input className="mono" value={branch} onChange={(e) => setBranch(e.target.value)} required spellCheck={false} style={{ width: `${Math.min(24, Math.max(5, branch.length + 1))}ch` }} />
             </label>
             </>
             ) : null}
@@ -319,9 +408,29 @@ export default function NewSessionPage() {
               onChange={(v) => {
                 setHarness(v);
                 setEffort(null); // levels differ per agent
+                setModel(null); // and so do models
               }}
             />
             )}
+            {single && !planMode ? (
+              <Picker
+                label="Model"
+                icon={<AgentLogo harness={chosen} icon={h.icon} size={15} />}
+                searchable
+                value={model ?? "default"}
+                options={[
+                  { value: "default", label: "Default model", sub: <span className="dim">{h.defaultModel ? `${h.defaultModel}, chosen by the agent` : "Chosen by the agent"}</span> },
+                  ...models.map((m: { value: string; label: string; hint?: string }) => {
+                    // OpenCode's free models end in "-free"; they stop at its usage limit until it resets.
+                    const hint = m.hint ?? (/(^|[-/ ])free$/i.test(m.value) ? "Free, up to OpenCode's usage limit" : undefined);
+                    return { value: m.value, label: m.label, sub: hint ? <span className="dim">{hint}</span> : undefined };
+                  }),
+                ]}
+                custom={(q) => `Use ${q}`}
+                note={isProviderHarness(chosen) && !h.models?.length ? `${h.name} lists its models once it has run a turn; type a model ID meanwhile.` : undefined}
+                onChange={(v) => setModel(v === "default" ? null : v)}
+              />
+            ) : null}
             {single ? <EffortControl harness={chosen} value={effort} onChange={setEffort} /> : null}
             {council ? (
               <>
@@ -351,26 +460,11 @@ export default function NewSessionPage() {
                 </label>
               </>
             ) : null}
-            <button type="button" className="pill" aria-pressed={planMode} onClick={() => setMode(planMode ? "session" : "plan")} title="Break a big task into sessions that run side by side">
-              <TreeStructure size={14} />
-              <span className="pill-text">Plan</span>
-            </button>
-            <button type="button" className="pill" aria-pressed={audit} onClick={() => setMode(audit ? "session" : "audit")} title="Review the whole repo for bugs and problems, then pick what to fix">
-              <MagnifyingGlass size={14} />
-              <span className="pill-text">Audit</span>
-            </button>
-            <button type="button" className="pill" aria-pressed={compare} onClick={() => setMode(compare ? "session" : "compare")} title="Give the same task to several agents and pick the best result">
-              <Scales size={14} />
-              <span className="pill-text">Compare</span>
-            </button>
-            <button type="button" className="pill" aria-pressed={council} onClick={() => setMode(council ? "session" : "council")} title="Several agents research a question together and report">
-              <UsersThree size={14} />
-              <span className="pill-text">Council</span>
-            </button>
-            {caps?.desktop && !council && !audit && !planMode ? (
-              <button type="button" className="pill" aria-pressed={desktop} onClick={() => setDesktop((d) => !d)} title="Give the agent a virtual desktop and browser">
+            {desktopOffered && desktop ? (
+              <button type="button" className="pill mode-chip" onClick={() => setDesktop(false)} aria-label="Desktop: turn off">
                 <Monitor size={14} />
                 <span className="pill-text">Desktop</span>
+                <X size={11} weight="bold" />
               </button>
             ) : null}
             <span className="spacer" />
@@ -428,7 +522,7 @@ export default function NewSessionPage() {
                   ? `${h.name} needs ${h.missing.join(" and ")}. Add it under Settings > Agents.`
                   : h.cost === "none"
                     ? `${h.name}'s turns record no cost. It's installed in the sandbox image and uses the keys under Settings > Agents.`
-                    : `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. It needs its key or plan sign-in in Settings.`)}
+                    : `${h.name} ${h.cost === "exact" ? "reports exact cost" : "cost is estimated from tokens"}. ${isProviderHarness(h.id) ? "Its keys are under Settings > Agents." : "It needs its key or plan sign-in in Settings."}`)}
           </span>
           <span>
             <kbd>Enter</kbd> to start, <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line

@@ -116,6 +116,8 @@ export interface CatalogEntry {
 const ANTHROPIC: ProviderCredential = { env: "ANTHROPIC_API_KEY", label: "Anthropic API key", hosts: ["api.anthropic.com"], optional: true, reuse: "ANTHROPIC_API_KEY" };
 const OPENAI: ProviderCredential = { env: "OPENAI_API_KEY", label: "OpenAI API key", hosts: ["api.openai.com"], optional: true, reuse: "OPENAI_API_KEY" };
 const OPENROUTER: ProviderCredential = { env: "OPENROUTER_API_KEY", label: "OpenRouter API key", hosts: ["openrouter.ai"], optional: true };
+/** OpenCode's own models (Zen, and the Go plan): one key from opencode.ai/auth, without its free tier's limits. */
+const OPENCODE: ProviderCredential = { env: "OPENCODE_API_KEY", label: "OpenCode Zen or Go key", hosts: ["opencode.ai"], optional: true };
 
 /**
  * The agents T3 Code offers by name. Claude, Codex and Gemini are built in;
@@ -147,9 +149,9 @@ export const PROVIDER_CATALOG: CatalogEntry[] = [
     registryId: "opencode",
     // opencode acp (1.19): loadSession, and usage_update with the session's cost in USD.
     features: { resume: true, cost: "usage" },
-    credentials: [ANTHROPIC, OPENAI, OPENROUTER],
+    credentials: [OPENCODE, ANTHROPIC, OPENAI, OPENROUTER],
     hosts: ["opencode.ai", "models.dev"],
-    note: "Runs OpenCode's free hosted models with no key. Add a key to use that vendor's models; the Anthropic and OpenAI keys from Settings are used when you leave them empty.",
+    note: "Runs OpenCode's free models with no key, within a usage limit OpenCode sets that resets after a few hours. An OpenCode key (opencode.ai/auth, Zen credit or the Go plan) lifts it; a vendor key runs that vendor's models. The Anthropic and OpenAI keys from Settings are used when you leave those empty.",
   },
   {
     id: "acp-antigravity",

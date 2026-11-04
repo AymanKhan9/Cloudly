@@ -91,6 +91,11 @@ export type Block =
   | { t: "steer"; text: string }
   | SubagentBlock;
 
+/** Whether the turn's own blocks already show this error, so it isn't shown twice. */
+export function showsError(blocks: Block[], text: string): boolean {
+  return blocks.some((b) => (b.t === "error" && (b.text.includes(text) || text.startsWith(b.text.replace(/…$/, "")))) || (b.t === "subagent" && showsError(b.blocks, text)));
+}
+
 // Claude starts a subagent with its Agent tool (named Task in older versions).
 const SPAWN = new Set(["Agent", "Task"]);
 

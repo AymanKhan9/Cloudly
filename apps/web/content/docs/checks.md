@@ -67,6 +67,6 @@ Every session has a **Changes** button. It shows everything the session has chan
 
 ## Audit a repository
 
-On the new-session page, the **Audit** button starts a session that reviews the whole repository instead of changing it. You can say what to focus on (security, error handling, one part of the code) or leave it blank. The agent lists what it finds, most important first, with the same three kinds. Nothing is fixed automatically: open **Changes**, tick the findings you want fixed, and send them. From then on it's an ordinary session, with a branch and a pull request.
+On the new-session page, **Audit** (under the **+** in the chat box) starts a session that reviews the whole repository instead of changing it. You can say what to focus on (security, error handling, one part of the code) or leave it blank. The agent lists what it finds, most important first, with the same three kinds. Nothing is fixed automatically: open **Changes**, tick the findings you want fixed, and send them. From then on it's an ordinary session, with a branch and a pull request.
 
 Each review and each audit is a turn, and costs like one.
