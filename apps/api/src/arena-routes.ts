@@ -4,6 +4,8 @@ import { z } from "zod";
 import { prisma, budgetStatus, harnessUsesPlan } from "@repo/db";
 import type { AuthEnv } from "./middleware/auth_middleware";
 import { HarnessId, harnessName, threadTitle } from "./harnesses";
+import { isAcpHarness } from "@repo/shared/providers";
+import { lastReply } from "@repo/shared/run-event";
 import { openPullRequest } from "./github";
 
 // One task, several agents. Each agent gets an ordinary session on its own
@@ -44,11 +46,25 @@ arenas.post("/", zValidator("json", ArenaSchema), async (c) => {
   return c.json({ id: arena.id }, 201);
 });
 
-/** The text of the last plain reply in a turn: the agent's own summary of what it did. */
-async function finalText(runId: string): Promise<string | null> {
-  const events = await prisma.runEvent.findMany({ where: { runId, kind: "text" }, orderBy: { seq: "desc" }, take: 40, select: { data: true } });
-  for (const e of events) if (typeof e.data === "string" && e.data.trim()) return e.data;
-  return null;
+/**
+ * The agent's last reply in a turn: its own summary of what it did. An ACP
+ * agent streams it in fragments after its last tool call or thought, so those
+ * are read back in order and joined (see lastReply).
+ */
+async function finalText(runId: string, harness: string): Promise<string | null> {
+  const acp = isAcpHarness(harness);
+  const after = acp
+    ? ((await prisma.runEvent.findFirst({ where: { runId, kind: { in: ["tool_call", "tool_result", "raw", "error"] } }, orderBy: { seq: "desc" }, select: { seq: true } }))?.seq ?? -1)
+    : -1;
+  const events = await prisma.runEvent.findMany({
+    where: { runId, kind: "text", seq: { gt: after } },
+    orderBy: { seq: acp ? "asc" : "desc" },
+    take: acp ? 2000 : 40,
+    select: { kind: true, data: true },
+  });
+  const reply = lastReply(acp);
+  for (const e of acp ? events : events.reverse()) reply.push(e);
+  return reply.text ?? null;
 }
 
 async function duration(runId: string): Promise<number | null> {
@@ -82,7 +98,7 @@ arenas.get("/:id", async (c) => {
           additions: runs.reduce((sum, r) => sum + (r.additions ?? 0), 0),
           deletions: runs.reduce((sum, r) => sum + (r.deletions ?? 0), 0),
           durationMs: await duration(first.id),
-          summary: latest ? await finalText(latest.id) : null,
+          summary: latest ? await finalText(latest.id, latest.harness) : null,
           latestStatus: latest?.status ?? first.status,
         },
       };

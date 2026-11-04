@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { prisma, budgetStatus, harnessUsesPlan, gatewayMcpServers } from "@repo/db";
-import { isProviderHarness, providerDisplayName } from "@repo/shared/providers";
+import { isAcpHarness, isProviderHarness, providerDisplayName } from "@repo/shared/providers";
 import type { Run } from "@repo/shared/run";
-import type { RunEvent } from "@repo/shared/run-event";
+import { lastReply, type RunEvent } from "@repo/shared/run-event";
 
 import { createRunContainer, cancelRun, type ContainerOptions } from "./docker";
 import { createWorkspace, destroyWorkspace, type Workspace } from "./workspace";
@@ -307,12 +307,12 @@ export async function processCouncilTurn(run: Run, workerId: string, runContaine
       task = `${rules}\n\n${prompt}`;
     }
 
-    let lastText: string | undefined;
+    const reply = lastReply(isAcpHarness(run.harness));
     let doneResult: string | undefined;
     try {
       for await (const event of runContainer(ws, task, run.harness, run.id, options)) {
         await insertEvents(run.id, [event]);
-        if (event.kind === "text" && typeof event.data === "string" && event.data.trim()) lastText = event.data;
+        reply.push(event);
         if (event.kind === "done") {
           const r = (event.data as { result?: unknown } | null)?.result;
           if (typeof r === "string") doneResult = r;
@@ -335,7 +335,7 @@ export async function processCouncilTurn(run: Run, workerId: string, runContaine
     // The answer file, read the way the patch is (the agent could have left anything there).
     const bytes = await readRegular(path.join(councilDir, "answer.md"), ANSWER_MAX);
     const written = bytes ? new TextDecoder().decode(bytes).trim() : "";
-    const output = written || doneResult?.trim() || lastText?.trim() || null;
+    const output = written || doneResult?.trim() || reply.text?.trim() || null;
     await prisma.run.updateMany({
       where: fenced,
       data: { status: cancelled ? "cancelled" : output ? "succeeded" : "failed", output, error: output ? null : agentError ?? "The agent didn't write an answer." },

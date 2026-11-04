@@ -4,7 +4,8 @@ import path from "node:path";
 
 import { prisma, budgetStatus, harnessUsesPlan } from "@repo/db";
 import type { Run } from "@repo/shared/run";
-import type { RunEvent } from "@repo/shared/run-event";
+import { lastReply, type RunEvent } from "@repo/shared/run-event";
+import { isAcpHarness } from "@repo/shared/providers";
 import { checkPlan, taskPrompt, type PlanTaskInput } from "@repo/shared/plan";
 
 import { createRunContainer, cancelRun, type ContainerOptions } from "./docker";
@@ -95,11 +96,11 @@ export async function processPlanTurn(run: Run, workerId: string, runContainer: 
       }
     }
 
-    let lastText: string | undefined;
+    const reply = lastReply(isAcpHarness(run.harness));
     try {
       for await (const event of runContainer(ws, PLANNER_PROMPT, run.harness, run.id, options)) {
         await insertEvents(run.id, [event]);
-        if (event.kind === "text" && typeof event.data === "string" && event.data.trim()) lastText = event.data;
+        reply.push(event);
         if (event.kind === "error") {
           const d = event.data as { message?: unknown } | string | null;
           agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
@@ -119,7 +120,7 @@ export async function processPlanTurn(run: Run, workerId: string, runContainer: 
     // plan.json, read the way any file the agent wrote is (no symlinks, size capped),
     // or a JSON block in its last reply.
     const bytes = await readRegular(path.join(dir, "plan.json"), PLAN_MAX);
-    const candidates = [bytes ? new TextDecoder().decode(bytes) : null, lastText?.match(/```(?:json)?\s*\n([\s\S]*?)```/)?.[1] ?? null];
+    const candidates = [bytes ? new TextDecoder().decode(bytes) : null, reply.text?.match(/```(?:json)?\s*\n([\s\S]*?)```/)?.[1] ?? null];
     let checked: ReturnType<typeof checkPlan> = { ok: false, error: "The planner didn't write a plan." };
     for (const text of candidates) {
       if (!text) continue;

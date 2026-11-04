@@ -295,8 +295,15 @@ function TurnView({
         {turn.error && /free usage limit/i.test(turn.error) && harness.includes("opencode") ? (
           <p className="hint">
             OpenCode caps its free models (the ones ending in &ldquo;Free&rdquo;) by account and by the server&rsquo;s IP address, and an OpenCode key doesn&rsquo;t lift that cap. With
-            an OpenCode key under <Link href="/app/settings/agents">Settings → Agents → OpenCode</Link>, pick a model without &ldquo;Free&rdquo; in its name: it runs on your Zen
+            an OpenCode key under <Link href="/app/settings/agents" className="link">Settings → Agents → OpenCode</Link>, pick a model without &ldquo;Free&rdquo; in its name: it runs on your Zen
             credit or Go plan. Or add a vendor key there, or switch to another agent from the model picker.
+          </p>
+        ) : null}
+
+        {turn.error && /insufficient account funds/i.test(turn.error) && harness.includes("opencode") ? (
+          <p className="hint">
+            Your OpenCode key works, but its account has no credit for this model. Add Zen credit or the Go plan at opencode.ai, pick one of the models ending in
+            &ldquo;Free&rdquo; from the model picker, or add a vendor key under <Link href="/app/settings/agents" className="link">Settings → Agents → OpenCode</Link>.
           </p>
         ) : null}
 

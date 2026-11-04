@@ -5,6 +5,8 @@ const nextConfig = {
   transpilePackages: ["@repo/shared"],
   // Lets a second copy (tests, previews) build next to the main one.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // In development the indicator's default spot (bottom left) covers the sidebar's settings button.
+  devIndicators: { position: "bottom-right" },
   async rewrites() {
     const api = process.env.API_INTERNAL_URL ?? "http://localhost:8787";
     // The relay's desktop port (a WebSocket to a sandbox's VNC server, by token).

@@ -5,6 +5,8 @@ import path from "node:path";
 import { prisma, Prisma, budgetStatus, harnessUsesPlan } from "@repo/db";
 import type { Run } from "@repo/shared/run";
 import { checkLessons } from "@repo/shared/lessons";
+import { isAcpHarness } from "@repo/shared/providers";
+import { lastReply } from "@repo/shared/run-event";
 
 import { createWorkspace, destroyWorkspace, type Workspace } from "./workspace";
 import { resolveCloneSource } from "./github";
@@ -170,11 +172,11 @@ export async function processLessonsTurn(run: Run, workerId: string, heartbeatIn
       options.maxBudgetUsd = BACKSTOP_USD;
     }
 
-    let lastText: string | undefined;
+    const reply = lastReply(isAcpHarness(run.harness));
     try {
       for await (const event of createRunContainer(ws, lessonsPrompt(), run.harness, run.id, options)) {
         await insertEvents(run.id, [event]);
-        if (event.kind === "text" && typeof event.data === "string" && event.data.trim()) lastText = event.data;
+        reply.push(event);
         if (event.kind === "error") {
           const d = event.data as { message?: unknown } | string | null;
           agentError = typeof d === "string" ? d : typeof d?.message === "string" ? d.message : agentError;
@@ -190,7 +192,7 @@ export async function processLessonsTurn(run: Run, workerId: string, heartbeatIn
     }
     if (leaseLost) return;
     if (cancelled) return void (await fail("Cancelled."));
-    await saveLessons(run, fenced, dir, lastText, signals, agentError);
+    await saveLessons(run, fenced, dir, reply.text, signals, agentError);
   } catch (err) {
     await fail(agentError ?? (err instanceof Error ? err.message : String(err)));
   } finally {

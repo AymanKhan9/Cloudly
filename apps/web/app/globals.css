@@ -8396,8 +8396,12 @@ body[data-resizing] .pane-body {
 /* ---------- Settings pages: one calm column, rows that read label left, control right ---------- */
 
 .manage .page {
-  max-width: 760px;
   padding: clamp(28px, 5vw, 52px) var(--gutter) 96px;
+}
+
+/* Forms read best in a narrow column; tables and boards (scorecard, plans) keep the wider page. */
+.manage .page:has(> .set-sec) {
+  max-width: 760px;
 }
 
 .manage .page-head {
@@ -8842,4 +8846,67 @@ body[data-resizing] .pane-body {
 
 .load-failed .btn {
   flex: none;
+}
+
+/* The run summary's text uses the "label" class, which forms style bold and bright; here it follows the summary. */
+.activity summary .label {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 450;
+}
+
+.activity summary:hover .label,
+.activity[open] summary .label {
+  color: var(--text);
+}
+
+/*
+ * Council cards: the card is a grid, and an automatic column grows to its widest
+ * line, so a long code line in an answer pushed the card's content (and the page)
+ * sideways. One shrinkable column keeps it inside; wide code scrolls in its own box.
+ */
+.council-turn {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.council-turn > *,
+.council-output,
+.council-output .reply {
+  min-width: 0;
+}
+
+.council-turn > header .spacer {
+  flex: 1;
+}
+
+.council-turn > header {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.council-output .reply pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Long lines scroll under the copy button; give it the block's own background so it reads as a button, not over the text. */
+.code-block .icon-btn {
+  top: 1px;
+  right: 1px;
+  border-radius: 0 calc(var(--r-control) - 1px) 0 8px;
+  background: var(--surface-2);
+  box-shadow: -10px 0 8px -2px var(--surface-2);
+}
+
+.code-block .icon-btn:hover {
+  background: var(--surface-3);
+}
+
+/* A file the agent linked by its sandbox path: shown as the file's name, not a link. */
+.file-ref {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.86em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-3);
 }

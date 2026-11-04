@@ -79,7 +79,16 @@ const baseComponents: Components = {
     return <CodeBlock {...props}>{children}</CodeBlock>;
   },
   a({ node: _node, href, children, ...props }) {
-    const external = href && /^https?:/i.test(href);
+    // Agents link the files they touched by their sandbox path (Codex writes
+    // [src/app.js](/workspace/src/app.js)). Those lead nowhere here, so show the name.
+    if (!href || !/^(https?:|mailto:|#|\/(app|api|docs|share)\/)/i.test(href)) {
+      return (
+        <span className="file-ref" title={href?.replace(/^(file:\/\/)?\/workspace\//, "")}>
+          {children}
+        </span>
+      );
+    }
+    const external = /^https?:/i.test(href);
     return (
       <a href={href} {...props} {...(external ? { target: "_blank", rel: "noreferrer noopener" } : {})}>
         {children}
