@@ -152,16 +152,16 @@ export function DiscordSettings() {
               <CopyText value={s.interactionsUrl} label="Interactions endpoint URL" />
             </div>
             <div className="panel-row field">
-              <span className="label">3. Add the bot and its command</span>
+              <span className="label">3. Add the bot, then its command</span>
               <div className="row-actions">
-                <button type="button" className="btn btn-secondary btn-sm" disabled={!configured || busy} onClick={() => run(() => api("/settings/discord/commands", { method: "POST" }), "Registered /cloudly. It can take a few minutes to show up.")}>
-                  Register /cloudly
-                </button>
                 {s.inviteUrl ? (
                   <a className="btn btn-secondary btn-sm" href={s.inviteUrl} target="_blank" rel="noreferrer">
                     Add the bot to a server
                   </a>
                 ) : null}
+                <button type="button" className="btn btn-secondary btn-sm" disabled={!configured || busy} onClick={() => run(() => api("/settings/discord/commands", { method: "POST" }), "Registered /cloudly in every server the bot is in. Added it to another server? Press this again.")}>
+                  Register /cloudly
+                </button>
               </div>
             </div>
             <div className="panel-row field">

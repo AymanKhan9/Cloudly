@@ -62,7 +62,7 @@ Everything the agent wrote is treated as untrusted. Its changes are exported in 
 ## Known limitations
 
 - **A preview shares your instance's host name.** Browsers keep cookies per host, not per port, and the relay strips Cloudly's own ones, but a preview's app can still set and read cookies of its own on that host.
-- **Docker is the isolation boundary.** It's weaker than a virtual machine, so only connect repositories you'd be comfortable running on the VM. A microVM backend is planned.
+- **Docker is the isolation boundary.** Containers share the host's kernel, so only connect repositories you'd be comfortable running on the VM, and only let people you'd trust with a shell on it sign in.
 - **A container escape lands as the worker's user,** who can run Docker.
 - **Cursor holds a session token while it runs.** Its API key stays out of the sandbox, but Cursor trades it for a short-lived session token, and that token is inside the sandbox for the turn.
 - **Plain HTTP is possible.** If you decline HTTPS at install time, the session cookie and anything typed into Settings cross the network unencrypted.

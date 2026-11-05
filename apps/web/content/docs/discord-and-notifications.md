@@ -15,7 +15,7 @@ You hear once a session **settles**, when its last automatic turn is done. A tur
 
 Where:
 
-- **Discord DMs** from the bot, once your Discord account is linked (below).
+- **Discord DMs** from the bot, once your Discord account is linked (below). A session started in Discord posts in its own thread instead.
 - **Slack DMs** from the Slack app, once your Slack account is linked (below).
 - **A Discord channel**, through a webhook: in the channel's settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. No bot needed.
 - **Slack**, through an incoming webhook from a Slack app.
@@ -42,8 +42,8 @@ The bot runs over HTTP: Discord sends each command to Cloudly, signed, and Cloud
 1. At [discord.com/developers/applications](https://discord.com/developers/applications), create an application.
 2. Under **Settings → Discord** in Cloudly, paste its **application ID** and **public key** (from General Information) and its **bot token** (from Bot, Reset Token), and save.
 3. Copy the **interactions endpoint URL** Cloudly shows into the application's General Information, and save there. Discord checks it straight away.
-4. Press **Register /cloudly**. Discord can take a few minutes to show the command.
-5. Press **Add the bot to a server** and pick your server. It asks for permission to send messages, embed links, read message history, and make and post in threads, nothing more.
+4. Press **Add the bot to a server** and pick your server. It asks for permission to send messages, embed links, read message history, and make and post in threads, nothing more.
+5. Press **Register /cloudly**. It adds the command to each server the bot is in, where it shows at once (reload Discord with Ctrl+R if it doesn't). After adding the bot to another server, press it again.
 6. Press **Make a link code**, and run the `/cloudly link` command it shows in Discord.
 
 The bot doesn't read messages, so it doesn't need Discord's Message Content intent. Replies go through the **Reply** button.

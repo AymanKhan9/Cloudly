@@ -31,3 +31,12 @@ It runs in a real sandbox, commits, runs the repo's checks (`npm test`, which fa
 Pull request links say `github.com`, the way Cloudly reads them, so open them on the stand-in by path. Downloads the sandbox makes go through Cloudly's egress proxy, which only allows HTTPS: an agent update tried in the sandbox can't fetch the stand-in's plain-HTTP archives.
 
 Run the unit tests against a fresh database, not this one: they expect no settings saved.
+
+## With real agents
+
+The same setup runs real agents; only GitHub stays a stand-in, so nothing reaches your real repositories.
+
+- **Sign-ins:** add a Claude plan token (`claude setup-token`), a ChatGPT sign-in for Codex, or API keys under **Settings → Keys and sign-ins**, as on a real instance.
+- **Added agents (OpenCode, Pi and the rest):** `env.sh` points the API and the worker at the stand-in's ACP registry, which lists only the scripted agents. Start both without `ACP_REGISTRY_URL` (`env -u ACP_REGISTRY_URL ...`) to add agents from the real registry. OpenCode's free models need no key.
+- **MCP servers:** agents reach them through the egress proxy, which runs in a container. A server on the machine's own `localhost` (like the stand-in's `/mcp`) isn't reachable from there; run a test server in a container on the `cloudly-egress-out` network and connect it by that container's address.
+- **Disk:** the sandbox image is about 2 GB and grows with each added agent. Leave several GB free, or image builds fail partway.

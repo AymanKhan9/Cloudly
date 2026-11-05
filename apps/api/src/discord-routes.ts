@@ -275,16 +275,21 @@ discordSettings.delete("/discord", async (c) => {
   return c.body(null, 204);
 });
 
-// Registers /cloudly with Discord (global commands can take a few minutes to show).
+// Registers /cloudly in each server the bot is in, where it shows at once; global
+// commands can take a long while to reach Discord clients. Global only when the
+// bot isn't in a server yet, and cleared otherwise so the command isn't listed twice.
+// ponytail: first 200 servers only; page through /users/@me/guilds if anyone needs more.
 discordSettings.post("/discord/commands", async (c) => {
   const [applicationId, token] = await Promise.all([config("DISCORD_APPLICATION_ID"), config("DISCORD_BOT_TOKEN")]);
   if (!applicationId || !token) return c.json({ message: "Save the application ID and the bot token first." }, 400);
   try {
-    await discordApi(token, "PUT", `/applications/${applicationId}/commands`, COMMANDS);
+    const guilds = await discordApi<{ id: string }[]>(token, "GET", "/users/@me/guilds?limit=200");
+    for (const g of guilds) await discordApi(token, "PUT", `/applications/${applicationId}/guilds/${g.id}/commands`, COMMANDS);
+    await discordApi(token, "PUT", `/applications/${applicationId}/commands`, guilds.length ? [] : COMMANDS);
+    return c.json({ ok: true, servers: guilds.length });
   } catch (err) {
     return c.json({ message: err instanceof Error ? err.message : "Discord refused the commands." }, 502);
   }
-  return c.json({ ok: true });
 });
 
 // A one-time code for /cloudly link, good for ten minutes.

@@ -20,9 +20,9 @@ Only the latest release is supported.
 
 ## Known limitations
 
-These are documented and planned, not new findings. The details are in [ARCHITECTURE.md §8](ARCHITECTURE.md#8-security-boundaries).
+These are known and documented, not new findings. The details are in [ARCHITECTURE.md §8](ARCHITECTURE.md#8-security-boundaries).
 
 - Model API keys and plan tokens stay out of run containers: agents get placeholders, and Cloudly's gateway adds the real credential on the way to the vendor (and refreshes ChatGPT sign-ins itself). An agent can still make model calls through the gateway on your account while it runs; it just can't take the credential with it.
-- Docker is the isolation boundary. It's weaker than a microVM, so only connect repositories you'd be comfortable running on the VM.
+- Docker is the isolation boundary. Containers share the host's kernel, so only connect repositories you'd be comfortable running on the VM, and only let people you'd trust with a shell on it sign in.
 - The run container uses the worker's own uid (1000 on installs), so a container escape lands as that user, who can run Docker.
 - If you decline HTTPS at install time, Cloudly serves plain HTTP on port 3000, and the session cookie and anything typed into Settings cross the network unencrypted. HTTPS works without a domain, on the VM's IP address, and is the default.

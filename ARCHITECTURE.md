@@ -1,12 +1,12 @@
-# Cloud Agents — Architecture
+# Cloudly architecture
 
-A hosted platform where a user signs in with GitHub, picks a repo, and hands a task to a coding
+A self-hosted platform where a user signs in with GitHub, picks a repo, and hands a task to a coding
 agent. The agent runs in an isolated sandbox in the cloud and keeps going after the user closes
 their laptop. Output is a branch and a pull request. The platform is **harness-agnostic**: any
 coding agent (Claude Code, Codex, Gemini CLI, and others) can run inside it, unmodified, behind
 the same contracts.
 
-Status legend used throughout: ✅ built & tested · 🚧 designed, not yet built.
+Status legend used throughout: ✅ built & tested · 🚧 built, not fully tested yet.
 
 ---
 
@@ -23,17 +23,18 @@ These are the decisions everything else in this document follows from.
    a separate broker. No Redis, no SQS, until it's *measured* to be insufficient — Postgres-as-queue
    is a well-worn pattern (Oban, River, GoodJob), not a shortcut.
 3. **The sandbox is unreachable from the outside.** No browser, no API request, ever talks to a
-   running container or microVM directly — the worker is the sandbox's only peer, and the API and
+   running container directly — the worker is the sandbox's only peer, and the API and
    worker themselves only communicate through Postgres, never directly. This is what makes worker
    crashes non-catastrophic, and what keeps the sandbox's attack surface to one controlled egress
    path instead of an open inbound one. One narrow, deliberate exception: watching a turn's desktop
    and opening a preview go through the relay (§8), which only accepts a short-lived token the API
    signed for one container and one port. The API and worker still never talk; the token is the
    only thing that crosses, and it carries no credential.
-4. **Docker now, Firecracker later.** Hardened Docker containers get the whole system working
-   end-to-end first. A `Sandbox` interface means swapping in Firecracker microVMs (dedicated
-   kernel, snapshot/restore, near-zero idle cost) later doesn't touch the worker's run-management
-   logic.
+4. **Docker is the isolation boundary.** Each run gets a hardened, non-root container with
+   capped memory and processes, behind an egress proxy. Containers share the host's kernel, so
+   sign-in is limited to an allowlist of GitHub logins and you should only connect repositories
+   you'd be comfortable running on the VM (§8). The `Sandbox` interface keeps the backend swappable
+   without touching the worker's run-management logic.
 5. **Backend first.** No web UI until the run lifecycle — queue, sandbox, event log, replay,
    crash recovery — is solid by hand-testing with `docker run` and a CLI worker.
 
@@ -48,14 +49,14 @@ flowchart TB
     end
 
     subgraph Control["Control plane"]
-        API["API<br/>apps/api · Hono/Bun ✅<br/>(dev-token auth still 🚧)"]
+        API["API<br/>apps/api · Hono/Bun ✅<br/>GitHub sign-in, sessions, SSE"]
         DB[("Postgres<br/>Run + RunEvent tables ✅<br/>(the job queue & durable event log)")]
         Worker["Worker<br/>apps/worker ✅<br/>claim/lease/heartbeat/cancel/recovery sweep"]
     end
 
     subgraph SandboxLayer["Sandbox (per run)"]
         direction TB
-        Container["Run container / microVM<br/>infra/images/base ✅ (Docker) · Firecracker 🚧<br/>run clone (borrows mirror objects, read-only mount), agent-writable"]
+        Container["Run container ✅<br/>infra/images/base (Docker, non-root)<br/>run clone (borrows mirror objects, read-only mount), agent-writable"]
         Runner["Runner<br/>packages/runner ✅<br/>picks a RunAdapter, normalizes events"]
         ClaudeAdapter["ClaudeAdapter ✅<br/>@anthropic-ai/claude-agent-sdk<br/>(spawns claude CLI subprocess)"]
         CodexAdapter["CodexAdapter ✅<br/>@openai/codex-sdk<br/>(spawns codex CLI subprocess)"]
@@ -64,17 +65,17 @@ flowchart TB
         Runner --> CodexAdapter
     end
 
-    ExportC["Export container 🚧<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
+    ExportC["Export container ✅<br/>run clone mounted, output folder mounted<br/>no model keys, no network"]
     CheckC["Check container ✅<br/>run clone mounted, no output-folder mount<br/>no model keys, network via the egress proxy"]
     ReviewC["Review / audit turn ✅<br/>reviewer agent on the session branch<br/>diff + task in /workspace/.cloudly-review<br/>findings.json read back with readRegular, never committed"]
 
     GitHub["GitHub<br/>repo + PR"]
-    Egress["Allowlisting egress proxy 🚧<br/>model API + registries only<br/>(not yet built — see §8)"]
+    Egress["Egress proxy ✅<br/>allow-listed hosts only · fills secret placeholders<br/>model and MCP gateway (§8)"]
 
     UI -- "POST /runs<br/>GET /runs/:id/events (SSE)" --> API
     API -- "insert queued run" --> DB
     Worker -- "claim (SKIP LOCKED + lease)<br/>heartbeat · recovery sweep" --> DB
-    Worker -- "docker run / create microVM<br/>write /control/config.json" --> Container
+    Worker -- "docker run<br/>write /control/config.json" --> Container
     Runner -- "one RunEvent JSON line per stdout line" --> Worker
     Worker -- "insert RunEvent rows<br/>(runId, seq) composite PK" --> DB
     API -- "poll run_events ~500ms<br/>forward via SSE, replay by Last-Event-ID" --> DB
@@ -84,8 +85,8 @@ flowchart TB
     Worker -- "start after export completes" --> CheckC
     CheckC -- "check result" --> Worker
     Worker -- "checkout base_sha in fresh publish clone<br/>apply patch, deterministic commit<br/>push, create PR" --> GitHub
-    ClaudeAdapter -. outbound today, unrestricted .-> Egress
-    CodexAdapter -. outbound today, unrestricted .-> Egress
+    ClaudeAdapter -- "all outbound traffic" --> Egress
+    CodexAdapter -- "all outbound traffic" --> Egress
 
     style DB fill:#2b6cb0,color:#fff
     style Container fill:#744210,color:#fff
@@ -99,10 +100,10 @@ flowchart TB
 - **Client** — the only thing a user's browser ever talks to is the API, over plain HTTP and SSE.
 - **Control plane** — API, worker, and Postgres. Postgres sits *between* API and worker; they
   never call each other directly. This is deliberate (see §4).
-- **Sandbox** — one run container (later: microVM) per run, fully isolated, reachable only by the
-  worker, followed by two separate finalize containers — export, then check — neither with model
-  keys or network. Today the run container's outbound path is unrestricted (§8); the allowlisting
-  proxy that narrows it to one controlled egress path is designed but not yet built.
+- **Sandbox** — one run container per run, isolated and reachable only by the worker, followed by
+  two separate finalize containers — export, then check — neither with model keys. Every outbound
+  request goes through the egress proxy (§8), which allows only listed hosts and fills in keys and
+  secrets that the sandbox only ever holds as placeholders.
 
 ---
 
@@ -376,13 +377,13 @@ will exercise `RunAdapter` harder than either adapter built so far (see the `sen
   `O_NOFOLLOW | O_NONBLOCK` + `fstat`, size and count caps, and only files the run started with
   can be deleted. Downloads are always `application/octet-stream` attachments with `nosniff`.
 
-### Planned, not yet built
+### Not enforced yet
 
 - **A repo's own `.mcp.json`/`.claude/settings.json` are untrusted by default** — `strict_mcp_config`
   and explicit `setting_sources` prevent a malicious repo from smuggling in hooks or MCP servers
   the platform didn't choose. Not yet wired up.
-- **Invite-only** while the Docker backend is the only isolation option; public sign-up is gated
-  behind the microVM backend landing first.
+- **No public sign-up.** Docker shares the host's kernel, so only the GitHub logins on the sign-in
+  list can use an instance. Don't open one to people you wouldn't give a shell on the VM.
 
 ## 9. Data model
 
@@ -831,6 +832,8 @@ thread's home (Claude's `-workspace` project, Codex's rollout, Pi's file via pi-
 it gzipped and sealed with the transcript `promptWithHistory` would give a new agent, and marks it
 ready. The command polls `GET /handoffs/:id`, checks out the branch, rewrites `/workspace` to the
 local folder, and writes the file where the local agent looks. Rows are deleted after a day.
+Tested live: a Claude Code session pulled into a fresh clone, then `claude --resume` on the
+laptop recalled the whole conversation and what it had changed.
 
 **Scorecard** (`@repo/db` scorecard): per thread harness, from threads, runs and review findings,
 over a window. PR outcomes come from `Thread.mergedAt`/`prClosedAt`, set by the `pull_request`
@@ -1033,22 +1036,22 @@ design, not after it:
 | Agent commands and sessions: a message starting with `/` reaches the agent untouched (Claude gets Cloudly's rules through its system prompt instead, on top of the `claude_code` preset); commands the agent announces (Claude's init `slash_commands`, ACP `available_commands_update`) are offered in the chat after `/`; Claude resumes its own session each turn (`~/.claude` kept per session), falling back to the transcript if the session file is gone | `apps/worker/src/{preamble,process-run}.ts`, `packages/runner/src/adapters/{claude,acp}.ts`, chat page | ✅ tests for passthrough, system prompt, resume and fallback; live: Gemini ran `/help` and announced 20 commands, Claude ran `/context` and announced 41; suggestions checked in a browser. Live on the user's VM with a Claude plan: `/compact` compacted a resumed session and `/model` answered. The header shows the model and a context ring from `getContextUsage({ detail: "summary" })`, which needs streaming input (a string prompt closes the query before the answer) |
 | HTTPS without a domain: Caddy gets a Let's Encrypt IP-address certificate (`shortlived` profile, about 6 days, renewed automatically); the installer offers it by default when there's no domain, `CLOUDLY_ENABLE_HTTPS=1` converts an existing HTTP install, and the web app then listens on 127.0.0.1 only | `deploy/Caddyfile`, `install.sh` | 🚧 Caddyfile verified with `caddy adapt` on Caddy 2.11.7 (IP → acme/shortlived, domain → acme/classic); installer paths tested in isolation. A real certificate needs a public VM; not yet issued |
 | Long runs | worker, gateway, API | ✅ a 30-minute Codex turn (ChatGPT plan, a 30-minute shell command) through the real worker: lease renewed throughout, one SSE connection stayed open and got all 15 events, the turn succeeded and committed. Multi-hour runs not yet tried |
-| MCP servers: OAuth with the instance's own callback, tokens refreshed by the worker, every agent reaches them through the gateway (`/mcp/<name>`) | `packages/db/src/mcp.ts`, `apps/api/src/mcp-routes.ts`, `apps/worker/src/egress*.ts`, `packages/runner/src/mcp.ts` | ✅ unit tests for discovery (401 → resource metadata → AS metadata, pre-9728 defaults), registration, PKCE exchange, refresh and failed refresh; gateway test with a real upstream (token added, sandbox's dropped, challenge stripped). Not yet signed in to a real hosted server |
+| MCP servers: OAuth with the instance's own callback, tokens refreshed by the worker, every agent reaches them through the gateway (`/mcp/<name>`) | `packages/db/src/mcp.ts`, `apps/api/src/mcp-routes.ts`, `apps/worker/src/egress*.ts`, `packages/runner/src/mcp.ts` | ✅ unit tests for discovery (401 → resource metadata → AS metadata, pre-9728 defaults), registration, PKCE exchange, refresh and failed refresh; gateway test with a real upstream (token added, sandbox's dropped, challenge stripped). Live: a bearer-token server connected in Settings, its tool called by Claude Code in a real turn through the gateway (the token added on the way, never in the sandbox). Not yet signed in to a real hosted server |
 | Secrets for runs: placeholders, filled in by the proxy only for each secret's hosts | `packages/db/src/env-secrets.ts`, `apps/worker/src/egress-proxy.ts` | ✅ unit tests; an end-to-end test through the real proxy and TLS server (CONNECT, TLS, placeholders filled in headers and URL; a spoofed `Host` gets a 421 and nothing is sent) |
 | Repo files at `/files`, kept between sessions | `packages/db/src/repo-files.ts`, `apps/worker/src/repo-files.ts`, `apps/api/src/workspace-routes.ts` | ✅ tests: symlinks to host files and FIFOs left by the agent are skipped, changed files saved, deletions limited to what the run saw, a full `processRun` saving what the stub agent wrote |
 | Arena: one task, several agents, each on its own branch with no PR until one is picked; per-turn diff stats | `apps/api/src/arena-routes.ts`, `apps/worker/src/process-run.ts`, `apps/web/app/app/arena` | ✅ API and worker tests; compare page checked in a browser with seeded runs. Live: Claude Code and OpenCode (a free model) on one task through the real worker, both diffs and replies on the compare page; an ACP agent's reply streams in fragments, so its summary joins the fragments after its last tool call (`lastReply`), found live. Then three live agents (Claude Code, Codex on a ChatGPT plan, OpenCode): Claude changed the code; Codex and OpenCode only read files and claimed they had, and the compare page showed them as "Done, no changes" with no PR to pick |
 | Desktop: Xvfb, x11vnc and Chromium (sandbox preset), a computer-use MCP server for every agent, live view and take-over through the relay | `packages/runner/src/desktop*.ts`, `apps/worker/src/relay.ts`, `apps/web/components/desktop-viewer.tsx` | 🚧 Tested on a real Xvfb + x11vnc + Chromium (on the build machine, not yet inside the sandbox image, whose Debian mirror wasn't reachable there): the MCP server opened a page, took a screenshot and clicked a button the page registered; the session page's viewer connected through the web app's `/relay` rewrite, the relay and the VNC password, and scaled the screen to fit. Separately, the relay bridged to a VNC-speaking process inside a real container by container name. Not yet driven by a live agent |
 | Previews: a session's branch with the user's command in its own container, opened on a separate origin or on the desktop | `apps/worker/src/previews.ts`, `packages/runner/src/preview.ts`, `apps/api/src/live-routes.ts` | ✅ live: the worker started a real preview container from a branch, the app (listening on localhost only) answered through the relay's published port with Cloudly's cookie stripped, no token got a 401, Stop removed the container |
-| Shared context per repo (opt-in): notes and a work log every agent reads (system prompt or preamble, plus `repo_context`/`add_note` tools in the sandbox), each turn logged; an MCP endpoint (`/api/mcp`, streamable HTTP, JSON responses, personal bearer tokens) for Cursor, Claude Code and Codex on the user's machine | `packages/db/src/context.ts`, `apps/worker/src/shared-context.ts`, `packages/runner/src/context-mcp.ts`, `apps/api/src/context-routes.ts` | ✅ worker test across two agents (Claude's decision and work reach Gemini's next turn; a symlinked notes file is ignored; off means nothing in or out); API tests; the official MCP TypeScript SDK client and Claude Code's `claude mcp list` both connected to the endpoint and used its tools. Not yet run with a live agent or from Cursor itself |
+| Shared context per repo (opt-in): notes and a work log every agent reads (system prompt or preamble, plus `repo_context`/`add_note` tools in the sandbox), each turn logged; an MCP endpoint (`/api/mcp`, streamable HTTP, JSON responses, personal bearer tokens) for Cursor, Claude Code and Codex on the user's machine | `packages/db/src/context.ts`, `apps/worker/src/shared-context.ts`, `packages/runner/src/context-mcp.ts`, `apps/api/src/context-routes.ts` | ✅ worker test across two agents (Claude's decision and work reach Gemini's next turn; a symlinked notes file is ignored; off means nothing in or out); API tests; the official MCP TypeScript SDK client and Claude Code's `claude mcp list` both connected to the endpoint and used its tools. Live: Claude Code on the laptop read the notes and added a note and a work record over the endpoint, and a Claude Code turn in Cloudly then read that note. Not yet run from Cursor itself |
 | Agent council: members research independently, cross-review, give final positions; a chair writes the report. Each turn is a queued Run (`councilRound`, `councilRole`) with no commit; answers are a file read back like the patch; rounds advance fenced on the council's round number, from the turn and from a sweep. Research councils (no repo, no secrets, no files) reach the open web through the egress proxy with a per-turn credential; private, loopback and link-local addresses are refused after the proxy's own DNS lookup | `apps/worker/src/council.ts`, `apps/worker/src/egress-proxy.ts`, `apps/api/src/council-routes.ts`, `apps/web/app/app/council` | ✅ worker tests through `processRun` with stand-in agents (three rounds and a report; answers passed between rounds; a member dropping out; a symlinked answer not followed; the spending cap stopping it; the proxy credential revoked after each turn); proxy tests for the credential and address checks; API tests. Live: the real proxy in a container refused off-list hosts without the credential and the metadata address with it. Live agents: a two-round repo council of Claude Code (chair) and OpenCode (a free model), research, final positions and the report |
 | Added agents (Settings → Agents), like T3 Code's providers: Cursor, Grok, OpenCode, Antigravity and Pi from Cloudly's catalog, any agent in the ACP registry, or a command. The image build installs each under `/opt/cloudly/agents/<id>` (npm package, per-CPU release archive checked against its sha256, uvx, or a script), one failure leaving the rest of the image intact; turns run it through `AcpAdapter` with ACP `authenticate` for API-key sign-in and the session's model as a config option. Its keys are placeholders the egress proxy fills in for each key's hosts, the same path as run secrets. Muse Code (Meta sign-in only) and fx (ignores `HTTPS_PROXY`) are listed as unavailable | `packages/shared/src/providers.ts`, `packages/db/src/providers.ts`, `apps/api/src/agent-routes.ts`, `apps/worker/src/{docker,sandbox-image}.ts`, `packages/runner/src/adapters/acp.ts`, `apps/web/components/agents-panel.tsx` | ✅ unit tests (install script run as root in the base image: argument quoting, an isolated failed install, a sha256 mismatch; keys, placeholders and reuse; API routes against a stand-in registry; the adapter against a stand-in ACP agent). Live, through the real worker, image build and egress proxy with fake keys: Cursor, Grok, OpenCode, Pi and Antigravity installed; Cursor's, Grok's, Pi's and Antigravity's placeholders were filled on api2.cursor.sh, api.x.ai, api.anthropic.com and generativelanguage.googleapis.com and the vendors refused the fake keys; OpenCode reached its free models. Antigravity hung until it got ordinary pipes for stdio and PYTHONUNBUFFERED (found live). fx made no request through the proxy. OpenCode with a real key: filled on opencode.ai, its paid models listed; a key on an account without credit fails with "Insufficient account funds", and the chat explains it. The others not yet run with real keys |
 | Sessions that talk to each other, like T3 Code's threads: `list_sessions`, `read_session` and `send_to_session` tools for every agent. The worker writes the sessions a turn may see (this repo's by default, `Thread.peers`) to `/sessions` before the turn and reads `/sessions/outbox.jsonl` back after it like the patch, checking each message against the scope again; a message becomes a queued Run in the target session (`fromThreadId`, `fromRunId`, `hops`), and with a reply asked for (`replyToThreadId`) its answer is queued back to the asker once the turn ends. Delivered at the end of the turn, not live, since `WORKER_CONCURRENCY` is 1 by default and the target couldn't run sooner anyway. `(fromRunId, threadId)` is unique so a retried turn can't send twice; 3 messages a turn, chains capped at 4 hops | `packages/shared/src/sessions.ts`, `apps/worker/src/peer-sessions.ts`, `packages/runner/src/sessions-mcp.ts`, `apps/api/src/index.ts`, chat page | ✅ worker test through `processRun` with stand-in agents (one session reads another and asks it; the message runs there; its answer comes back; malformed, duplicate and out-of-scope messages and a symlinked outbox ignored; scope and hop cap); the tools' own test; the MCP server run inside the sandbox image; API test; chat page checked in a browser. Not yet run with live agents |
 | Sidebar actions like T3 Code's thread menu: pin, settle, snooze (back unread when it runs out), rename, mark read and unread, filter by repo, copy, archive (also out of other sessions' reach), delete (not while a turn runs; the branch and PR stay on GitHub). New activity un-settles, un-snoozes and unarchives. Unread is a turn that ended after `Thread.seenAt` (`Run.updatedAt`); an upgrade marks existing sessions seen. "Needs you": the agent's `ask_user` tool writes `/ask/question.json`, read back after the turn like the patch, into `Thread.needsInput` until the user replies. Agents still never wait on permission prompts: every adapter approves its own tool use, since the sandbox, egress allowlist and placeholder credentials are the boundary | `apps/web/components/session-list.tsx`, `apps/api/src/index.ts`, `apps/worker/src/ask.ts`, `packages/runner/src/ask-mcp.ts` | ✅ API test of every action and the unread rules; worker test of ask_user through `processRun` (a symlinked question file ignored); the tool's own test; every action checked in a browser. Not yet run with live agents |
 | Councils of any size, started from a message: no cap on members beyond the agents set up (each once). "Use claude, chatgpt, opencode, gemini and pi for …" is read by `agentsAskedFor` (a list of agent names right after a word like "use" or "ask", not one followed by "SDK" and the like), which switches the composer to Council and picks them. `agentReadiness` says whether each can run (a key or plan sign-in; for an added agent, on, its keys set and installed) and why not; the composer lists those that can't, and the API refuses a council with any of them, naming each | `packages/shared/src/agent-names.ts`, `packages/db/src/providers.ts`, `apps/api/src/council-routes.ts`, `apps/web/app/app/page.tsx` | ✅ tests for the name matcher (false positives included), the API (a council of five, and the reasons for a signed-out, an unadded and an unavailable agent), and the worker (a council of five through every round); the composer checked in a browser with the example message |
 | Checks and fix-until-green: the repo's checks (detected from its files, or a command per repo) run after every changing turn in their own container behind the egress proxy; a failure becomes a fix turn for the same agent, up to N in a row, then the session needs the user | `apps/worker/src/checks.ts`, `apps/api/src/repo-settings-routes.ts`, `apps/web/components/checks*.tsx` | ✅ worker tests with real check containers: pass, fail → two fix turns → "Needs you", a new message resets the count, a missing tool reports and doesn't fix, checks off, a question isn't checked, a hang stopped at the time limit; detection from repo files, symlinks not followed; API tests. Not yet run against a live agent |
-| Environments (recipes, cached images) | — | 🚧 planned |
-| Jev supervisor (risky-action gate, stuck/progressing/done check) | — | 🚧 planned |
-| Firecracker microVM backend | — | 🚧 planned |
+| Discord bot and notifications: `/cloudly` over signed HTTP interactions, a thread per session, DMs and channel webhooks | `apps/api/src/discord-routes.ts`, `apps/worker/src/notify.ts` | ✅ tested live with a real bot and server through a public tunnel: Discord's signed endpoint check, `link`, `repo`, `task` (a thread with the reply and the PR) and `status`; a channel webhook got the test and "done" notifications, and a session started on the web reached the linked account as a DM. A brand-new bot's global command didn't show in the server, so **Register /cloudly** now registers it per server |
+| Sentry: signed issue webhooks start one session per issue | `apps/api/src/sentry-routes.ts`, `apps/worker/src/sentry.ts` | 🚧 tested with simulated, correctly signed deliveries (bad signature 401, duplicate delivery, one session per issue, the agent declining a trace that didn't match the repo); not yet against a real Sentry project |
+| Slack app and webhook | `apps/api/src/slack-routes.ts`, `apps/worker/src/notify.ts` | 🚧 not yet tested live |
 
 ## 13. Decision log
 
