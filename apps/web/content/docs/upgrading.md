@@ -5,7 +5,7 @@
 Re-run the install command on the VM:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
+curl -fsSL https://usecloudly.dev/install.sh | sh
 ```
 
 It downloads the latest release, runs database migrations and restarts the services. Your `.env`, database and settings are kept.

@@ -24,7 +24,7 @@ Free tiers change often, so check each provider's current terms. As of October 2
 SSH into the VM and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
+curl -fsSL https://usecloudly.dev/install.sh | sh
 ```
 
 It asks for:
@@ -54,7 +54,7 @@ Behind Caddy the web app only listens on the VM itself, so nothing can bypass HT
 To switch an existing plain-HTTP install to HTTPS on its IP:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | CLOUDLY_ENABLE_HTTPS=1 sh
+curl -fsSL https://usecloudly.dev/install.sh | CLOUDLY_ENABLE_HTTPS=1 sh
 ```
 
 Your address becomes `https://<ip>`. The installer prints the new homepage, callback and setup URLs; enter them in your GitHub App's settings, since GitHub doesn't let other apps change them.
@@ -64,7 +64,7 @@ Your address becomes `https://<ip>`. The installer prints the new homepage, call
 Paste a Postgres URL when the installer asks (Neon, Supabase, RDS, or anything that accepts connections from the VM), or run it non-interactively:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | LOCAL_POSTGRES=0 DATABASE_URL=postgresql://... sh
+curl -fsSL https://usecloudly.dev/install.sh | LOCAL_POSTGRES=0 DATABASE_URL=postgresql://... sh
 ```
 
 Sessions, settings and encrypted keys then live in your database rather than on the VM, which makes [moving to a new VM](/docs/upgrading#move-to-a-new-vm) easy.

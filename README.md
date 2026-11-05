@@ -2,6 +2,8 @@
 
 Hand off a coding task from anywhere, and get back a pull request that was actually checked.
 
+**[usecloudly.dev](https://usecloudly.dev)** · [Docs](https://usecloudly.dev/docs)
+
 Cloudly runs coding agents (Claude Code, Codex, Gemini CLI, or one you add: OpenCode, Pi, Cursor, Grok, Antigravity, any ACP agent) against your GitHub repos on a server you own. Give it a task from the browser, Discord, Slack or a GitHub issue, close the laptop, and come back to a branch and a pull request. It runs on your API keys or on the Claude or ChatGPT plan you already pay for.
 
 Free, MIT-licensed and self-hosted: your VM, your database, your keys. There's no Cloudly account and no hosted service in the middle.
@@ -44,12 +46,12 @@ Free, MIT-licensed and self-hosted: your VM, your database, your keys. There's n
 On a fresh Ubuntu or Debian VM:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
+curl -fsSL https://usecloudly.dev/install.sh | sh
 ```
 
 The installer sets up Docker, Bun, Postgres and a swap file on small machines, builds everything, and starts three systemd services. It prints a link to a setup page where you create the GitHub App in one click and choose repositories; add model keys or plan sign-ins under Settings afterwards. Re-run it any time to upgrade; it keeps your `.env`.
 
-[DEPLOY.md](DEPLOY.md) covers picking a VM on each provider, HTTPS and upgrades. The full guide is in the docs on your instance at `/docs`.
+[DEPLOY.md](DEPLOY.md) covers picking a VM on each provider, HTTPS and upgrades. The full guide is at [usecloudly.dev/docs](https://usecloudly.dev/docs), and on your instance at `/docs`.
 
 ## Where to run it
 

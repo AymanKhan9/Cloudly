@@ -23,7 +23,7 @@ Open inbound ports in your provider's firewall or security group:
 SSH into the VM and run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
+curl -fsSL https://usecloudly.dev/install.sh | sh
 ```
 
 It asks for a domain (optional), the public URL and, optionally, your own Postgres URL (see [Using your own Postgres](#using-your-own-postgres)), then installs Docker, Bun, Postgres and the three services. It downloads a prebuilt release, so a small VM never has to compile the web app. If no release exists for your CPU it builds from source instead (set `CLOUDLY_FROM_SOURCE=1` to force that). When it finishes it prints a setup link and a one-time **setup token**. The token is also saved as `CLOUDLY_SETUP_TOKEN` in `/opt/cloudly/.env`.
@@ -60,7 +60,7 @@ Behind Caddy, the web app only listens on the VM itself, so `http://<ip>:3000` s
 To switch an existing plain-HTTP install to HTTPS on its IP, re-run the installer with `CLOUDLY_ENABLE_HTTPS=1`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | CLOUDLY_ENABLE_HTTPS=1 sh
+curl -fsSL https://usecloudly.dev/install.sh | CLOUDLY_ENABLE_HTTPS=1 sh
 ```
 
 Your address then changes to `https://<ip>`, and GitHub needs to know: the installer prints the new homepage, callback and setup URLs to enter in your GitHub App's settings. GitHub doesn't let other apps change those for you.

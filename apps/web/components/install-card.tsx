@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
 
-export const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh";
+export const INSTALL_COMMAND = "curl -fsSL https://usecloudly.dev/install.sh | sh";
 
 export function InstallCard() {
   const [copied, setCopied] = useState(false);

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Cloudly installer. Turns a fresh Ubuntu or Debian VM into a Cloudly station:
-#   curl -fsSL https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh | sh
+#   curl -fsSL https://usecloudly.dev/install.sh | sh
 # Re-running it upgrades in place and keeps your .env.
 set -eu
 
