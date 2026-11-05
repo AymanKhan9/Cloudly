@@ -4,6 +4,7 @@ import { InstallCard } from "@/components/install-card";
 import { RunStory } from "@/components/run-story";
 import { SpendDemo } from "@/components/spend-demo";
 import { AgentsDemo } from "@/components/agents-demo";
+import { Faq } from "@/components/faq";
 import { MARKETING, REPO_URL, SiteHeader } from "@/components/site-header";
 
 const HOSTS = ["Oracle Cloud Always Free (Arm, 12 GB)", "Google Cloud e2-micro (1 GB, one run at a time)", "AWS (new-account credits)", "DigitalOcean"];
@@ -66,6 +67,8 @@ export default function Landing() {
             </p>
           </div>
         </section>
+
+        <Faq />
 
         <section className="section">
           <div className="wrap close">

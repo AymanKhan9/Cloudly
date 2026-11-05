@@ -58,7 +58,7 @@
   --border-strong: #353c45;
   --text: #eceef1;
   --text-2: #a3aab5;
-  --text-3: #707884;
+  --text-3: #7f8793;
   --accent: #f26a35;
   --accent-ink: #ff8f61;
   --accent-soft: rgba(242, 106, 53, 0.14);
@@ -93,7 +93,7 @@
     --border-strong: #353c45;
     --text: #eceef1;
     --text-2: #a3aab5;
-    --text-3: #707884;
+    --text-3: #7f8793;
     --accent: #f26a35;
     --accent-ink: #ff8f61;
     --accent-soft: rgba(242, 106, 53, 0.14);
@@ -3456,9 +3456,17 @@ button.pill:disabled {
 }
 
 .docs-toc a {
-  padding: 4px 0;
+  padding: 4px 0 4px 12px;
+  margin-left: -1px;
+  border-left: 1px solid var(--border);
   color: var(--text-2);
   line-height: 1.4;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.docs-toc a[aria-current] {
+  color: var(--text);
+  border-left-color: var(--accent);
 }
 
 .docs-toc a:hover {
@@ -8997,4 +9005,49 @@ body[data-resizing] .pane-body {
   .side-panel {
     scroll-margin-top: 104px;
   }
+}
+
+/* Landing FAQ: native disclosure rows. */
+.faq {
+  max-width: 760px;
+}
+.faq h2 {
+  font-size: clamp(1.9rem, 3.4vw, 2.75rem);
+  letter-spacing: -0.03em;
+  margin-bottom: 28px;
+}
+.faq details {
+  border-top: 1px solid var(--border);
+}
+.faq details:last-of-type {
+  border-bottom: 1px solid var(--border);
+}
+.faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+  font-size: 17px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+.faq summary::after {
+  content: "+";
+  color: var(--text-3);
+  font-weight: 400;
+  transition: transform 0.2s;
+}
+.faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+.faq details p {
+  padding: 0 0 20px;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.65;
+  max-width: 68ch;
 }

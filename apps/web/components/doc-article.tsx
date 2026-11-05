@@ -5,6 +5,9 @@ import { ArrowLeft, ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { hrefOf, slugify } from "@/lib/docs";
 import { loadDoc } from "@/lib/load-doc";
 import { CodeBlock } from "./code-block";
+import { DocToc } from "./doc-toc";
+import { JsonLd } from "./json-ld";
+import { SITE_URL } from "@/lib/site";
 
 function textOf(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -16,6 +19,28 @@ function textOf(node: React.ReactNode): string {
 export function DocArticle({ doc }: { doc: NonNullable<ReturnType<typeof loadDoc>> }) {
   return (
     <>
+      <JsonLd
+        data={[
+          {
+            "@context": "https://schema.org",
+            "@type": "TechArticle",
+            headline: doc.page.title,
+            description: doc.description,
+            url: SITE_URL + hrefOf(doc.page.slug),
+            isPartOf: { "@type": "WebSite", name: "Cloudly", url: SITE_URL },
+            about: { "@type": "SoftwareApplication", name: "Cloudly" },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: "Cloudly", item: SITE_URL },
+              { "@type": "ListItem", position: 2, name: "Docs", item: `${SITE_URL}/docs` },
+              { "@type": "ListItem", position: 3, name: doc.page.title, item: SITE_URL + hrefOf(doc.page.slug) },
+            ],
+          },
+        ]}
+      />
       <article className="prose">
         <p className="docs-crumb">{doc.page.group}</p>
         <Markdown
@@ -62,16 +87,7 @@ export function DocArticle({ doc }: { doc: NonNullable<ReturnType<typeof loadDoc
         </nav>
       </article>
 
-      {doc.toc.length > 1 ? (
-        <aside className="docs-toc" aria-label="On this page">
-          <h2>On this page</h2>
-          {doc.toc.map((t) => (
-            <a key={t.id} href={`#${t.id}`}>
-              {t.text}
-            </a>
-          ))}
-        </aside>
-      ) : null}
+      {doc.toc.length > 1 ? <DocToc toc={doc.toc} /> : null}
     </>
   );
 }

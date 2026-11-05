@@ -14,5 +14,8 @@ export function loadDoc(slug: string) {
     const text = m[1]!.replace(/`/g, "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
     return { text, id: slugify(text) };
   });
-  return { page: DOCS[i]!, markdown, toc, prev: DOCS[i - 1], next: DOCS[i + 1] };
+  // The first paragraph, as plain text: the page's search and preview description.
+  const intro = markdown.split(/\n\s*\n/).find((b) => b.trim() && !/^[#`|>\-*\d]/.test(b.trim())) ?? "";
+  const description = intro.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[`*]/g, "").replace(/\s+/g, " ").trim().slice(0, 300);
+  return { page: DOCS[i]!, markdown, toc, description, prev: DOCS[i - 1], next: DOCS[i + 1] };
 }

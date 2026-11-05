@@ -12,7 +12,15 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  return { title: DOCS.find((d) => d.slug === slug)?.title };
+  const doc = loadDoc(slug);
+  if (!doc) return {};
+  const url = `/docs/${slug}`;
+  return {
+    title: doc.page.title,
+    description: doc.description,
+    alternates: { canonical: url },
+    openGraph: { type: "article", url, title: `${doc.page.title} · Cloudly docs`, description: doc.description },
+  };
 }
 
 export default async function DocsPage({ params }: { params: Promise<{ slug: string }> }) {

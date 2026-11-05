@@ -3,14 +3,23 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Script from "next/script";
 import { themeScript } from "@/lib/theme";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 const geistSans = localFont({ src: "./fonts/GeistVF.woff", variable: "--font-sans-face" });
 const geistMono = localFont({ src: "./fonts/GeistMonoVF.woff", variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "Cloudly: cloud coding agents you own end to end",
-  description:
-    "Run Claude Code, Codex or Gemini against your GitHub repos on a VM in your own cloud account, on your API keys or your Claude or ChatGPT plan. Your server, database, keys and spend limit. Free and MIT-licensed.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: `%s · ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "self-hosted coding agents", "Claude Code", "Codex", "Gemini CLI", "background coding agent",
+    "AI pull requests", "open source Devin alternative", "cloud coding agent", "ACP agents", "usecloudly",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: { type: "website", siteName: SITE_NAME, url: "/", title: SITE_TITLE, description: SITE_DESCRIPTION },
+  twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
 };
 
 export const viewport: Viewport = {
