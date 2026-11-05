@@ -7,6 +7,10 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // In development the indicator's default spot (bottom left) covers the sidebar's settings button.
   devIndicators: { position: "bottom-right" },
+  // `curl -fsSL https://usecloudly.dev/install.sh | sh` (-L follows the redirect).
+  async redirects() {
+    return [{ source: "/install.sh", destination: "https://raw.githubusercontent.com/AymanKhan9/Cloudly/main/install.sh", permanent: false }];
+  },
   async rewrites() {
     const api = process.env.API_INTERNAL_URL ?? "http://localhost:8787";
     // The relay's desktop port (a WebSocket to a sandbox's VNC server, by token).
