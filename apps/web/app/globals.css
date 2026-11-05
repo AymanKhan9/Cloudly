@@ -8987,3 +8987,14 @@ body[data-resizing] .pane-body {
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* Phones: tabs would be a row of cut-off titles; the menu lists the sessions. The
+   session header wraps to two rows, so a panel opened from it scrolls in below both. */
+@media (max-width: 600px) {
+  .ws-tabs {
+    display: none;
+  }
+  .side-panel {
+    scroll-margin-top: 104px;
+  }
+}
