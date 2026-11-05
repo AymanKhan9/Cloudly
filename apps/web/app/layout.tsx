@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Script from "next/script";
 import { themeScript } from "@/lib/theme";
+import { PageViews } from "@/components/ads-pixel";
+import { PIXEL_ID, pixelScript } from "@/lib/ads-pixel";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 const geistSans = localFont({ src: "./fonts/GeistVF.woff", variable: "--font-sans-face" });
@@ -38,6 +40,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Script id="theme" strategy="beforeInteractive">
           {themeScript}
         </Script>
+        {PIXEL_ID && (
+          <>
+            <Script id="oai-pixel" strategy="beforeInteractive">
+              {pixelScript}
+            </Script>
+            <PageViews />
+          </>
+        )}
       </body>
     </html>
   );

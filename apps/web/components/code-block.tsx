@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
+import { trackInstallCopy } from "@/lib/ads-pixel";
 
 /** A docs code block with a copy button. */
 export function CodeBlock(props: React.HTMLAttributes<HTMLPreElement>) {
@@ -15,7 +16,9 @@ export function CodeBlock(props: React.HTMLAttributes<HTMLPreElement>) {
         className="icon-btn"
         aria-label={copied ? "Copied" : "Copy code"}
         onClick={async () => {
-          await navigator.clipboard.writeText(ref.current?.innerText.trimEnd() ?? "").catch(() => {});
+          const text = ref.current?.innerText.trimEnd() ?? "";
+          await navigator.clipboard.writeText(text).catch(() => {});
+          trackInstallCopy(text);
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1500);
         }}

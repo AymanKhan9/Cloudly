@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
+import { trackInstallCopy } from "@/lib/ads-pixel";
 
 export const INSTALL_COMMAND = "curl -fsSL https://usecloudly.dev/install.sh | sh";
 
@@ -11,6 +12,7 @@ export function InstallCard() {
   async function copy() {
     try {
       await navigator.clipboard.writeText(INSTALL_COMMAND);
+      trackInstallCopy(INSTALL_COMMAND);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
