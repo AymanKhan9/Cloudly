@@ -14,3 +14,6 @@ export const trackCustom = (name: string) => track("measure", "custom", { type: 
 export const trackInstallCopy = (text: string) => {
   if (text.includes("install.sh")) trackCustom("install_command_copied");
 };
+
+// Cloudflare Web Analytics. The site is DNS-only on Cloudflare (Vercel serves it), so its automatic setup never sees traffic.
+export const CF_BEACON_TOKEN = process.env.NEXT_PUBLIC_SITE_MODE === "marketing" ? process.env.NEXT_PUBLIC_CF_BEACON_TOKEN : undefined;

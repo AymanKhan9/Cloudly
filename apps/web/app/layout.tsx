@@ -4,7 +4,7 @@ import "./globals.css";
 import Script from "next/script";
 import { themeScript } from "@/lib/theme";
 import { PageViews } from "@/components/ads-pixel";
-import { PIXEL_ID, pixelScript } from "@/lib/ads-pixel";
+import { CF_BEACON_TOKEN, PIXEL_ID, pixelScript } from "@/lib/ads-pixel";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 const geistSans = localFont({ src: "./fonts/GeistVF.woff", variable: "--font-sans-face" });
@@ -47,6 +47,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </Script>
             <PageViews />
           </>
+        )}
+        {CF_BEACON_TOKEN && (
+          <Script src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: CF_BEACON_TOKEN })} strategy="afterInteractive" />
         )}
       </body>
     </html>
