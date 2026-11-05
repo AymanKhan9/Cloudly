@@ -2,7 +2,9 @@
 
 Hand off a coding task from anywhere, and get back a pull request that was actually checked.
 
-**[usecloudly.dev](https://usecloudly.dev)** · [Docs](https://usecloudly.dev/docs)
+**[usecloudly.dev](https://usecloudly.dev)** · [Docs](https://usecloudly.dev/docs) · [![GitHub stars](https://img.shields.io/github/stars/AymanKhan9/Cloudly?style=social)](https://github.com/AymanKhan9/Cloudly/stargazers)
+
+> If Cloudly is useful to you, consider giving it a ⭐ on GitHub. It helps other developers find the project and keeps it going.
 
 Cloudly runs coding agents (Claude Code, Codex, Gemini CLI, or one you add: OpenCode, Pi, Cursor, Grok, Antigravity, any ACP agent) against your GitHub repos on a server you own. Give it a task from the browser, Discord, Slack or a GitHub issue, close the laptop, and come back to a branch and a pull request. It runs on your API keys or on the Claude or ChatGPT plan you already pay for.
 
@@ -91,6 +93,10 @@ bun run --filter @repo/worker test       # worker tests (needs Postgres and Dock
 ```
 
 To try it end to end on one machine, with a stand-in GitHub and either scripted or real agents, see [scripts/local-test](scripts/local-test/README.md). [CONTRIBUTING.md](CONTRIBUTING.md) has the checks to run before a pull request.
+
+## Support the project
+
+Cloudly is free and built in the open. A [star on GitHub](https://github.com/AymanKhan9/Cloudly/stargazers) is the simplest way to support it; bug reports, ideas and pull requests are just as welcome.
 
 ## License
 
