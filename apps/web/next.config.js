@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  // The installer runs the standalone server; Vercel (the website) packages the app its own way.
+  output: process.env.VERCEL ? undefined : "standalone",
   // Shared contracts are TypeScript source in the monorepo.
   transpilePackages: ["@repo/shared"],
   // Lets a second copy (tests, previews) build next to the main one.
