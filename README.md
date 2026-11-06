@@ -55,6 +55,30 @@ The installer sets up Docker, Bun, Postgres and a swap file on small machines, b
 
 [DEPLOY.md](DEPLOY.md) covers picking a VM on each provider, HTTPS and upgrades. The full guide is at [usecloudly.dev/docs](https://usecloudly.dev/docs), and on your instance at `/docs`.
 
+## Run it on your own computer
+
+No cloud account needed. On an Ubuntu 22.04+ or Debian 12+ machine (a desktop, a laptop, or an Ubuntu VM on macOS or Windows), run the same installer and answer its prompts like this:
+
+```sh
+curl -fsSL https://usecloudly.dev/install.sh | sh
+```
+
+| It asks | Answer |
+|---|---|
+| Domain pointing at this VM | Press Enter (leave empty) |
+| HTTPS on the IP address | `n` |
+| Public URL | `http://localhost:3000` |
+| Your own Postgres URL | Press Enter (it runs Postgres for you) |
+
+Then open `http://localhost:3000/setup`, paste the setup token the installer printed, and finish setup in the browser: create the GitHub App, choose repositories, and add a Claude or ChatGPT sign-in or an API key.
+
+What to expect on a computer instead of a server:
+- Sessions started from the browser work as usual, but only while the machine is on and awake.
+- Anything that has GitHub, Discord, Slack or Sentry call in (a labelled issue, an `@cloudly` mention, `/cloudly` in Discord) needs an address those services can reach. `localhost` isn't one, so use a tunnel (Cloudflare Tunnel, Tailscale Funnel or ngrok) and set the public URL to it, or run Cloudly on a cloud VM instead.
+- The sandbox image is about 2 GB and grows with each agent you add. Leave several GB free.
+
+To work on Cloudly itself, see [Develop](#develop).
+
 ## Where to run it
 
 | Provider | What to use | Notes |

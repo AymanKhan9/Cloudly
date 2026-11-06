@@ -8,6 +8,12 @@ Cloudly runs on one Linux VM. Installing takes about fifteen minutes, most of it
 - 2 GB of RAM or more is comfortable. On 1 GB the installer adds a 2 GB swap file; Cloudly then runs one turn at a time. With more memory, several sessions' turns run at once (`WORKER_CONCURRENCY=auto`).
 - Inbound ports open in your cloud firewall: **22** for SSH, and **80** and **443** for HTTPS. If you choose plain HTTP instead, open **3000**.
 
+## Running it on your own computer
+
+You don't need a cloud account. On an Ubuntu 22.04+ or Debian 12+ machine (a desktop, a laptop, or an Ubuntu VM on macOS or Windows), run the installer and answer its prompts: leave the domain empty, answer `n` to HTTPS on the IP address, and enter `http://localhost:3000` as the public URL. Then open `http://localhost:3000/setup` and continue as in [Setup](/docs/setup).
+
+Sessions started from the browser work as usual, but only while the machine is on and awake. Anything that has GitHub, Discord, Slack or Sentry call in ([GitHub triggers](/docs/github-triggers), [Discord](/docs/discord-and-notifications), [Sentry](/docs/sentry)) needs an address those services can reach. `localhost` isn't one: put a tunnel in front of Cloudly and set the public URL to it, or use a VM.
+
 ## Pick a VM
 
 Free tiers change often, so check each provider's current terms. As of October 2026:
