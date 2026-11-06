@@ -5,6 +5,7 @@ import { RunStory } from "@/components/run-story";
 import { SpendDemo } from "@/components/spend-demo";
 import { AgentsDemo } from "@/components/agents-demo";
 import { Faq } from "@/components/faq";
+import { DemoVideo } from "@/components/demo-video";
 import { MARKETING, REPO_URL, SiteHeader } from "@/components/site-header";
 
 const HOSTS = ["Oracle Cloud Always Free (Arm, 12 GB)", "Google Cloud e2-micro (1 GB, one run at a time)", "AWS (new-account credits)", "DigitalOcean"];
@@ -34,6 +35,19 @@ export default function Landing() {
             </section>
           }
         />
+
+        <section id="demo" className="section">
+          <div className="wrap">
+            <div className="section-head">
+              <h2>See it work in 90 seconds.</h2>
+              <p>
+                A real task on Cloudly&apos;s own repo: the agent works in a container, the tests run, and the pull
+                request opens. Then sessions talking to each other, agent races, Discord and spend limits.
+              </p>
+            </div>
+            <DemoVideo />
+          </div>
+        </section>
 
         <section id="spend" className="section">
           <div className="wrap">

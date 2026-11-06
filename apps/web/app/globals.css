@@ -756,6 +756,17 @@ kbd,
   color: var(--text-2);
 }
 
+.demo-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #0a0c0f;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
+}
+
 /* Spend demo */
 .spend {
   display: grid;

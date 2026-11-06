@@ -4,6 +4,10 @@ Hand off a coding task from anywhere, and get back a pull request that was actua
 
 **[usecloudly.dev](https://usecloudly.dev)** · [Docs](https://usecloudly.dev/docs) · [![GitHub stars](https://img.shields.io/github/stars/AymanKhan9/Cloudly?style=social)](https://github.com/AymanKhan9/Cloudly/stargazers)
 
+[![Watch Cloudly in 90 seconds](apps/web/public/demo/poster.jpg)](https://usecloudly.dev/#demo)
+
+<p align="center"><a href="https://usecloudly.dev/#demo">▶ Watch the 90-second demo</a> · <a href="https://usecloudly.dev/demo/cloudly-demo.mp4">Download the MP4</a></p>
+
 > If Cloudly is useful to you, consider giving it a ⭐ on GitHub. It helps other developers find the project and keeps it going.
 
 Cloudly runs coding agents (Claude Code, Codex, Gemini CLI, or one you add: OpenCode, Pi, Cursor, Grok, Antigravity, any ACP agent) against your GitHub repos on a server you own. Give it a task from the browser, Discord, Slack or a GitHub issue, close the laptop, and come back to a branch and a pull request. It runs on your API keys or on the Claude or ChatGPT plan you already pay for.
