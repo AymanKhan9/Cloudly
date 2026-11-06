@@ -1095,7 +1095,27 @@ kbd,
 
 @media (max-width: 860px) {
   .close {
-    grid-template-columns: 1fr;
+    /* minmax(0, ...) so the install command can't stretch the column past the screen. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* On phones the command wraps instead of scrolling, and Copy sits underneath. */
+@media (max-width: 600px) {
+  .install {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .install code {
+    flex: 1 1 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    mask-image: none;
+    line-height: 1.5;
+  }
+  .install .btn {
+    flex: 1 1 100%;
+    justify-content: center;
   }
 }
 
