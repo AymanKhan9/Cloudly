@@ -1,5 +1,5 @@
-import { test, expect } from "bun:test";
-import { mapClaudeMessage } from "./claude";
+import { describe, test, expect } from "bun:test";
+import { mapClaudeMessage, trackBackground } from "./claude";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 // Fixtures are cast through `unknown` since we only exercise the fields
@@ -125,4 +125,19 @@ test("result error_max_turns maps to error", () => {
 test("unrecognized message type falls back to raw", () => {
     const msg = { type: "hook_started" } as unknown as SDKMessage;
     expect(mapClaudeMessage(msg)).toEqual([{ kind: "raw", data: msg }]);
+});
+
+describe("trackBackground", () => {
+    test("follows the live set, ignores ambient tasks, and falls back to the start/finish edges", () => {
+        const running = new Set<string>();
+        trackBackground(running, { subtype: "task_started", task_id: "a", is_backgrounded: true });
+        trackBackground(running, { subtype: "task_started", task_id: "fg", is_backgrounded: false });
+        expect([...running]).toEqual(["a"]);
+        trackBackground(running, { subtype: "background_tasks_changed", tasks: [{ task_id: "a" }, { task_id: "w", ambient: true }, { task_id: "b" }] });
+        expect([...running].sort()).toEqual(["a", "b"]);
+        trackBackground(running, { subtype: "task_notification", task_id: "a", status: "completed" });
+        expect([...running]).toEqual(["b"]);
+        trackBackground(running, { subtype: "background_tasks_changed", tasks: [] });
+        expect(running.size).toBe(0);
+    });
 });

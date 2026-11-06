@@ -7,6 +7,19 @@ const canUseTool: CanUseTool = async (_toolName, _input, options) => {
     return { behavior: "allow", toolUseID: options.toolUseID };
 };
 
+/** Keeps `running` in step with Claude Code's live background tasks (ambient watchers don't count). */
+export function trackBackground(running: Set<string>, message: { subtype?: string; [k: string]: unknown }): void {
+    const m = message as { subtype?: string; tasks?: { task_id: string; ambient?: boolean }[]; task_id?: string; is_backgrounded?: boolean; ambient?: boolean };
+    if (m.subtype === "background_tasks_changed" && Array.isArray(m.tasks)) {
+        running.clear();
+        for (const t of m.tasks) if (!t.ambient) running.add(t.task_id);
+    } else if (m.subtype === "task_started" && m.is_backgrounded && !m.ambient && m.task_id) {
+        running.add(m.task_id);
+    } else if (m.subtype === "task_notification" && m.task_id) {
+        running.delete(m.task_id);
+    }
+}
+
 export type NormalizedEvent = Pick<RunEvent, "kind" | "data">;
 
 export function mapClaudeMessage(message: SDKMessage): NormalizedEvent[] {
@@ -123,9 +136,16 @@ export class ClaudeAdapter implements RunAdapter {
         }
         // A message taken in mid-turn may not get a result of its own: once the
         // agent has been quiet a while after its last result, the turn is over.
+        // Background work (a subagent or command the agent sent to the background)
+        // ends the turn with a result while it still runs; Claude Code picks the
+        // turn up again when it finishes. Closing the input then would cut the
+        // channel tool permissions go through, so the turn waits for it.
+        const background = new Set<string>();
         const watchdog = setInterval(() => {
-            if (!this.closed && results > 0 && results < sent && this.steers.length === 0 && Date.now() - lastMessage > 6000) close();
+            if (this.closed || results === 0 || this.steers.length > 0 || background.size > 0 || Date.now() - lastMessage <= 6000) return;
+            if (results < sent || waitedOnBackground) close();
         }, 1000);
+        let waitedOnBackground = false;
 
         const q = query({
             prompt: input(),
@@ -152,8 +172,10 @@ export class ClaudeAdapter implements RunAdapter {
                 lastMessage = Date.now();
                 // How full the context window is, like Claude Code's context indicator.
                 // "summary" answers from the last response's usage: no extra API calls.
+                if (message.type === "system") trackBackground(background, message);
                 if (message.type === "result") results++;
-                if (message.type === "result" && results >= sent && this.steers.length === 0) {
+                if (message.type === "result" && background.size > 0) waitedOnBackground = true;
+                if (message.type === "result" && results >= sent && this.steers.length === 0 && background.size === 0) {
                     const usage = await q.getContextUsage({ detail: "summary" }).catch(() => null);
                     close();
                     if (usage) {
