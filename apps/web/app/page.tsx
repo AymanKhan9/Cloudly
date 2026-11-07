@@ -19,7 +19,7 @@ export default function Landing() {
         <RunStory
           hero={
             <section className="hero">
-              <h1>Coding agents you own, end to end.</h1>
+              <h1>Self-hosted cloud coding agents you own, end to end.</h1>
               <p className="sub">
                 Run Claude Code, Codex, Gemini CLI or any ACP agent on your GitHub repos from a VM in your own cloud. Close the
                 laptop, get a pull request.
@@ -114,9 +114,11 @@ export default function Landing() {
 
       <footer className="footer">
         <div className="wrap">
-          <span>Cloudly is free software under the MIT license.</span>
+          <span>Cloudly (usecloudly) is free software under the MIT license.</span>
           <nav>
             <Link href="/docs">Docs</Link>
+            <Link href="/compare">Compare</Link>
+            <Link href="/changelog">Changelog</Link>
             <a href={REPO_URL}>GitHub</a>
             {MARKETING ? null : <Link href="/signin">Sign in to your instance</Link>}
           </nav>

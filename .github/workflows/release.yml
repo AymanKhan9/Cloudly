@@ -23,6 +23,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the tags, for the release notes
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: cd packages/db && bun x prisma generate
@@ -38,9 +40,14 @@ jobs:
           mkdir -p stage/apps/web/.next
           cp -r apps/web/.next/standalone stage/apps/web/.next/standalone
           tar -czf cloudly-linux-${{ matrix.arch }}.tar.gz -C stage .
+      # The commits since the last release; the website's /changelog shows them.
+      - run: |
+          prev=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          git log --no-merges --format='- %s' ${prev:+$prev..}HEAD > notes.md
       - uses: softprops/action-gh-release@v2
         with:
           files: cloudly-linux-${{ matrix.arch }}.tar.gz
+          body_path: notes.md
           # A run by hand creates the tag on the commit it ran on.
           tag_name: ${{ inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}

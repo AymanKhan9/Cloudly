@@ -767,6 +767,15 @@ kbd,
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.28);
 }
 
+/* Compare and changelog pages */
+.page-narrow {
+  padding-top: clamp(40px, 6vw, 72px);
+  padding-bottom: 96px;
+}
+.page-narrow .prose {
+  max-width: 820px;
+}
+
 /* Spend demo */
 .spend {
   display: grid;
@@ -9081,4 +9090,8 @@ body[data-resizing] .pane-body {
   font-size: 16px;
   line-height: 1.65;
   max-width: 68ch;
+}
+.faq summary h3 {
+  font: inherit;
+  margin: 0;
 }
